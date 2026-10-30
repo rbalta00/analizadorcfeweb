@@ -92,25 +92,82 @@ se reinventa una formula aqui, solo se traduce.
       requiere internet esa vez; despues el navegador lo cachea).
       `test_pdf.html` queda en el repo como herramienta de depuracion para
       probar un recibo nuevo rapido sin pasar por toda la interfaz.
-- [~] Generador de PDF con secciones apagables (hoy usa reportlab en Python;
-      jsPDF ya esta vendorizado en `lib/` para esto). Construida la libreria
-      de componentes visuales (`js/pdfComponents.js`: colores, tarjetas,
-      tablas, avisos, graficas de barras/curva/gauge, armado de documento) --
-      ojo, jsPDF tiene el eje Y invertido respecto a reportlab (Y=0 arriba,
-      crece hacia abajo; reportlab es Y=0 abajo) -- hubo que corregir
-      `CONTENT_TOP`/`CONTENT_BOTTOM` por este motivo. Portada la **pagina 1
-      (resumen)** en `js/propuesta.js`, verificada visualmente en Chrome con
-      `test_propuesta.html` (dev tool, igual que `test_pdf.html`) contra los
-      numeros reales de Abue ya corregidos. Falta: paginas 2-21, y conectar
-      el parametro `secciones` (hoy aceptado pero sin usar) a los
-      `BLOQUES_COTIZACION` del lado Python para el toggle de secciones.
-- [ ] Historial / seguimiento de clientes (hoy CSV local; en el navegador
-      necesitaria localStorage como minimo, o Supabase si se quiere
-      compartir entre dispositivos -- pendiente de decidir con el usuario).
+- [x] **Generador de PDF de 21 paginas con secciones apagables** (`js/propuesta.js`
+      + `js/pdfComponents.js`, ambos completos). Las 21 paginas estan portadas 1:1
+      desde `app/propuesta.py` (mismo texto, mismas tablas, mismas graficas). El
+      filtro de bloques (`BLOQUES_COTIZACION`, portado a `js/bloques.js`) renumera
+      las paginas de corrido igual que Python. Verificado en Chrome con
+      `test_propuesta.html`: 21 paginas generadas sin error, inspeccion visual de
+      paginas 1/2/6/13/16 (tablas, barra, curva de flujo con punto de recuperacion,
+      gauge, todas correctas), y el toggle de un bloque reduce correctamente el
+      PDF a 20 paginas.
+- [x] **App reestructurada en pantallas: Clientes -> 21 secciones navegables**
+      (`index.html` + `js/app.js` + `js/secciones.js` + `js/resultado.js` +
+      `js/clientes.js` + `js/notas.js` + `js/util.js` + `js/charts.js` +
+      `js/comercial.js`). Reemplaza el formulario-de-una-sola-pantalla por:
+      - **Pantalla de clientes**, agrupados por tipo (gobierno/particular,
+        pedido explicito del usuario -- "no todos van a ser de gobierno").
+        Guardados en `localStorage` (clave `cfe_clientes_v1`), cada uno con su
+        propio formulario/recibo/condiciones del inmueble/bloques activos.
+      - **Auto-deteccion de tarifa + auto-calculo al subir el recibo**: si
+        `leerRecibo()` detecta una tarifa soportada y los datos minimos (dias,
+        kWh, columna "$/kW"), se calcula solo, sin que el usuario tenga que
+        pulsar "Calcular" -- pedido explicito del usuario. Si falta algo, se
+        avisa que hace falta revisar el formulario a mano.
+      - **Las 21 secciones de `propuesta.py` portadas a HTML interactivo**
+        (`js/secciones.js`, NO solo al PDF): cada una con numero "NN de 21",
+        pregunta que explica que resuelve, resultado principal, explicacion en
+        espanol llano, grafica/tabla (`js/charts.js`: barras horizontales,
+        barras agrupadas, gauge, curva de flujo en SVG -- version HTML/CSS de
+        las mismas graficas que pdfComponents.js dibuja en el PDF), "Ver detalle
+        del calculo" (`<details>`) donde corresponde, y etiquetas de estado
+        (Comprobado/Declarado/Supuesto/Pendiente). Los avisos importantes NUNCA
+        van dentro de un detalle colapsado.
+      - **Boton de apagado en cada seccion** (pedido explicito del usuario):
+        cada una de las 21 secciones muestra un checkbox "Incluir en la
+        cotizacion final (pantalla y PDF)". Como algunas paginas se refieren
+        entre si (ej. pagina 3 remite a la pagina 4), el apagado es por BLOQUE
+        (`BLOQUES_COTIZACION`, los mismos 12 de Python) no pagina por pagina --
+        mismo criterio ya documentado en `propuesta.py`. El estado se guarda
+        por cliente y se usa tanto para la vista en pantalla como para filtrar
+        el PDF (misma fuente de datos, nunca se desincronizan).
+      - **Indice de secciones navegable**: lista colapsable (boton "☰ Índice de
+        secciones", pensada para celular), resalta la seccion visible
+        (`IntersectionObserver`), atenua las apagadas, botones "← Anterior" /
+        "Siguiente →" dentro de cada seccion, y se conserva el scroll al
+        navegar (son anclas `#seccion-N` dentro de la misma pagina, no cambia
+        de ruta).
+      - **"Condiciones actuales del inmueble"**: dato que NO existia en
+        ninguna de las 21 paginas de Python. Siguiendo la instruccion de "no
+        agregar una seccion 22 automatica", se integro como una subseccion de
+        la seccion 6 ("Sistema propuesto"), con su propio bloque de captura en
+        el formulario (actividad, horarios, equipos, tension/fases, tablero,
+        transformador, tierra fisica, punto de conexion, cubierta, area
+        -medida o estimada-, sombras, sistemas existentes, fecha de visita y
+        notas). Si no hay datos capturados, la seccion lo marca como
+        "Pendiente" en vez de inventar contenido. **No se capturan fotografias
+        en esta version** -- pendiente real, declarado como tal en el propio
+        formulario.
+      Verificado en Chrome real, con el PDF real de Abue: crear cliente de
+      gobierno -> subir recibo -> tarifa GDMTO detectada y calculo automatico
+      (mismos 8 numeros exactos de siempre) -> 21 secciones e indice generados
+      -> apagar un bloque (impacto ambiental) lo oculta del indice Y reduce el
+      PDF de 21 a 20 paginas -> recargar la pagina conserva el cliente, sus
+      datos, el resultado recalculado y el bloque apagado -> crear un segundo
+      cliente como "particular" y confirmar que se agrupa aparte del de
+      gobierno. Sin errores de consola propios de la app (el unico ruido son
+      mensajes conocidos de la extension de Chrome, no de este codigo).
+- [ ] Fotografias del inmueble (condiciones del inmueble) -- declarado como
+      pendiente real, no se construyo esta sesion.
+- [ ] Historial/seguimiento agregado entre TODOS los clientes (hoy cada
+      cliente vive aislado en `localStorage`; compartir entre dispositivos
+      seguiria requiriendo Supabase -- pendiente de decidir con el usuario).
 - [ ] Resumen ejecutivo / guia de presentacion (los 2 PDFs de 1 pagina que
       existen en resumen.py).
-- [ ] Simulador de financiamiento y editor de precios de materiales (las 2
-      ultimas funcionalidades agregadas a la app de Streamlit).
+- [ ] Simulador de financiamiento, editor de precios de materiales y
+      deduccion ISR (funcionalidades de `cotizador_app.py` no portadas a esta
+      version -- fuera del alcance de "las 21 secciones", deliberadamente no
+      tocadas esta sesion).
 - [ ] Decidir si esto reemplaza a `app/` o conviven mientras se termina.
 - [ ] Decidir si se crea el repo en GitHub y donde se despliega (Vercel,
       igual que las demas apps del usuario, es lo mas consistente).

@@ -1,0 +1,600 @@
+// Las 21 secciones interactivas de la cotizacion, mismo orden y mismo contenido real
+// que las 21 paginas de app/propuesta.py (puerto fiel del texto/tablas, no generico) --
+// aqui en HTML navegable en vez de PDF estatico. Cada seccion pertenece a un bloque de
+// bloques.js (para el boton de apagado) y recibe el mismo objeto `r` que arma
+// construirResultado() en app.js.
+import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA } from './util.js';
+import { barraHorizontal, barraAgrupada, gauge, curvaFlujo } from './charts.js';
+import { bloqueDeSeccion } from './bloques.js';
+import { COMERCIAL } from './comercial.js';
+
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html != null) e.innerHTML = html;
+  return e;
+}
+function p(texto) { return el('p', null, texto); }
+
+function tarjetas(items) {
+  const cont = el('div', 'tarjetas-metricas');
+  for (const [valor, etiqueta] of items) {
+    const m = el('div', 'metrica');
+    m.innerHTML = `<div class="valor">${valor}</div><div class="etiqueta">${etiqueta}</div>`;
+    cont.append(m);
+  }
+  return cont;
+}
+
+function tabla(headers, filas, { small = false } = {}) {
+  const wrap = el('div', 'tabla-wrap');
+  const t = el('table', 'tabla-seccion' + (small ? ' tabla-chica' : ''));
+  const thead = el('thead');
+  const trh = el('tr');
+  headers.forEach((h, i) => trh.append(el('th', i > 0 ? 'num' : null, h)));
+  thead.append(trh);
+  const tbody = el('tbody');
+  for (const fila of filas) {
+    const tr = el('tr');
+    fila.forEach((c, i) => tr.append(el('td', i > 0 ? 'num' : null, String(c))));
+    tbody.append(tr);
+  }
+  t.append(thead, tbody);
+  wrap.append(t);
+  return wrap;
+}
+
+function avisoCream(texto) { return el('div', 'aviso-cream', texto); }
+function avisoRojo(texto) { return el('div', 'nota aviso', texto); }
+
+function detalle(resumen, nodoOArray) {
+  const d = el('details', 'detalle-calculo');
+  const s = el('summary', null, 'Ver detalle del cálculo');
+  void resumen;
+  d.append(s);
+  const cont = el('div', 'detalle-calculo-cuerpo');
+  for (const n of Array.isArray(nodoOArray) ? nodoOArray : [nodoOArray]) cont.append(n);
+  d.append(cont);
+  return d;
+}
+
+const ESTADOS = {
+  comprobado: ['Comprobado', 'Respaldado por una fuente identificada (el recibo, un cálculo verificado).'],
+  declarado: ['Declarado', 'Proporcionado por una persona, pendiente de verificar.'],
+  supuesto: ['Supuesto', 'Adoptado como criterio para poder calcular.'],
+  pendiente: ['Pendiente', 'Información o validación todavía faltante.'],
+};
+function badgeEstado(tipo) {
+  const [texto, titulo] = ESTADOS[tipo] || ESTADOS.supuesto;
+  const b = el('span', `badge-estado badge-${tipo}`, texto);
+  b.title = titulo;
+  return b;
+}
+
+function toggleBloque(r, numero, onToggle) {
+  const bloque = bloqueDeSeccion(numero);
+  const activo = r.seccionesActivas.includes(bloque);
+  const wrap = el('label', 'toggle-seccion');
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = activo;
+  input.disabled = bloque === 'resumen';
+  input.addEventListener('change', () => onToggle(bloque, input.checked));
+  wrap.append(input, document.createTextNode(
+    bloque === 'resumen' ? ' Siempre incluida' : ' Incluir en la cotización final (pantalla y PDF)'));
+  return wrap;
+}
+
+function crearSeccion(numero, titulo, pregunta, r, onToggle) {
+  const art = el('article', 'seccion');
+  art.id = `seccion-${numero}`;
+  const header = el('div', 'seccion-header');
+  header.append(el('div', 'seccion-numero', `${String(numero).padStart(2, '0')} de 21`));
+  header.append(el('h2', null, titulo));
+  if (pregunta) header.append(el('p', 'seccion-pregunta', pregunta));
+  header.append(toggleBloque(r, numero, onToggle));
+  art.append(header);
+  return art;
+}
+
+// ---------- 01: resumen ----------
+function s01(r, _leido, onToggle) {
+  const art = crearSeccion(1, 'Su proyecto, explicado en una página', 'Resultado principal: ¿cuánto cuesta y en cuánto se paga solo?', r, onToggle);
+  art.append(p(`${r.titular} · ${r.domicilio || 'domicilio por confirmar'}`));
+  art.append(p(`Servicio CFE ${r.noServicio || 'por confirmar'} · Estudio del ${r.fechaEstudio}.`));
+  art.append(tarjetas([
+    [M(r.investment), 'Lo que cuesta el sistema, IVA incluido'],
+    [r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se paga solo'],
+    [M(r.ahorroAnual), 'Lo que ahorraría en el primer año'],
+  ]));
+  art.append(tarjetas([
+    [`${r.n} paneles`, `${r.moduloWp} W por módulo / ${r.kwp.toFixed(2)} kWp`],
+    [M(r.ahorroAnual - r.om1), 'Ahorro neto año 1, tras mantenimiento'],
+    [PCT(r.pctAhorro), 'Porcentaje de la factura que ahorraría'],
+  ]));
+  art.append(el('h3', null, 'Qué se propone'));
+  art.append(p(`Instalar un sistema conectado a red de ${r.n} paneles de ${r.moduloWp} W. Su producción regional ` +
+    `de referencia es de ${r.gen.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año. Se plantea ` +
+    'medición neta, sujeta a contratación y autorización.'));
+  art.append(el('h3', null, 'Cuánto cuesta y en cuánto se paga solo'));
+  const flujoTxt = r.recuperacionAcumulada
+    ? ` (o ${r.recuperacionAcumulada.toFixed(1)} años si se cuenta el mantenimiento y el cambio de inversor)` : '';
+  art.append(p(`El sistema completo cuesta ${M(r.investment)} (ya con IVA). Con el ahorro que generaría cada mes, ` +
+    `esa inversión se recupera en aproximadamente ${r.payback ? r.payback.toFixed(1) + ' años' : 'un tiempo no calculable con el ahorro estimado actual'}${flujoTxt}. ` +
+    'Después de ese tiempo, el ahorro mensual es ganancia, no recuperación de lo invertido.'));
+  art.append(p(`En el año de referencia se estima pasar de pagar ${M(r.annualbefore)} a ${M(r.annualafter)} al año. ` +
+    `El promedio mensual sería ${M(r.annualafter / 12)} en vez de ${M(r.annualbefore / 12)}. Son promedios de un ` +
+    'modelo, no pagos mensuales fijos.'));
+  art.append(avisoCream('El recibo permite comprobar el gasto actual; el ahorro futuro es una estimación ' +
+    `condicionada. Se conserva el gasto observado de ${listaConceptos(r.meta.noReducibles)} sin anticipar ahorro ` +
+    'adicional. Los precios deberán actualizarse antes de contratar.'));
+  return art;
+}
+
+// ---------- 02: recibo ----------
+function s02(r, leido, onToggle) {
+  const art = crearSeccion(2, 'Su recibo: datos comprobados', '¿Qué dice el recibo real, tal como se leyó?', r, onToggle);
+  art.append(badgeEstado(leido ? 'comprobado' : 'declarado'));
+  art.append(p(`Titular: ${r.titular}. Domicilio: ${(r.domicilio || 'por confirmar').replace(/\.$/, '')}.`));
+  art.append(p(`Tarifa ${r.tarifa}: ${EXPLICACION_TARIFA[r.tarifa] || 'tarifa de CFE; consultar al emisor el detalle de su clasificación.'}`));
+  if (r.tituloRecibo && r.tituloRecibo.trim().toUpperCase() !== r.titular.trim().toUpperCase()) {
+    art.append(avisoRojo(`El nombre impreso en el recibo de CFE es "${r.tituloRecibo}", distinto al nombre con el ` +
+      `que se identifica este inmueble ("${r.titular}"). Verificar que ambos correspondan al mismo servicio antes de continuar.`));
+  }
+  const filasRecibo = [['Período', `${r.periodoDias || '?'} días`], ['Consumo del período', r.periodoKwh ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh` : 'por confirmar']];
+  if (r.demandaContratadaKw) filasRecibo.push(['Demanda contratada', `${r.demandaContratadaKw.toFixed(0)} kW`]);
+  art.append(tabla(['Dato verificado', 'Valor'], filasRecibo));
+  art.append(tabla(['Total del recibo', 'Importe'], [
+    ['Servicio con IVA', M(r.pagoRecurrentePeriodo - (r.dap || 0))],
+    ['Alumbrado público (DAP)', M(r.dap || 0)],
+    ['Pago recurrente del período', M(r.pagoRecurrentePeriodo)],
+  ]));
+  art.append(avisoCream('Los datos de este recibo se usan como base de cálculo del estudio completo; cualquier ' +
+    'corrección debe confirmarse contra el documento original de CFE.'));
+  return art;
+}
+
+// ---------- 03: como se forma el pago ----------
+function s03(r, _leido, onToggle) {
+  const art = crearSeccion(3, 'Cómo se forma lo que paga a CFE', '¿En qué conceptos se divide el recibo?', r, onToggle);
+  const filas = [];
+  for (const k of ['suministro', 'distribucion', 'transmision', 'cenace', 'energia', 'energia_base',
+                    'energia_intermedia', 'energia_punta', 'capacidad', 'scnmem']) {
+    if (k in r.cargos) filas.push([listaConceptos([k]), M(r.cargos[k])]);
+  }
+  const suma = Object.values(r.cargos).reduce((a, b) => a + b, 0);
+  filas.push(['Suma de componentes', M(suma)]);
+  art.append(tabla(['Componente del recibo', 'Importe'], filas));
+  art.append(p('En palabras simples: "Suministro" es lo que cuesta que CFE le dé servicio, sin importar cuánto ' +
+    'consuma. "Distribución" y "Transmisión" son el costo de llevar la electricidad desde la planta hasta su ' +
+    'medidor. "CENACE" y "SCnMEM" son cargos que CFE traslada tal cual del operador del sistema eléctrico ' +
+    'nacional — no los decide CFE libremente. "Energía" y "Capacidad" son lo que cuesta generar y tener ' +
+    'disponible la electricidad que usa.'));
+  art.append(p('Para valorar el ahorro no se multiplica toda la producción solar por el precio medio de la ' +
+    'factura: cada uno de estos cargos tiene su propia regla, explicada en la sección siguiente.'));
+  return art;
+}
+
+// ---------- 04: que cargos pueden disminuir ----------
+function s04(r, _leido, onToggle) {
+  const art = crearSeccion(4, 'Qué cargos pueden disminuir', '¿Cuánto de la factura SÍ baja con paneles solares, y cuánto no?', r, onToggle);
+  const razon = r.meta.tieneDemandaContratada
+    ? 'Tiene demanda contratada: Distribución y Capacidad se facturan por kW, no por kWh, y no bajan aunque la energía neta llegue a cero.'
+    : 'No tiene demanda contratada: casi toda la factura se factura por kWh, por lo que casi todo baja con la energía solar.';
+  art.append(badgeEstado('comprobado'));
+  art.append(p(`Tarifa ${r.tarifa}. ${razon}`));
+  const montoReduc = r.meta.reducibles.reduce((s, k) => s + (r.cargos[k] || 0), 0);
+  const montoNoReduc = r.meta.noReducibles.reduce((s, k) => s + (r.cargos[k] || 0), 0);
+  art.append(barraHorizontal([
+    ['Sí baja con los paneles', montoReduc, 'var(--cfe-teal,#21798b)'],
+    ['No baja con los paneles', montoNoReduc, 'var(--cfe-navy,#163b4c)'],
+  ]));
+  art.append(p(`Lo que SÍ baja: ${listaConceptos(r.meta.reducibles)}. Lo que NO baja: ${listaConceptos(r.meta.noReducibles)}.`));
+  art.append(p(`Por eso, aunque se instalaran más paneles de los que se necesitan, el pago de un período no ` +
+    `bajaría de ${M(r.pisoPeriodo)} (ya con IVA y DAP) frente a los ${M(r.pagoRecurrentePeriodo)} actuales. El ` +
+    `ahorro máximo posible en este recibo, sin importar cuántos paneles se instalen, es de ${M(r.ahorroMaxPeriodo)} ` +
+    `por período — un ${PCT(r.pctMaxPeriodo)}.`));
+  art.append(avisoCream('No se prometen ahorros de demanda sin conocer la energía importada y la demanda después ' +
+    'de instalar. Conservar su importe en el presupuesto es un criterio prudente, no afirmar que esos cargos sean fijos.'));
+  return art;
+}
+
+// ---------- 05: consumo anual ----------
+function s05(r, _leido, onToggle) {
+  const art = crearSeccion(5, 'Consumo anual: base disponible', '¿Con qué consumo anual se dimensiona el sistema?', r, onToggle);
+  const historial = r.historial;
+  if (historial && historial.length >= 3) {
+    art.append(badgeEstado('comprobado'));
+    art.append(p(`El propio recibo trae impreso un historial de ${historial.length} períodos ya facturados — es ` +
+      'la base más confiable para calcular el consumo anual, mejor que suponer que todos los meses son iguales al último período.'));
+    const meses = historial.map(x => `${x.mes}${x.anio}`);
+    const kwh = historial.map(x => x.kwh);
+    const prom = kwh.reduce((a, b) => a + b, 0) / kwh.length;
+    art.append(barraAgrupada(meses, 'Consumo real facturado', kwh, 'Promedio del historial', kwh.map(() => prom)));
+    art.append(tabla(['Período', 'Consumo facturado'], historial.map(x => [`${x.mes} ${x.anio}`, `${x.kwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]), { small: true }));
+  } else {
+    art.append(badgeEstado('supuesto'));
+  }
+  art.append(tabla(['Base de trabajo', 'Resultado'], [
+    ['Período observado', r.periodoKwh && r.periodoDias ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh en ${r.periodoDias} días` : 'por confirmar'],
+    ['Base usada para el consumo anual', r.basisConsumo],
+    ['Consumo anual de referencia', `${r.annualKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año`],
+    ['Gasto anual de referencia', M(r.annualbefore) + ' con IVA y 12 cuotas de DAP'],
+  ]));
+  if (historial && historial.length >= 6) {
+    art.append(avisoCream(`Esta base usa el historial real de consumo del propio recibo (${historial.length} períodos), no una extrapolación de un solo mes.`));
+  } else {
+    art.append(avisoCream('La extrapolación de un solo período sirve para presupuestar. El historial de consumo ' +
+      'de 12 meses, cuando esté disponible, debe usarse para confirmar esta base antes de comprometer una cifra de ahorro definitiva.'));
+  }
+  return art;
+}
+
+// ---------- 06: sistema propuesto (+ condiciones del inmueble) ----------
+function s06(r, _leido, onToggle) {
+  const art = crearSeccion(6, `Sistema propuesto: ${r.n} paneles de ${r.moduloWp} W`, 'Paneles → inversor → inmueble ↔ red. ¿Qué se instalaría?', r, onToggle);
+  const esquema = el('div', 'esquema-sistema');
+  esquema.innerHTML = '<span>☀️ Paneles</span><span class="flecha">→</span><span>⚡ Inversor</span>' +
+    '<span class="flecha">→</span><span>🏠 Inmueble</span><span class="flecha-doble">↔</span><span>🔌 Red CFE</span>';
+  art.append(esquema);
+  const acKw = r.kwp / 1.2;
+  art.append(tabla(['Parte del sistema', 'Cantidad y función'], [
+    ['Paneles', `${r.n} módulos de ${r.moduloWp} W: ${r.kwp.toFixed(2)} kWp de potencia nominal. Marca y modelo por confirmar.`],
+    ['Inversor', `${acKw.toFixed(2)} kW AC como capacidad de cálculo económico; equipo comercial por seleccionar.`],
+    ['Relación DC:AC', '1.2 — el inversor se dimensiona más chico que la suma de los paneles a propósito (práctica estándar de la industria, no un error de cálculo): los paneles casi nunca producen su potencia máxima al mismo tiempo.'],
+    ['Estructura', 'Compatible con cubierta y panel. Anclajes, viento y cargas por calcular.'],
+    ['Conexiones y protecciones', 'Cables DC/AC, conectores, canalización, protecciones y puesta a tierra previstos.'],
+    ['Monitoreo', 'Consulta de producción, según solución y comunicaciones disponibles.'],
+    ['Espacio preliminar', `${(r.n * 4).toLocaleString('en-US')} m² con pasillos, como provisión de 4 m² por módulo; sujeto a levantamiento.`],
+    ['Baterías / respaldo', 'No incluidas. No hay respaldo durante apagones en esta propuesta.'],
+  ]));
+  art.append(avisoCream('Es una distribución conceptual, sin levantamiento validado: no es prueba de cabida, ' +
+    'escala exacta ni seguridad estructural. La potencia y las cantidades presupuestadas no sustituyen el plano ' +
+    'y los cálculos de ingeniería.'));
+
+  // --- Condiciones actuales del inmueble (dato nuevo que no tenia un lugar en las 21
+  // paginas de Python; se integra aqui -- ver propuesta al usuario de no crear una
+  // seccion 22 automatica, sino usar el espacio natural de "sistema propuesto"). ---
+  const inm = r.inmueble || {};
+  const hayDatos = Object.values(inm).some(v => v);
+  art.append(el('h3', null, 'Condiciones actuales del inmueble'));
+  if (!hayDatos) {
+    art.append(badgeEstado('pendiente'));
+    art.append(avisoCream('Sin datos capturados todavía del sitio. Completar en "Datos y recibo → Condiciones ' +
+      'del inmueble" cuando se tenga la visita o la información del cliente.'));
+  } else {
+    art.append(p('Resumen de la situación actual, según lo capturado (ver estados: declarado = lo dijo el ' +
+      'cliente; pendiente = falta confirmarlo).'));
+    const filaCondicion = (etiqueta, valor) => [etiqueta, valor || '— pendiente —'];
+    art.append(tabla(['Condición', 'Dato'], [
+      filaCondicion('Actividad del inmueble', inm.actividad),
+      filaCondicion('Horarios y días de operación', inm.horarios),
+      filaCondicion('Equipos principales / cambios previstos', inm.equipos),
+      filaCondicion('Tensión y fases', inm.tensionFases),
+      filaCondicion('Tablero e interruptor principal', inm.tablero),
+      filaCondicion('Transformador', inm.transformador),
+      filaCondicion('Tierra física', inm.tierraFisica),
+      filaCondicion('Punto de conexión posible', inm.puntoConexion),
+      filaCondicion('Tipo y estado de cubierta', inm.cubierta),
+      filaCondicion('Dimensiones / área disponible', inm.areaDisponible ? `${inm.areaDisponible} (${inm.areaFuente === 'medida' ? 'medida' : 'estimada'})` : null),
+      filaCondicion('Sombras, obstáculos, accesos', inm.sombras),
+      filaCondicion('Sistemas solares/baterías existentes', inm.sistemasExistentes),
+      filaCondicion('Fecha de visita y notas', [inm.fechaVisita, inm.notas].filter(Boolean).join(' — ')),
+    ], { small: true }));
+    art.append(el('div', 'recuadro-implica',
+      '<strong>Qué implica para la propuesta:</strong> estos datos son los que la persona declaró o se observaron ' +
+      'en sitio; no reemplazan un levantamiento técnico. No se deduce tensión o fases solo por el número de hilos ' +
+      'del recibo, y ninguna fotografía o inspección visual aquí descrita es un dictamen estructural.'));
+  }
+  return art;
+}
+
+// ---------- 07: produccion ----------
+function s07(r, _leido, onToggle) {
+  const art = crearSeccion(7, 'Cuánta electricidad podría producir', '¿Cuánta energía generarían los paneles al año?', r, onToggle);
+  art.append(tarjetas([
+    [`${r.gen.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Producción anual regional estimada'],
+    [(r.gen / r.kwp).toLocaleString('en-US', { maximumFractionDigits: 2 }), 'kWh por kWp al año de referencia'],
+    [`${r.kwp.toFixed(2)} kWp`, 'Potencia nominal de cálculo'],
+  ]));
+  art.append(p('El segundo número (kWh por kWp al año) es un indicador de rendimiento. Con el criterio fijo de ' +
+    'horas-sol que se explica abajo, ese número sale prácticamente igual sin importar el predio o el tamaño del ' +
+    'sistema — no es un error de cálculo ni algo específico de este inmueble.'));
+  const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
+  art.append(barraAgrupada(mesesAbrev, 'Generación estimada', r.rows.map(x => x.generacionKwh), 'Consumo extrapolado', r.rows.map(x => x.consumoExtrapoladoKwh)));
+  art.append(detalle('Ver detalle', tabla(['Mes', 'Generación estimada', 'Consumo extrapolado'],
+    r.rows.map(x => [x.mes, `${x.generacionKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${x.consumoExtrapoladoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]), { small: true })));
+  art.append(badgeEstado('supuesto'));
+  art.append(avisoCream(r.metodoGeneracion || 'Criterio preliminar de horas-sol fijas (4.5 h/día, 30.5 días/mes), ' +
+    'no una simulación con PVGIS ni datos de irradiancia reales del sitio. No hay simulación de sombras exactas ' +
+    'del inmueble ni descuento de pérdidas de sistema. Generar el equivalente al 100% de los kWh consumidos no ' +
+    'significa ahorrar el 100% de la factura ni disponer de respaldo durante apagones.'));
+  return art;
+}
+
+// ---------- 08: impacto ambiental ----------
+function s08(r, _leido, onToggle) {
+  const art = crearSeccion(8, 'Impacto ambiental estimado', '¿Cuánto CO2 evitaría generar su propia electricidad?', r, onToggle);
+  const co2Kg = r.gen * FACTOR_CO2_KG_KWH, co2Ton = co2Kg / 1000, arboles = co2Kg / CO2_KG_POR_ARBOL_ANIO;
+  art.append(p('Generar su propia electricidad con el sol, en vez de tomarla de la red (que en México todavía se ' +
+    'produce en buena parte quemando combustibles), evita que se emita cierta cantidad de CO2 cada año que el sistema esté funcionando.'));
+  art.append(tarjetas([
+    [`${co2Ton.toLocaleString('en-US', { maximumFractionDigits: 1 })} ton`, 'CO2 evitado estimado, cada año'],
+    [`${arboles.toLocaleString('en-US', { maximumFractionDigits: 0 })} árboles`, 'Equivalente en árboles urbanos durante un año'],
+    [`${(co2Ton * 25).toLocaleString('en-US', { maximumFractionDigits: 0 })} ton`, 'CO2 evitado acumulado en 25 años (sin degradación)'],
+  ]));
+  art.append(badgeEstado('supuesto'));
+  art.append(avisoCream(`Estimación de referencia: ${FACTOR_CO2_KG_KWH} kg de CO2 evitado por cada kWh generado ` +
+    '(factor de emisión del Sistema Eléctrico Nacional, varía por año según lo publicado por SEMARNAT/CFE) y ~' +
+    `${CO2_KG_POR_ARBOL_ANIO.toFixed(0)} kg de CO2 absorbido por árbol urbano al año. No es una certificación de bono de carbono ni una medición propia del inmueble.`));
+  return art;
+}
+
+// ---------- 09: como se obtiene el ahorro ----------
+function s09(r, _leido, onToggle) {
+  const art = crearSeccion(9, 'Cómo se obtiene el ahorro que se presenta', '¿Qué reglas sigue el modelo para calcular el ahorro?', r, onToggle);
+  art.append(p('Se calcula mes a mes la energía neta facturable y la factura resultante. En palabras simples, el modelo sigue estas reglas:'));
+  art.append(tabla(['Criterio', 'Aplicación'], [
+    ['Compensación', 'Medición neta: lo que generan los paneles se resta directo de su consumo del mes, en vez de vendérselo a CFE aparte. Requiere contrato y medidor autorizados.'],
+    ['Energía aplicada', 'Cada mes se compara cuánto consumió contra cuánto generaron los paneles ese mismo mes, y se usa el MENOR de los dos — así nunca se le da más ahorro del que realmente generó (se reserva además un 1% de margen de seguridad).'],
+    ['Excedentes entre meses', 'Si algún mes los paneles generan más de lo que consume, ese sobrante no se guarda para el siguiente mes ni se vende aparte: el modelo no le da ningún valor económico.'],
+    [listaConceptos(r.meta.noReducibles), 'Se conserva su gasto de referencia proporcional a días, sin presupuestar ahorro adicional.'],
+    ['IVA y DAP', 'Se incluye IVA 16%. Se conserva el DAP observado en los pagos modelados.'],
+  ]));
+  art.append(badgeEstado('comprobado'));
+  art.append(avisoCream('Esta estimación no es una refacturación oficial de CFE ni una garantía mínima de ahorro.'));
+  return art;
+}
+
+// ---------- 10: cuanto pagaria y ahorraria ----------
+function s10(r, _leido, onToggle) {
+  const art = crearSeccion(10, 'Cuánto pagaría y cuánto ahorraría', 'Comparación directa: factura sin solar vs. con solar.', r, onToggle);
+  art.append(barraHorizontal([
+    ['Hoy, sin paneles (al año)', r.annualbefore, 'var(--cfe-navy,#163b4c)'],
+    ['Con paneles (al año)', r.annualafter, 'var(--cfe-teal,#21798b)'],
+  ]));
+  art.append(tabla(['Concepto comparable', 'Sin sistema', 'Con sistema estimado'], [
+    ['Gasto anual de referencia', M(r.annualbefore), M(r.annualafter)],
+    ['Promedio mensual del año', M(r.annualbefore / 12), M(r.annualafter / 12)],
+    ['Ahorro anual de factura', '—', M(r.ahorroAnual)],
+    ['Ahorro promedio mensual', '—', M(r.ahorroAnual / 12)],
+    ['Ahorro total anual', '—', PCT(r.pctAhorro)],
+    ['Mantenimiento del primer año', '—', M(r.om1)],
+    ['Ahorro neto del primer año', '—', M(r.ahorroAnual - r.om1)],
+  ]));
+  art.append(p('El ahorro de factura es la diferencia entre pagos de electricidad. El ahorro neto descuenta el ' +
+    'mantenimiento; no son cifras que deban sumarse.'));
+  art.append(avisoCream('Son estimaciones con las bases descritas. El ahorro real se medirá después de operar, comparando recibos equivalentes y cambios de consumo.'));
+  return art;
+}
+
+// ---------- 11: presupuesto resumen ----------
+function s11(r, _leido, onToggle) {
+  const art = crearSeccion(11, 'Presupuesto y alcance económico', '¿Cuánto cuesta el sistema completo, con IVA?', r, onToggle);
+  art.append(tabla(['Resumen de venta', 'Importe'], [
+    ['Subtotal', M(r.ventaSinIva)], ['IVA 16%', M(r.iva)], ['INVERSIÓN TOTAL ESTIMADA', M(r.investment)],
+  ]));
+  const cat = agruparPresupuesto(r.materiales);
+  art.append(barraHorizontal(cat.map(([g, v]) => [g, v, 'var(--cfe-navy,#163b4c)'])));
+  art.append(p('La inversión contempla los equipos y trabajos agrupados arriba (detalle completo en la sección ' +
+    'siguiente): módulos, inversor presupuestado, estructura, conexión, protecciones, monitoreo, ingeniería, ' +
+    'gestión, flete, montaje y pruebas dentro de las cantidades previstas.'));
+  art.append(avisoCream('Los precios deberán actualizarse y confirmarse antes de contratar. El total ya incluye ' +
+    'el IVA modelado. No se supone devolución de IVA, deducciones fiscales, subsidios ni financiamiento.'));
+  return art;
+}
+
+// ---------- 12: detalle presupuesto ----------
+function s12(r, _leido, onToggle) {
+  const art = crearSeccion(12, 'Detalle del presupuesto', '¿Qué partidas específicas componen el presupuesto?', r, onToggle);
+  art.append(tabla(['Concepto', 'Cantidad prevista', 'Importe sin IVA'],
+    r.materiales.map(m => [m.partida, `${m.cantidad.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${m.unidad}`, M(m.importeMxn)]), { small: true }));
+  const sumaPartidas = r.materiales.reduce((s, m) => s + m.importeMxn, 0);
+  art.append(p(`Subtotal: ${M(r.ventaSinIva)} · IVA: ${M(r.iva)} · Inversión con IVA: ${M(r.investment)}.`));
+  art.append(detalle('Ver detalle', p(
+    `Verificación: la suma de las ${r.materiales.length} partidas (${M(sumaPartidas)}) coincide con el Subtotal ` +
+    `(${M(r.ventaSinIva)}); el IVA se aplica una sola vez sobre ese Subtotal. Los costos de adquisición, ` +
+    'contingencia y margen comercial se reparten de forma proporcional dentro del precio de cada partida — no se ' +
+    'exponen como un renglón de utilidad aparte en este documento para el cliente.')));
+  art.append(avisoCream('Las capacidades, longitudes y accesorios son provisiones. El modelo de inversor, ' +
+    'calibres y cantidades finales se ajustarán mediante ingeniería y cotización vigente antes de contratar.'));
+  return art;
+}
+
+// ---------- 13: recuperacion ----------
+function s13(r, _leido, onToggle) {
+  const art = crearSeccion(13, 'En cuánto se recuperaría la inversión', '¿Cuándo deja de deber la inversión y empieza a ganar?', r, onToggle);
+  const paybackTxt = r.payback ? `${r.payback.toFixed(1)} años` : 'no calculable con el ahorro actual';
+  art.append(p(`Esta es la pregunta más importante de todo el estudio. Con este cálculo, la respuesta es ${paybackTxt}.`));
+  if (r.flujo25Rows && r.flujo25Rows.length) {
+    art.append(curvaFlujo(r.flujo25Rows.map(x => [x.anio, x.acumuladoMxn]), r.recuperacionAcumulada));
+  }
+  const roi = r.investment ? r.ahorroAnual / r.investment : 0;
+  const bc = beneficioCosto(r);
+  const reposicionAnio = (r.flujo25Rows || []).find(x => x.reposicionMxn)?.anio;
+  const filasInd = [
+    ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años: inversión / ahorro neto del primer año.` : 'Sin recuperación con el ahorro neto del primer año.'],
+    ['Recuperación del flujo', r.recuperacionAcumulada ? `${r.recuperacionAcumulada.toFixed(1)} años, considerando degradación, mantenimiento creciente${reposicionAnio ? ` y reposición del inversor en el año ${reposicionAnio}.` : '.'}` : 'No se recupera dentro del horizonte de 25 años.'],
+    ['ROI anual simple', `${PCT(roi)}: ahorro neto del primer año / inversión.`],
+    ['TIR (tasa interna de retorno)', r.tir ? `${PCT(r.tir)} del flujo de 25 años: equivale a la ganancia anual de invertir ese dinero ahí en vez de en otra parte. No es una tasa garantizada.` : 'No calculable con un solo cambio de signo.'],
+    ['VAN (valor actual neto) al 10%', `${M(r.van)}: cuánto más valen, en pesos de hoy, los ahorros futuros que lo que costó el sistema.`],
+  ];
+  if (bc != null) filasInd.push(['Beneficio/costo', `${bc.toFixed(2)}: por cada peso invertido (y gastado en mantenimiento), regresa ${bc.toFixed(2)} pesos actualizados en ahorros.`]);
+  art.append(tabla(['Indicador estimado', 'Resultado y explicación'], filasInd, { small: true }));
+  const escPct = r.escalamientoTarifaPct || 0;
+  const escTxt = escPct
+    ? `Se supone que la tarifa de CFE sube ${escPct.toFixed(1)}% anual (criterio del estudio, no una cifra oficial de CFE) a partir del año 1.`
+    : 'Los precios de electricidad se mantienen constantes como base económica del recibo (sin supuesto de incremento de tarifa).';
+  art.append(badgeEstado('supuesto'));
+  art.append(avisoCream('Se consideran degradación de 0.5% anual, mantenimiento inicial de 1% de la venta sin ' +
+    'IVA que crece 3% anual' + (reposicionAnio ? `, y reposición del inversor en el año ${reposicionAnio}. ` : '. No se incluyó reposición de inversor en este cálculo. ') +
+    escTxt + ' No se presentan rendimientos ni recuperación como garantías.'));
+  return art;
+}
+function beneficioCosto(r) {
+  const flujo25 = r.flujo25Rows || [];
+  if (!flujo25.length) return null;
+  const beneficioDesc = flujo25.filter(x => x.anio > 0).reduce((s, x) => s + x.ahorroMxn / Math.pow(1.10, x.anio), 0);
+  const costoDesc = r.investment + flujo25.filter(x => x.anio > 0).reduce((s, x) => s + x.omMxn / Math.pow(1.10, x.anio), 0);
+  return costoDesc ? beneficioDesc / costoDesc : null;
+}
+
+// ---------- 14: flujo 25 años ----------
+function s14(r, _leido, onToggle) {
+  const art = crearSeccion(14, 'Flujo del proyecto durante 25 años', '¿Cómo se ve el dinero del proyecto año por año?', r, onToggle);
+  const flujo25 = r.flujo25Rows || [];
+  if (flujo25.length) {
+    const reposicionAnio = flujo25.find(x => x.reposicionMxn)?.anio;
+    const montoReposicion = flujo25.find(x => x.reposicionMxn)?.reposicionMxn || 0;
+    art.append(p(`Año cero: inversión de ${M(r.investment)}. El flujo neto descuenta mantenimiento` +
+      (reposicionAnio ? ` y, en el año ${reposicionAnio}, ${M(montoReposicion)} de reposición del inversor (precio de hoy del inversor presupuestado, escalado al año ${reposicionAnio}).` : '. No se incluyó reposición de inversor en este cálculo.') +
+      ' Importes en MXN.'));
+    const filasFlujo = flujo25.filter(x => x.anio > 0).map(x => [
+      x.reposicionMxn ? `${x.anio} *` : x.anio, M(x.ahorroMxn), M(x.flujoMxn), M(x.acumuladoMxn)]);
+    art.append(detalle('Ver tabla completa', tabla(['Año', 'Ahorro factura', 'Flujo neto', 'Acumulado'], filasFlujo, { small: true })));
+    if (reposicionAnio) art.append(p('* Año con reposición de inversor incluida en el Flujo neto.'));
+  } else {
+    art.append(p('Flujo a 25 años no disponible para este cálculo.'));
+  }
+  art.append(avisoCream('El cálculo mensual no da valor a excedentes entre meses ni reduce los cargos por ' +
+    'demanda; no incluye crédito, efectos fiscales, valor de rescate ni venta de energía.'));
+  return art;
+}
+
+// ---------- 15: pagos mensuales ----------
+function s15(r, _leido, onToggle) {
+  const art = crearSeccion(15, 'Pagos estimados por mes del año de referencia', '¿Cómo se ve el pago mes a mes, con y sin paneles?', r, onToggle);
+  const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
+  art.append(barraAgrupada(mesesAbrev, 'Sin solar', r.rows.map(x => x.pagoSinSolarMxn), 'Con solar estimado', r.rows.map(x => x.pagoConSolarEstimadoMxn), { fmt: M }));
+  art.append(detalle('Ver tabla mes a mes', tabla(['Mes', 'Sin solar', 'Con solar estimado', 'Ahorro estimado'],
+    r.rows.map(x => [x.mes, M(x.pagoSinSolarMxn), M(x.pagoConSolarEstimadoMxn), M(x.ahorroEstimadoMxn)]), { small: true })));
+  art.append(p(`Total anual: ${M(r.annualbefore)} sin solar y ${M(r.annualafter)} con solar. Ahorro estimado: ${M(r.ahorroAnual)}.`));
+  art.append(avisoCream('Los meses son un año de referencia climático y de consumo extrapolado, no una fecha ' +
+    'prometida de instalación. No se presentan meses del historial como si ya hubieran operado con paneles.'));
+  return art;
+}
+
+// ---------- 16: que tan cerca del 100% ----------
+function s16(r, _leido, onToggle) {
+  const art = crearSeccion(16, 'Qué tan cerca se puede llegar al 100% de ahorro', '¿Por qué la propuesta no llega al 100% de ahorro?', r, onToggle);
+  art.append(gauge(r.pctMaxPeriodo, 'Ahorro máximo posible de este recibo'));
+  art.append(p(`Para ahorrar el 100% de un pago recurrente de ${M(r.pagoRecurrentePeriodo)} por ${r.periodoDias || '?'} ` +
+    'días, el pago residual tendría que ser $0.00. La generación anual por sí sola no demuestra ese resultado.'));
+  art.append(p('La estimación comercial aquí presentada no llega a ese 100%, por DOS razones distintas e independientes entre sí:'));
+  art.append(el('h3', null, '1. El piso estructural de su tarifa'));
+  art.append(p(`El piso estructural de este recibo es ${M(r.pisoPeriodo)} por período (${PCT(r.pctMaxPeriodo)} de ` +
+    'ahorro máximo) — ver sección 4. Sin importar cuántos paneles se instalen, esta parte de la factura no baja a cero.'));
+  art.append(el('h3', null, '2. El alumbrado público (DAP), un cobro aparte'));
+  art.append(p('La Ley de Ingresos de cada municipio de Puebla suele fijar una cuota mensual de alumbrado público ' +
+    '(DAP), con un descuento (estímulo) cuando el consumo de energía baja lo suficiente (en el municipio de ' +
+    'Puebla capital, el menor entre la cuota fija y el 6.5% del importe de energía del período). Este cobro no ' +
+    'depende de los paneles ni de la tarifa eléctrica: es un trámite municipal aparte. En el recibo observado se ' +
+    'paga la cuota completa; conviene verificar la regla vigente para el municipio específico de este inmueble.'));
+  art.append(avisoCream('No se ofrece un porcentaje de ahorro garantizado ni se declara un piso absoluto de pago. ' +
+    'El contrato deberá usar un compromiso sustentado en medición, ingeniería y reglas de facturación verificadas.'));
+  return art;
+}
+
+// ---------- 17: que falta ----------
+function s17(r, leido, onToggle) {
+  const art = crearSeccion(17, 'Qué hace falta para cerrar el ahorro', '¿Qué pendientes hay antes de ofertar en firme?', r, onToggle);
+  const notas = r.notas || [];
+  if (notas.length) {
+    for (const n of notas) art.append(avisoCream(n));
+  } else {
+    art.append(avisoCream('Sin pendientes detectados automáticamente; revisar de todas formas el recibo original antes de presentar una oferta firme.'));
+  }
+  void leido;
+  return art;
+}
+
+// ---------- 18: alcance y condiciones ----------
+function s18(r, _leido, onToggle) {
+  const art = crearSeccion(18, 'Alcance, exclusiones y condiciones comerciales', '¿Qué incluye y qué NO incluye el presupuesto?', r, onToggle);
+  art.append(p('Incluye provisiones para suministro, montaje, conexión, protecciones, puesta a tierra, ' +
+    'monitoreo, ingeniería, documentación, preparación y seguimiento de gestión, flete, pruebas y capacitación básica dentro del presupuesto.'));
+  art.append(p('No incluye baterías, respaldo en apagones, refuerzo estructural, sustitución de cubierta, ' +
+    'impermeabilización general, cambio de transformador, obra de media tensión ni rehabilitación eléctrica ' +
+    'ajena al sistema. Cualquier necesidad adicional se cotizará y aceptará por escrito.'));
+  art.append(tabla(['Condiciones de pago sugeridas', ''], COMERCIAL.pagos.map(pg => [`${Math.round(pg.porcentaje * 100)}%`, pg.hito])));
+  art.append(p(COMERCIAL.naturalezaCondiciones));
+  art.append(detalle('Ver cronograma estimado', tabla(['Etapa', 'Plazo estimado'], COMERCIAL.cronograma, { small: true })));
+  art.append(badgeEstado('declarado'));
+  art.append(avisoCream('Los precios deberán actualizarse antes de contratar. Las garantías serán las ' +
+    'documentadas para los equipos y trabajos efectivamente suministrados.'));
+  return art;
+}
+
+// ---------- 19: entrega y mantenimiento ----------
+function s19(r, _leido, onToggle) {
+  const art = crearSeccion(19, 'Entrega, mantenimiento y comprobación del ahorro', '¿Qué se entrega, y cómo se comprueba el ahorro ya operando?', r, onToggle);
+  art.append(tabla(['Momento', 'Entrega o comprobación'], [
+    ['Antes de obra', 'Plano, diagrama unifilar, memoria eléctrica, cálculo de estructura, modelos, protecciones, alcance y contrato.'],
+    ['Al terminar', 'Inventario y números de serie, pruebas, documentación de conexión, manuales y garantías, plano final, acceso al monitoreo y capacitación.'],
+    ['Durante operación', 'Registrar producción, importaciones, exportaciones, demanda, consumo y recibos. Revisar limpiezas, conexiones y alarmas.'],
+    ['Para medir ahorro', 'Comparar factura sin solar ajustada al consumo real con factura efectivamente pagada, en períodos equivalentes. Separar IVA, DAP, adeudos y cambios tarifarios.'],
+  ]));
+  art.append(p(`El mantenimiento inicial modelado es ${M(r.om1)} al año. Es una provisión económica, no una póliza ` +
+    'incluida gratuitamente ni un precio fijo para toda la vida del sistema.'));
+  art.append(avisoCream(COMERCIAL.garantiaInstalacion));
+  art.append(avisoCream(COMERCIAL.garantiaEquipos));
+  return art;
+}
+
+// ---------- 20: glosario ----------
+function s20(r, _leido, onToggle) {
+  const art = crearSeccion(20, 'Glosario: términos usados en este estudio', 'Consulta rápida del significado de los términos técnicos.', r, onToggle);
+  art.append(tabla(['Término', 'Qué significa'], [
+    ['kWh (kilowatt-hora)', 'La unidad en la que CFE cobra la electricidad: cuánta energía se consumió. Es lo que aparece en su recibo.'],
+    ['kW / kWp (kilowatt / kilowatt pico)', 'La potencia (velocidad a la que se consume o se genera electricidad en un instante). "Pico" es la potencia máxima que pueden dar los paneles en condiciones ideales de sol.'],
+    ['Demanda contratada', 'En tarifas de negocio/gobierno, la potencia máxima que CFE tiene reservada para ese servicio; se paga por tenerla disponible, exista o no consumo.'],
+    ['Medición neta', 'El esquema de CFE donde la energía que generan los paneles se resta de la que se consume, en vez de venderse aparte.'],
+    ['Relación de desempeño (PR)', 'Qué tan cerca está la producción real de lo ideal, después de descontar pérdidas (cableado, temperatura, suciedad, eficiencia del inversor).'],
+    ['Degradación', 'La pérdida pequeña y normal de producción de los paneles cada año (en este estudio, 0.5% anual).'],
+    ['Recuperación simple', 'En cuántos años el ahorro de los primeros años, sumado, iguala lo que costó el sistema — sin considerar que ese ahorro cambia con el tiempo.'],
+    ['Recuperación del flujo', 'Lo mismo, pero tomando en cuenta la degradación, el mantenimiento que crece y el cambio de inversor — un cálculo más realista.'],
+    ['ROI (retorno sobre la inversión)', 'El ahorro del primer año como porcentaje de lo que costó el sistema.'],
+    ['TIR (tasa interna de retorno)', 'La ganancia anual que representa esta inversión, expresada como una tasa de interés — para comparar contra otras inversiones u opciones de ahorro.'],
+    ['VAN (valor actual neto)', 'Cuánto vale hoy, en pesos de hoy, el conjunto de ahorros futuros, después de descontar lo que costó el sistema.'],
+    ['Beneficio/costo', 'Por cada peso que cuesta el sistema (incluido el mantenimiento), cuántos pesos regresa en ahorros a lo largo de los años.'],
+    ['DAP (Derecho de Alumbrado Público)', 'Un cobro aparte que los municipios le piden a CFE que incluya en el recibo, para el alumbrado de las calles — no es parte del consumo de electricidad del predio.'],
+    ['CENACE / SCnMEM', 'Cargos que CFE traslada tal cual del operador del mercado eléctrico nacional; no los fija CFE libremente.'],
+  ], { small: true }));
+  return art;
+}
+
+// ---------- 21: fuentes ----------
+function s21(r, _leido, onToggle) {
+  const art = crearSeccion(21, 'Fuentes y trazabilidad del cálculo', '¿En qué se basa cada número de este estudio?', r, onToggle);
+  art.append(tabla(['Elemento', 'Fuente'], [
+    ['Documento principal', `Recibo CFE del servicio ${r.noServicio || 'por confirmar'}${r.periodoDias ? ', período ' + r.periodoDias + ' días' : ''}.`],
+    ['Producción', r.metodoGeneracion || 'Criterio preliminar de horas-sol fijas (4.5 h/día, 30.5 días/mes), no PVGIS ni irradiancia real del sitio.'],
+    ['Marco tarifario', 'Acuerdo CNE 2026, apartados 3.1.2, 5.1, 5.2 y 5.5. sidof.segob.gob.mx/notas/docFuente/5783862'],
+    ['Compensación', 'Metodología de medición neta del Anexo I de RES/142/2017 y contrato que corresponda al suministro.'],
+    ['DAP', 'Ley de Ingresos del municipio correspondiente para el ejercicio vigente; verificar artículo y porcentaje de estímulo aplicable al inmueble específico.'],
+    ['Impacto ambiental', `Factor de emisión de referencia ${FACTOR_CO2_KG_KWH} kg CO2/kWh (Sistema Eléctrico Nacional, SEMARNAT/CFE) y absorción de referencia de árbol urbano.`],
+  ]));
+  art.append(avisoCream('Se conserva evidencia, archivo de cálculo mensual, presupuesto y flujo financiero. El ' +
+    'recibo no acredita un contrato de generación firmado ni un ahorro futuro medido.'));
+  return art;
+}
+
+const RENDERERS = [s01, s02, s03, s04, s05, s06, s07, s08, s09, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21];
+
+export const TITULOS_SECCIONES = [
+  'Su proyecto, explicado en una página', 'Su recibo: datos comprobados', 'Cómo se forma lo que paga a CFE',
+  'Qué cargos pueden disminuir', 'Consumo anual: base disponible', 'Sistema propuesto',
+  'Cuánta electricidad podría producir', 'Impacto ambiental estimado', 'Cómo se obtiene el ahorro que se presenta',
+  'Cuánto pagaría y cuánto ahorraría', 'Presupuesto y alcance económico', 'Detalle del presupuesto',
+  'En cuánto se recuperaría la inversión', 'Flujo del proyecto durante 25 años',
+  'Pagos estimados por mes del año de referencia', 'Qué tan cerca se puede llegar al 100% de ahorro',
+  'Qué hace falta para cerrar el ahorro', 'Alcance, exclusiones y condiciones comerciales',
+  'Entrega, mantenimiento y comprobación del ahorro', 'Glosario: términos usados en este estudio',
+  'Fuentes y trazabilidad del cálculo',
+];
+
+// renderSeccion(numero 1..21, r, leido, onToggle) -> HTMLElement
+export function renderSeccion(numero, r, leido, onToggle) {
+  const fn = RENDERERS[numero - 1];
+  return fn(r, leido, onToggle);
+}

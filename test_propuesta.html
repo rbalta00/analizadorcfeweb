@@ -1,65 +1,39 @@
 <!doctype html>
 <html lang="es">
-<head><meta charset="utf-8" /><title>Prueba generador de PDF</title></head>
+<head><meta charset="utf-8" /><title>Prueba generador de PDF (21 páginas)</title></head>
 <body>
-  <h1>Prueba: generar PDF (pagina 1) con datos reales de Abue</h1>
+  <h1>Prueba: generar PDF completo (21 páginas) con datos reales de Abue</h1>
   <button id="btn">Generar y mostrar</button>
+  <label><input type="checkbox" id="soloResumen" /> Solo la página 1 (probar que el toggle de bloques funciona)</label>
   <div id="visor" style="margin-top: 16px;"></div>
 
   <script src="lib/pdf.min.js"></script>
   <script src="lib/jspdf.umd.min.js"></script>
   <script type="module">
-    import {
-      construirInvoice, pisoDeAhorro, flujoMensualAnual, dimensionarHorasSol,
-      normalizarConsumoMensual, presupuestar, costoInversor, flujo25Anios, COSTOS_RESIDENCIAL,
-    } from './js/motor.js';
+    import { COSTOS_RESIDENCIAL } from './js/motor.js';
+    import { construirResultado } from './js/resultado.js';
     import { generarPdf } from './js/propuesta.js';
 
     document.getElementById('btn').addEventListener('click', () => {
       // Datos reales del recibo de Casa del Abue Sur (ya verificados contra Python toda la sesion).
-      const tarifa = 'GDMTO', periodoDias = 32, periodoKwh = 2400.0;
       const cargos = { suministro: 353.02, distribucion: 951.6, transmision: 432.24, cenace: 18.24,
                         capacidad: 2134.43, scnmem: 16.56, energia: 3182.4 };
-      const rateKw = { distribucion: 1.0, capacidad: 1.0 };
-      const dap = 197.0;
-      // bt_monto/bonus_monto reales del recibo de Abue (2% baja tension + bonificacion factor de potencia).
-      const baseAprox = Object.values(cargos).reduce((a, b) => a + b, 0) || 1.0;
-      const btMonto = 141.77, bonusMonto = 180.76;
-      const btPct = btMonto / baseAprox;
-      const fpBonusPct = bonusMonto / (baseAprox + btMonto);
-
-      const { invoice, meta } = construirInvoice(tarifa, periodoDias, periodoKwh, cargos, rateKw, dap, btPct, fpBonusPct);
-      const consumoMensual = normalizarConsumoMensual(periodoKwh, periodoDias);
-      const { n, kwp, genAnual } = dimensionarHorasSol(consumoMensual, 605, 1.0, 4.5);
-      const monthlyE = Array(12).fill(genAnual / kwp);
-      const pres = presupuestar(n, kwp, 605, COSTOS_RESIDENCIAL);
-      const dailyKwh = periodoKwh / periodoDias;
-      const pagoRecurrente = invoice(periodoDias, periodoKwh, false).total;
-      pisoDeAhorro(periodoDias, pagoRecurrente, invoice);
-      const rows = flujoMensualAnual(invoice, dailyKwh, monthlyE, kwp, 1);
-      const annualbefore = Math.round(rows.reduce((s, x) => s + x.pagoSinSolarMxn, 0) * 100) / 100;
-      const annualafter = Math.round(rows.reduce((s, x) => s + x.pagoConSolarEstimadoMxn, 0) * 100) / 100;
-      const ahorroAnual = Math.round((annualbefore - annualafter) * 100) / 100;
-      const pctAhorro = ahorroAnual / annualbefore;
-      const costoInv = costoInversor(pres.materiales);
-      const flujo25 = flujo25Anios(pres.inversion, ahorroAnual, 0.10, 25, 0.04, 0.01, 0.03, 0.005, costoInv);
-      const payback = pres.inversion / ahorroAnual;
-      const om1 = pres.inversion * 0.01;
-
-      const r = {
+      const r = construirResultado({
         titular: 'SEDIF CASA DEL ABUE II', domicilio: '103 PONIENTE 1559, BLVD CARMELITAS, MAYORAZGO 08H, C.P.72480, PUEBLA,PUE.',
-        noServicio: '258260200990', fechaEstudio: '29 de octubre de 2026', tarifa,
-        n, kwp, moduloWp: 605, gen: genAnual, investment: pres.inversion, payback,
-        ahorroAnual, pctAhorro, om1, annualbefore, annualafter,
-        recuperacionAcumulada: flujo25.recuperacionAcumulada, van: flujo25.van, tir: flujo25.tir,
-        flujo25Rows: flujo25.flujo, meta,
-      };
+        noServicio: '258260200990', tarifa: 'GDMTO', esDomestica: false,
+        periodoDias: 32, periodoKwh: 2400.0, dap: 197.0, cargos, rateKw: { distribucion: 1.0, capacidad: 1.0 },
+        btPct: 0.02000002821475378, fpBonusPct: 0.025000484076644545,
+        moduloWp: 605, cobertura: 1.0, horasUtiles: 4.5, costos: COSTOS_RESIDENCIAL, escalamientoPct: 4.0,
+        leido: { titular: 'SEDIF CASA DEL ABUE II', demanda_contratada_kw: null, historial: null, historial_meses_cubiertos: null },
+        inmueble: { actividad: 'Centro de día para adultos mayores (SEDIF)', tensionFases: '220V trifásico', cubierta: 'Lámina galvanizada, buen estado' },
+      });
+      window.__r = r;
 
-      const doc = generarPdf(r);
+      const secciones = document.getElementById('soloResumen').checked ? ['resumen'] : null;
+      const doc = generarPdf(r, { secciones });
       const blobUrl = doc.output('bloburl');
       document.getElementById('visor').innerHTML =
-        `<iframe src="${blobUrl}" style="width:100%;height:900px;border:1px solid #ccc;"></iframe>`;
-      window.__r = r;
+        `<iframe src="${blobUrl}" style="width:100%;height:1000px;border:1px solid #ccc;"></iframe>`;
       window.__doc = doc;
     });
   </script>
