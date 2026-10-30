@@ -345,6 +345,14 @@ se reinventa una formula aqui, solo se traduce.
         Vercel): llenar `cliente.html` -> aparece en la bandeja de `index.html` con
         contador -> asignar a cliente nuevo -> cotizacion creada y calculada
         automaticamente -> envio marcado como `asignado` en Supabase.
+      - **Boton nuevo: "💬 Enviar formulario por WhatsApp"** (pantalla Clientes, junto
+        a "📥 Envíos de clientes") -- comparte el link de `cliente.html` por WhatsApp
+        para CUALQUIER cliente, no uno fijo: usa `wa.me/?text=...` (sin numero en la
+        URL) para que Isaac elija el contacto desde su propio WhatsApp, a diferencia
+        del boton de WhatsApp de una cotizacion ya calculada (ese si manda a un
+        numero fijo). Verificado interceptando `window.open` en consola: el texto y
+        el link (`https://cotizador-fv-cfe-web.vercel.app/cliente.html`) salen
+        correctos.
 
 ## Como probarlo en el navegador
 ```

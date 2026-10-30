@@ -94,6 +94,18 @@ $('btnGuiaPresentacionGeneral').addEventListener('click', () => {
   doc.save('Guia_para_presentar_cotizacion.pdf');
 });
 
+// Comparte el link de la pagina publica (cliente.html) por WhatsApp, para CUALQUIER
+// cliente -- pedido explicito del usuario. Sin numero fijo (wa.me/?text=...), para que
+// Isaac elija el contacto desde su propio WhatsApp en vez de mandarlo siempre al mismo
+// numero (a diferencia del boton de WhatsApp de una cotizacion ya calculada, que si
+// tiene un numero fijo -- ver mas abajo).
+const URL_FORMULARIO_PUBLICO = 'https://cotizador-fv-cfe-web.vercel.app/cliente.html';
+$('btnEnviarFormularioWhatsapp').addEventListener('click', () => {
+  const mensaje = 'Hola 👋 Para preparar tu cotización de paneles solares, carga los datos de tu recibo ' +
+    `de CFE aquí (elige tu tarifa y sube una foto o el PDF de tu recibo, o llénalo a mano):\n${URL_FORMULARIO_PUBLICO}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
+});
+
 function mostrarPantallaClientes() {
   $('pantallaClientes').hidden = false;
   $('pantallaEnvios').hidden = true;
