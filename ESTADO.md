@@ -28,6 +28,21 @@ se reinventa una formula aqui, solo se traduce.
       Verificado con `npm test` contra el caso real de Casa del Abue Sur
       (32 verificaciones, todas exactas o dentro de 1 centavo) y contra un
       caso PDBT + el freno de clasificacion lanzando error correctamente.
+      **Bug real encontrado y corregido esta sesion**: tanto `js/test_motor.mjs`
+      (el "ground truth" de la prueba) como `calcular()` en `js/app.js`
+      llamaban a `construirInvoice(...)` con `bt_pct=0.0, fp_bonus_pct=0.0`
+      fijos, omitiendo el 2% de baja tension y la bonificacion por factor de
+      potencia que el recibo real de Abue SI trae -- daba un ahorro_anual de
+      $48,286.64 en vez del $46,860.76 real ya entregado al cliente ($1,425.88
+      de diferencia). Se agregaron los campos de UI (checkbox + monto) en la
+      seccion 3 de `index.html`, se corrigio `calcular()` para derivar
+      `btPct`/`fpBonusPct` de esos campos (misma formula que
+      `cotizador_app.py`: `bt_pct = bt_monto/base_aprox`,
+      `fp_bonus_pct = bonus_monto/(base_aprox+bt_monto)`), y
+      `llenarFormularioDesdeRecibo()` ahora los autollena desde
+      `bt_monto`/`bonus_monto` del recibo leido. Revalidado end-to-end en
+      navegador real (subir el PDF real de Abue -> autollenado -> Calcular)
+      reproduciendo exacto los 8 numeros correctos.
 - [x] **manifest.json + service-worker.js**, copiados del patron de
       cotizador-soelrb. Verificado en navegador real (servidor local, no
       Streamlit): `navigator.serviceWorker.getRegistrations()` da 1 registro
@@ -77,8 +92,18 @@ se reinventa una formula aqui, solo se traduce.
       requiere internet esa vez; despues el navegador lo cachea).
       `test_pdf.html` queda en el repo como herramienta de depuracion para
       probar un recibo nuevo rapido sin pasar por toda la interfaz.
-- [ ] Generador de PDF de 21 paginas con secciones apagables (hoy usa
-      reportlab en Python; jsPDF ya esta vendorizado en `lib/` para esto).
+- [~] Generador de PDF con secciones apagables (hoy usa reportlab en Python;
+      jsPDF ya esta vendorizado en `lib/` para esto). Construida la libreria
+      de componentes visuales (`js/pdfComponents.js`: colores, tarjetas,
+      tablas, avisos, graficas de barras/curva/gauge, armado de documento) --
+      ojo, jsPDF tiene el eje Y invertido respecto a reportlab (Y=0 arriba,
+      crece hacia abajo; reportlab es Y=0 abajo) -- hubo que corregir
+      `CONTENT_TOP`/`CONTENT_BOTTOM` por este motivo. Portada la **pagina 1
+      (resumen)** en `js/propuesta.js`, verificada visualmente en Chrome con
+      `test_propuesta.html` (dev tool, igual que `test_pdf.html`) contra los
+      numeros reales de Abue ya corregidos. Falta: paginas 2-21, y conectar
+      el parametro `secciones` (hoy aceptado pero sin usar) a los
+      `BLOQUES_COTIZACION` del lado Python para el toggle de secciones.
 - [ ] Historial / seguimiento de clientes (hoy CSV local; en el navegador
       necesitaria localStorage como minimo, o Supabase si se quiere
       compartir entre dispositivos -- pendiente de decidir con el usuario).

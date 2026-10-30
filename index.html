@@ -79,6 +79,13 @@
           <label><input type="radio" name="rkCap" value="mercado" /> Aparece en $0.00 (NO hay demanda)</label>
         </fieldset>
       </div>
+      <h3>Cargos extra del recibo (si aplican)</h3>
+      <div class="fila">
+        <label><input type="checkbox" id="traeBt" /> Trae cargo de 2% en baja tensión</label>
+        <label>Monto del 2% (MXN)<input id="btMonto" type="number" value="0" min="0" step="0.01" disabled /></label>
+        <label><input type="checkbox" id="traeBonus" /> Trae bonificación por factor de potencia</label>
+        <label>Monto de la bonificación (MXN, positivo)<input id="bonusMonto" type="number" value="0" min="0" step="0.01" disabled /></label>
+      </div>
     </section>
 
     <section class="tarjeta" id="bloqueDomestica" hidden>

@@ -21,6 +21,9 @@ $('tarifa').addEventListener('change', () => {
   $('bloqueDomestica').hidden = !esDomestica;
 });
 
+$('traeBt').addEventListener('change', () => { $('btMonto').disabled = !$('traeBt').checked; });
+$('traeBonus').addEventListener('change', () => { $('bonusMonto').disabled = !$('traeBonus').checked; });
+
 const TARIFAS_SOPORTADAS = new Set(['GDMTO', 'GDMTH', 'GDBT', 'PDBT', '01', 'DAC']);
 
 $('archivoRecibo').addEventListener('change', async (e) => {
@@ -74,6 +77,16 @@ function llenarFormularioDesdeRecibo(c) {
       document.querySelector(`input[name="rkDist"][value="${c.rate_kw_detectado.distribucion > 0 ? 'demanda' : 'mercado'}"]`).checked = true;
       document.querySelector(`input[name="rkCap"][value="${c.rate_kw_detectado.capacidad > 0 ? 'demanda' : 'mercado'}"]`).checked = true;
     }
+    if (c.bt_monto) {
+      $('traeBt').checked = true;
+      $('btMonto').disabled = false;
+      $('btMonto').value = c.bt_monto;
+    }
+    if (c.bonus_monto) {
+      $('traeBonus').checked = true;
+      $('bonusMonto').disabled = false;
+      $('bonusMonto').value = Math.abs(c.bonus_monto);
+    }
   } else {
     if (c.periodo_dias != null) $('d_periodoDias').value = c.periodo_dias;
     if (c.periodo_kwh != null) $('d_periodoKwh').value = c.periodo_kwh;
@@ -123,7 +136,14 @@ function calcular() {
       distribucion: document.querySelector('input[name="rkDist"]:checked').value === 'demanda' ? 1.0 : 0.0,
       capacidad: document.querySelector('input[name="rkCap"]:checked').value === 'demanda' ? 1.0 : 0.0,
     };
-    ({ invoice, meta } = construirInvoice(tarifa, periodoDias, periodoKwh, cargos, rateKw, dap, 0.0, 0.0));
+    const baseAprox = Object.values(cargos).reduce((a, b) => a + b, 0) || 1.0;
+    const traeBt = $('traeBt').checked;
+    const traeBonus = $('traeBonus').checked;
+    const btMonto = Number($('btMonto').value);
+    const bonusMonto = Number($('bonusMonto').value);
+    const btPct = traeBt ? (btMonto / baseAprox) : 0.0;
+    const fpBonusPct = traeBonus ? (bonusMonto / (baseAprox + btMonto)) : 0.0;
+    ({ invoice, meta } = construirInvoice(tarifa, periodoDias, periodoKwh, cargos, rateKw, dap, btPct, fpBonusPct));
     pagoRecurrente = invoice(periodoDias, periodoKwh, false).total;
     ({ piso, ahorroMax, pct: pctMax } = pisoDeAhorro(periodoDias, pagoRecurrente, invoice));
   } else {
