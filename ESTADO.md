@@ -11,6 +11,11 @@ NO se toca, solo se usa como referencia de que esa configuracion si funciona.
 Repo git independiente (no es parte del repo de `app/`). Repo privado en GitHub:
 `rbalta00/cotizador-fv-cfe-web` — https://github.com/rbalta00/cotizador-fv-cfe-web
 
+**Publicado**: https://cotizador-fv-cfe-web.vercel.app (Vercel, conectado al repo de
+GitHub, cada push a `master` redespliega solo). Backend compartido en Supabase
+(proyecto `cotizador-fv-cfe`, id `prchqgvwaepzmcohoehu`) -- ver la seccion de avance
+mas abajo, "Publicado en Vercel, con backend compartido".
+
 ## Por que existe
 La app de Streamlit (`cfe-presupuestos/app`) sigue siendo la fuente de verdad
 de TODA la logica de negocio: lectura de recibo (OCR), motor de tarifas con
@@ -276,9 +281,6 @@ se reinventa una formula aqui, solo se traduce.
 - [ ] Fotografias de condiciones generales del inmueble (sombras, cubierta, etc.,
       mas alla de la foto del sembrado) -- sigue sin construirse, declarado como
       pendiente en la propia seccion 6 ("No se capturan fotografías en esta versión").
-- [ ] Historial/seguimiento agregado entre TODOS los clientes (hoy cada
-      cliente vive aislado en `localStorage`; compartir entre dispositivos
-      seguiria requiriendo Supabase -- pendiente de decidir con el usuario).
 - [ ] Conectar el texto editado de las 21 secciones tambien al PDF exportado (hoy
       solo se ve en pantalla, ver nota arriba).
 - [ ] Simulador de financiamiento, editor de precios de materiales y
@@ -286,10 +288,63 @@ se reinventa una formula aqui, solo se traduce.
       version -- fuera del alcance de "las 21 secciones", deliberadamente no
       tocadas esta sesion).
 - [ ] Decidir si esto reemplaza a `app/` o conviven mientras se termina.
-- [ ] Decidir donde se despliega (Vercel, igual que las demas apps del usuario, es
-      lo mas consistente) -- el repo de GitHub ya existe (`rbalta00/cotizador-fv-cfe-web`,
-      privado), falta conectarlo a un hosting real para que no dependa de correr
-      `python -m http.server` a mano.
+- [x] **Publicado en Vercel, con backend compartido (Supabase)** -- pedido explicito
+      del usuario: "que cualquier cliente pueda cargar sus datos, le mande un link...
+      y se cargue automaticamente en el servidor". Esto cruzo una decision que venia
+      pendiente varias sesiones: la app ya NO es puramente local/`localStorage`.
+      - **Desplegado**: `https://cotizador-fv-cfe-web.vercel.app` (proyecto Vercel
+        `isaacrbs-projects/cotizador-fv-cfe-web`, conectado al repo de GitHub --
+        cada push a `master` deberia redesplegar solo). Verificado con `curl` y en
+        Chrome real contra el dominio de produccion (no solo local).
+      - **Proyecto de Supabase nuevo**: `cotizador-fv-cfe` (id `prchqgvwaepzmcohoehu`,
+        misma organizacion que los demas proyectos del usuario). Una sola tabla,
+        `envios_cliente` (ver migracion `crear_envios_cliente` +
+        `renombrar_bt_bonus_a_montos`). RLS abierto a la anon key para
+        insert/select/update/delete -- **mismo modelo de seguridad que TODOS los
+        demas proyectos del usuario** (sin autenticacion, la anon key es publica por
+        diseno) -- pero aqui vale la pena remarcarlo mas fuerte porque esta tabla
+        guarda datos de TERCEROS (clientes del usuario), no solo datos propios del
+        negocio: cualquiera con la anon key (visible en el codigo fuente de
+        `cliente.html`) podria en teoria leer todos los envios directo via la API de
+        Supabase, no solo insertar los suyos. Es una decision consciente, consistente
+        con el resto de los proyectos, pero el usuario debe saber que existe ese
+        riesgo si algun dia maneja datos mas sensibles ahi.
+      - **Pagina publica nueva** (`cliente.html` + `js/clienteForm.js`): CUALQUIERA
+        con el link puede cargar los datos de su propio recibo, SIN instalar nada ni
+        tener cuenta. Lo primero que elige es su tarifa (pedido explicito), despues
+        puede subir su recibo (reusa el mismo OCR/lectura que la app interna, incluido
+        el resaltado de campos no detectados) o llenarlo a mano, pone su nombre/
+        telefono, y envia -- queda guardado en `envios_cliente`, nunca toca
+        `localStorage` ni requiere que el navegador del cliente tenga nada previo.
+      - **Bandeja de entrada nueva en la app interna** ("📥 Envíos de clientes",
+        pantalla entre Clientes y el resto): lista los envios pendientes desde
+        Supabase, con boton para asignarlos a un cliente YA REGISTRADO o crear uno
+        nuevo ahi mismo (mini-formulario inline, sin `prompt()`/dialogos nativos que
+        bloquean la pestaña) -- al asignar, crea la cotizacion, llena el formulario
+        con los datos del envio, autocalcula, abre la cotizacion, y marca el envio
+        como `asignado` en Supabase (con el id de cliente/proyecto local, para
+        trazabilidad). "Descartar" lo marca como `descartado` (no se borra).
+      - **Refactor**: la logica de captura del formulario (tarifa, cargos, $/kW,
+        cargos extra, escalones domesticos) se extrajo a `js/formularioRecibo.js`,
+        compartida entre `js/app.js` (cotizacion interna) y `js/clienteForm.js`
+        (formulario publico) -- evita mantener dos copias que se puedan
+        desincronizar. El helper `$()` de ese modulo es tolerante a campos
+        ausentes (`cliente.html` usa un subconjunto mas chico de campos que
+        `index.html`, sin los escalones domesticos).
+      - **Bug real encontrado y corregido durante las pruebas**: `leerFormularioRecibo()`
+        asumia que TODOS los campos de `index.html` existian en cualquier pagina que
+        usara el modulo -- en `cliente.html` (que deliberadamente no pide los
+        escalones domesticos) tronaba con `Cannot read properties of null`. Se
+        corrigio haciendo el helper `$()` tolerante por diseno (devuelve un elemento
+        "vacio" seguro si el id no existe) en vez de asumir que todos los campos
+        estan siempre presentes.
+      - **Nuevo cliente REST minimo para Supabase** (`js/supabase.js`): sin el SDK
+        `supabase-js`, solo `fetch` directo a PostgREST -- consistente con el resto
+        del proyecto (sin frameworks/dependencias).
+      - Verificado de punta a punta, dos veces (local y contra el dominio real de
+        Vercel): llenar `cliente.html` -> aparece en la bandeja de `index.html` con
+        contador -> asignar a cliente nuevo -> cotizacion creada y calculada
+        automaticamente -> envio marcado como `asignado` en Supabase.
 
 ## Como probarlo en el navegador
 ```

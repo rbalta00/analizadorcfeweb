@@ -38,6 +38,7 @@
       </div>
       <div class="acciones acciones-pdf">
         <button id="btnCrearCliente" class="btn-primario">+ Nuevo cliente</button>
+        <button id="btnAbrirEnvios" class="btn-secundario">📥 Envíos de clientes <span id="contadorEnvios"></span></button>
         <button id="btnGuiaPresentacionGeneral" class="btn-secundario">📖 Guía para presentar (genérica)</button>
       </div>
     </section>
@@ -49,6 +50,23 @@
     <section class="tarjeta">
       <h3>Particulares</h3>
       <div id="listaParticular" class="lista-clientes"></div>
+    </section>
+  </main>
+
+  <!-- ================= PANTALLA: ENVIOS DE CLIENTES (bandeja de entrada) ================= -->
+  <main id="pantallaEnvios" hidden>
+    <div class="cliente-barra">
+      <button id="btnVolverClientesDesdeEnvios" class="btn-link">← Clientes</button>
+      <strong>Envíos de clientes</strong>
+    </div>
+    <section class="tarjeta">
+      <p class="nota">Cuando alguien llena <a href="cliente.html" target="_blank" id="linkPaginaCliente">la página
+        pública</a> con los datos de su recibo, aparece aquí. Asígnalo a un cliente (nuevo o ya registrado) para
+        convertirlo en una cotización, o descártalo si no aplica.</p>
+      <div class="acciones"><button id="btnRefrescarEnvios" class="btn-secundario">↻ Refrescar envíos</button></div>
+    </section>
+    <section class="tarjeta">
+      <div id="listaEnvios" class="lista-clientes"></div>
     </section>
   </main>
 

@@ -91,6 +91,17 @@ input.campo-no-detectado, select.campo-no-detectado {
   max-width: 220px; max-height: 160px; border-radius: 8px; border: 1px solid var(--border); object-fit: contain;
 }
 .seccion-img-sembrado { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); margin: 10px 0; display: block; }
+
+.pie-cliente { max-width: 980px; margin: 0 auto; padding: 8px 16px 24px; text-align: center; }
+
+/* ===================== Envios de clientes (bandeja de entrada) ===================== */
+.tarjeta-envio { flex-direction: column; align-items: stretch; gap: 10px; cursor: default; }
+.tarjeta-envio:hover { outline: none; }
+.aviso-chico { color: #a1481a; font-weight: 600; }
+.acciones-envio { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.acciones-envio select { padding: 6px 8px; }
+.fila-nuevo-cliente-envio { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 100%; }
+.fila-nuevo-cliente-envio label { flex: 1 1 160px; font-size: 0.78rem; }
 .fila.cargos label { min-width: 130px; }
 label {
   display: flex;

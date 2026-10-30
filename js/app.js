@@ -15,12 +15,15 @@ import { archivoAImagenComprimida } from './imagenes.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion } from './bloques.js';
 import { M, PCT } from './util.js';
+import {
+  TARIFAS_SOPORTADAS, esDomestica, conectarEventosFormularioRecibo,
+  leerFormularioRecibo, aplicarFormularioRecibo, llenarFormularioDesdeReciboCampos,
+} from './formularioRecibo.js';
+import { supabaseListar, supabaseActualizar, supabaseEliminar } from './supabase.js';
 
 window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 
 const $ = (id) => document.getElementById(id);
-const DOMESTICAS = new Set(['01', 'DAC']);
-const TARIFAS_SOPORTADAS = new Set(['GDMTO', 'GDMTH', 'GDBT', 'PDBT', '01', 'DAC']);
 // Numero de WhatsApp al que apunta "Enviar por WhatsApp" (dado por el usuario). 52 =
 // Mexico; WhatsApp no permite adjuntar archivos desde un enlace wa.me, solo texto.
 const WHATSAPP_NUMERO = '522218367792';
@@ -93,10 +96,171 @@ $('btnGuiaPresentacionGeneral').addEventListener('click', () => {
 
 function mostrarPantallaClientes() {
   $('pantallaClientes').hidden = false;
+  $('pantallaEnvios').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null;
   renderListaClientes();
+}
+
+// =====================================================================
+// Pantalla: Envios de clientes (bandeja de entrada de cliente.html)
+// =====================================================================
+function actualizarContadorEnvios(n) {
+  $('contadorEnvios').textContent = n ? `(${n})` : '';
+}
+
+// Al arrancar, consulta cuantos envios pendientes hay para mostrar el contador en el
+// boton de la pantalla de Clientes, sin tener que entrar a la bandeja.
+supabaseListar('envios_cliente', 'estado=eq.pendiente&select=id')
+  .then(filas => actualizarContadorEnvios(filas.length))
+  .catch(err => console.error('No se pudo consultar envios pendientes:', err));
+
+async function renderListaEnvios() {
+  const cont = $('listaEnvios');
+  cont.innerHTML = '<p class="nota">Cargando...</p>';
+  try {
+    const envios = await supabaseListar('envios_cliente', 'estado=eq.pendiente&order=creado_en.desc');
+    cont.innerHTML = '';
+    if (!envios.length) cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: 'Sin envíos pendientes.' }));
+    for (const envio of envios) cont.append(tarjetaEnvio(envio));
+    actualizarContadorEnvios(envios.length);
+  } catch (err) {
+    cont.innerHTML = '';
+    cont.append(Object.assign(document.createElement('p'), { className: 'nota aviso', textContent: 'No se pudo cargar: ' + err.message }));
+    console.error(err);
+  }
+}
+
+function mostrarPantallaEnvios() {
+  $('pantallaClientes').hidden = true;
+  $('pantallaProyectos').hidden = true;
+  $('pantallaCliente').hidden = true;
+  $('pantallaEnvios').hidden = false;
+  renderListaEnvios();
+}
+$('btnAbrirEnvios').addEventListener('click', mostrarPantallaEnvios);
+$('btnVolverClientesDesdeEnvios').addEventListener('click', mostrarPantallaClientes);
+$('btnRefrescarEnvios').addEventListener('click', renderListaEnvios);
+
+function tarjetaEnvio(envio) {
+  const div = document.createElement('div');
+  div.className = 'tarjeta-cliente tarjeta-envio';
+  const fecha = new Date(envio.creado_en).toLocaleString('es-MX');
+  const resumen = `Tarifa ${envio.tarifa} · ${envio.periodo_kwh ?? '?'} kWh en ${envio.periodo_dias ?? '?'} días · ${fecha}`;
+  const info = document.createElement('div');
+  info.className = 'tarjeta-cliente-info';
+  info.innerHTML = `<strong>${escapeHtml(envio.nombre_declarado || 'Sin nombre')}</strong><span class="nota">${resumen}</span>` +
+    (envio.telefono_declarado ? `<span class="nota">Tel/WhatsApp: ${escapeHtml(envio.telefono_declarado)}</span>` : '') +
+    (envio.notas_cliente ? `<span class="nota">Nota del cliente: ${escapeHtml(envio.notas_cliente)}</span>` : '') +
+    (envio.campos_leidos?.reconciliacion_advertencia ? '<span class="nota aviso-chico">🛑 Tenía una advertencia de reconciliación al leer el recibo -- revisar con cuidado.</span>' : '');
+  div.append(info);
+
+  const acciones = document.createElement('div');
+  acciones.className = 'acciones-envio';
+  const selectCliente = document.createElement('select');
+  const optNuevo = document.createElement('option');
+  optNuevo.value = '__nuevo__';
+  optNuevo.textContent = '+ Crear cliente nuevo';
+  selectCliente.append(optNuevo);
+  const { gobierno, particular } = clientesAgrupadosPorTipo();
+  for (const [etiqueta, lista] of [['Gobierno', gobierno], ['Particulares', particular]]) {
+    if (!lista.length) continue;
+    const og = document.createElement('optgroup');
+    og.label = etiqueta;
+    for (const c of lista) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.nombre;
+      og.append(opt);
+    }
+    selectCliente.append(og);
+  }
+
+  const filaNuevo = document.createElement('div');
+  filaNuevo.className = 'fila fila-nuevo-cliente-envio';
+  filaNuevo.innerHTML = `<label>Nombre del cliente nuevo<input type="text" class="input-nombre-nuevo" value="${escapeHtml(envio.nombre_declarado || '')}" /></label>
+    <label>Tipo<select class="select-tipo-nuevo"><option value="particular">Particular</option><option value="gobierno">Gobierno</option></select></label>`;
+  filaNuevo.hidden = false; // "+ Crear cliente nuevo" es la opcion por defecto del select
+  selectCliente.addEventListener('change', () => { filaNuevo.hidden = selectCliente.value !== '__nuevo__'; });
+
+  const btnAsignar = document.createElement('button');
+  btnAsignar.className = 'btn-primario';
+  btnAsignar.textContent = 'Asignar';
+  btnAsignar.addEventListener('click', () => asignarEnvio(envio, selectCliente, filaNuevo, btnAsignar));
+
+  const btnDescartar = document.createElement('button');
+  btnDescartar.className = 'btn-link';
+  btnDescartar.textContent = '🗑 Descartar';
+  btnDescartar.addEventListener('click', () => descartarEnvio(envio));
+
+  acciones.append(selectCliente, filaNuevo, btnAsignar, btnDescartar);
+  div.append(acciones);
+  return div;
+}
+
+function formularioDesdeEnvio(envio) {
+  const esc = envio.escalones || {};
+  return {
+    titular: envio.nombre_declarado || 'Cliente', domicilio: '', noServicio: '',
+    tarifa: envio.tarifa,
+    periodoDias: envio.periodo_dias, periodoKwh: envio.periodo_kwh, dap: envio.dap || 0,
+    cargos: envio.cargos || {},
+    rkDist: envio.rate_kw?.distribucion ? 'demanda' : 'mercado',
+    rkCap: envio.rate_kw?.capacidad ? 'demanda' : 'mercado',
+    traeBt: !!envio.bt_monto, btMonto: envio.bt_monto || 0,
+    traeBonus: !!envio.bonus_monto, bonusMonto: envio.bonus_monto || 0,
+    dBasicoKwh: esc.basicoKwh ?? 150, dBasicoRate: esc.basicoRate ?? 1.140,
+    dInterKwh: esc.interKwh ?? 130, dInterRate: esc.interRate ?? 1.385,
+    dExcedRate: esc.excedRate ?? 4.054,
+    dDap: envio.es_domestica ? (envio.dap || 0) : 0,
+    dPeriodoDias: envio.es_domestica ? envio.periodo_dias : 60,
+    dPeriodoKwh: envio.es_domestica ? envio.periodo_kwh : 400,
+    moduloWp: 605, cobertura: 1.0, horasUtiles: 4.5, escalaCostos: 'residencial', escalamiento: 4.0,
+  };
+}
+
+async function asignarEnvio(envio, selectCliente, filaNuevo, btnAsignar) {
+  let cliente;
+  if (selectCliente.value === '__nuevo__') {
+    const nombre = filaNuevo.querySelector('.input-nombre-nuevo').value.trim();
+    if (!nombre) { alert('Escribe el nombre del cliente nuevo.'); return; }
+    const tipo = filaNuevo.querySelector('.select-tipo-nuevo').value;
+    cliente = crearCliente({ nombre, tipo });
+  } else {
+    cliente = obtenerCliente(selectCliente.value);
+  }
+  if (!cliente) { alert('No se encontró el cliente seleccionado.'); return; }
+
+  btnAsignar.disabled = true;
+  try {
+    const proyecto = crearProyecto(cliente, { nombre: envio.nombre_declarado || undefined });
+    proyecto.formulario = formularioDesdeEnvio(envio);
+    proyecto.campos = envio.campos_leidos || null;
+    guardarProyecto(cliente, proyecto);
+
+    await supabaseActualizar('envios_cliente', envio.id, {
+      estado: 'asignado', asignado_cliente_id: cliente.id, asignado_proyecto_id: proyecto.id,
+      asignado_en: new Date().toISOString(),
+    });
+
+    abrirProyecto(cliente.id, proyecto.id);
+  } catch (err) {
+    alert('No se pudo asignar: ' + err.message);
+    console.error(err);
+    btnAsignar.disabled = false;
+  }
+}
+
+async function descartarEnvio(envio) {
+  if (!confirm(`¿Descartar el envío de "${envio.nombre_declarado || 'sin nombre'}"? No se puede deshacer.`)) return;
+  try {
+    await supabaseActualizar('envios_cliente', envio.id, { estado: 'descartado' });
+    renderListaEnvios();
+  } catch (err) {
+    alert('No se pudo descartar: ' + err.message);
+    console.error(err);
+  }
 }
 
 // =====================================================================
@@ -141,6 +305,7 @@ function mostrarPantallaProyectos(clienteId) {
   if (!clienteActual) { mostrarPantallaClientes(); return; }
   proyectoActual = null; ultimoResultado = null; ultimoLeido = null;
   $('pantallaClientes').hidden = true;
+  $('pantallaEnvios').hidden = true;
   $('pantallaProyectos').hidden = false;
   $('pantallaCliente').hidden = true;
   $('clienteNombreBarraProyectos').textContent = clienteActual.nombre;
@@ -217,6 +382,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   proyectoActual = clienteActual ? obtenerProyecto(clienteActual, proyectoId) : null;
   if (!clienteActual || !proyectoActual) { mostrarPantallaProyectos(clienteId); return; }
   $('pantallaClientes').hidden = true;
+  $('pantallaEnvios').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = false;
   $('clienteNombreBarra').textContent = clienteActual.nombre;
@@ -249,32 +415,16 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   }
 }
 
-$('tarifa').addEventListener('change', () => {
-  const esDomestica = DOMESTICAS.has($('tarifa').value);
-  $('bloqueNoDomestica').hidden = esDomestica;
-  $('bloqueDomestica').hidden = !esDomestica;
-});
-$('traeBt').addEventListener('change', () => { $('btMonto').disabled = !$('traeBt').checked; });
-$('traeBonus').addEventListener('change', () => { $('bonusMonto').disabled = !$('traeBonus').checked; });
+conectarEventosFormularioRecibo();
 
 // ---------------- Formulario: leer/aplicar (snapshot persistido por proyecto) ----------------
+// leerFormulario/aplicarFormulario = los campos compartidos con la pagina publica
+// (formularioRecibo.js) MAS los campos que solo existen en la app interna (datos del
+// cliente, sistema propuesto -- la pagina publica del cliente no los pide).
 function leerFormulario() {
   return {
     titular: $('titular').value, domicilio: $('domicilio').value, noServicio: $('noServicio').value,
-    tarifa: $('tarifa').value,
-    periodoDias: $('periodoDias').value, periodoKwh: $('periodoKwh').value, dap: $('dap').value,
-    cargos: {
-      suministro: $('c_suministro').value, distribucion: $('c_distribucion').value, transmision: $('c_transmision').value,
-      cenace: $('c_cenace').value, energia: $('c_energia').value, capacidad: $('c_capacidad').value, scnmem: $('c_scnmem').value,
-    },
-    rkDist: document.querySelector('input[name="rkDist"]:checked').value,
-    rkCap: document.querySelector('input[name="rkCap"]:checked').value,
-    traeBt: $('traeBt').checked, btMonto: $('btMonto').value,
-    traeBonus: $('traeBonus').checked, bonusMonto: $('bonusMonto').value,
-    dBasicoKwh: $('d_basicoKwh').value, dBasicoRate: $('d_basicoRate').value,
-    dInterKwh: $('d_interKwh').value, dInterRate: $('d_interRate').value,
-    dExcedRate: $('d_excedRate').value, dDap: $('d_dap').value,
-    dPeriodoDias: $('d_periodoDias').value, dPeriodoKwh: $('d_periodoKwh').value,
+    ...leerFormularioRecibo(),
     moduloWp: $('moduloWp').value, cobertura: $('cobertura').value, horasUtiles: $('horasUtiles').value,
     escalaCostos: $('escalaCostos').value, escalamiento: $('escalamiento').value,
   };
@@ -284,23 +434,7 @@ function aplicarFormulario(f) {
   $('titular').value = f?.titular || '';
   $('domicilio').value = f?.domicilio || '';
   $('noServicio').value = f?.noServicio || '';
-  $('tarifa').value = f?.tarifa || 'GDMTO';
-  $('tarifa').dispatchEvent(new Event('change'));
-  $('periodoDias').value = f?.periodoDias ?? 30;
-  $('periodoKwh').value = f?.periodoKwh ?? 1000;
-  $('dap').value = f?.dap ?? 197;
-  const cargos = f?.cargos || {};
-  for (const k of ['suministro', 'distribucion', 'transmision', 'cenace', 'energia', 'capacidad', 'scnmem']) {
-    $('c_' + k).value = cargos[k] ?? 0;
-  }
-  document.querySelector(`input[name="rkDist"][value="${f?.rkDist || 'demanda'}"]`).checked = true;
-  document.querySelector(`input[name="rkCap"][value="${f?.rkCap || 'demanda'}"]`).checked = true;
-  $('traeBt').checked = !!f?.traeBt; $('btMonto').disabled = !f?.traeBt; $('btMonto').value = f?.btMonto ?? 0;
-  $('traeBonus').checked = !!f?.traeBonus; $('bonusMonto').disabled = !f?.traeBonus; $('bonusMonto').value = f?.bonusMonto ?? 0;
-  $('d_basicoKwh').value = f?.dBasicoKwh ?? 150; $('d_basicoRate').value = f?.dBasicoRate ?? 1.140;
-  $('d_interKwh').value = f?.dInterKwh ?? 130; $('d_interRate').value = f?.dInterRate ?? 1.385;
-  $('d_excedRate').value = f?.dExcedRate ?? 4.054; $('d_dap').value = f?.dDap ?? 0;
-  $('d_periodoDias').value = f?.dPeriodoDias ?? 60; $('d_periodoKwh').value = f?.dPeriodoKwh ?? 400;
+  aplicarFormularioRecibo(f);
   $('moduloWp').value = f?.moduloWp ?? 605; $('cobertura').value = f?.cobertura ?? 1.0; $('horasUtiles').value = f?.horasUtiles ?? 4.5;
   $('escalaCostos').value = f?.escalaCostos || 'residencial'; $('escalamiento').value = f?.escalamiento ?? 4.0;
 }
@@ -413,9 +547,9 @@ function mostrarEstadoLecturaRecibo(campos) {
 }
 
 function intentarAutoCalcular(campos) {
-  const esDomestica = DOMESTICAS.has($('tarifa').value);
+  const esDom = esDomestica($('tarifa').value);
   const tarifaOk = campos.tarifa && TARIFAS_SOPORTADAS.has(campos.tarifa);
-  const datosOk = esDomestica
+  const datosOk = esDom
     ? (campos.periodo_dias && campos.periodo_kwh)
     : (campos.periodo_dias && campos.periodo_kwh && campos.rate_kw_detectado);
   if (tarifaOk && datosOk) {
@@ -466,29 +600,7 @@ function llenarFormularioDesdeRecibo(c) {
   if (c.titular) $('titular').value = c.titular;
   if (c.domicilio) $('domicilio').value = c.domicilio;
   if (c.no_servicio) $('noServicio').value = c.no_servicio;
-  if (c.tarifa && TARIFAS_SOPORTADAS.has(c.tarifa)) {
-    $('tarifa').value = c.tarifa;
-    $('tarifa').dispatchEvent(new Event('change'));
-  }
-  const esDomestica = DOMESTICAS.has($('tarifa').value);
-  if (!esDomestica) {
-    if (c.periodo_dias != null) $('periodoDias').value = c.periodo_dias;
-    if (c.periodo_kwh != null) $('periodoKwh').value = c.periodo_kwh;
-    if (c.dap != null) $('dap').value = c.dap;
-    for (const k of ['suministro', 'distribucion', 'transmision', 'cenace', 'energia', 'capacidad', 'scnmem']) {
-      if (c[k] != null) $('c_' + k).value = c[k];
-    }
-    if (c.rate_kw_detectado) {
-      document.querySelector(`input[name="rkDist"][value="${c.rate_kw_detectado.distribucion > 0 ? 'demanda' : 'mercado'}"]`).checked = true;
-      document.querySelector(`input[name="rkCap"][value="${c.rate_kw_detectado.capacidad > 0 ? 'demanda' : 'mercado'}"]`).checked = true;
-    }
-    if (c.bt_monto) { $('traeBt').checked = true; $('btMonto').disabled = false; $('btMonto').value = c.bt_monto; }
-    if (c.bonus_monto) { $('traeBonus').checked = true; $('bonusMonto').disabled = false; $('bonusMonto').value = Math.abs(c.bonus_monto); }
-  } else {
-    if (c.periodo_dias != null) $('d_periodoDias').value = c.periodo_dias;
-    if (c.periodo_kwh != null) $('d_periodoKwh').value = c.periodo_kwh;
-    if (c.dap != null) $('d_dap').value = c.dap;
-  }
+  llenarFormularioDesdeReciboCampos(c);
 }
 
 // ---------------- Calcular ----------------
@@ -507,7 +619,7 @@ $('btnCalcular').addEventListener('click', () => {
 
 function calcularYRenderizar() {
   const tarifa = $('tarifa').value;
-  const esDomestica = DOMESTICAS.has(tarifa);
+  const esDom = esDomestica(tarifa);
   const costos = $('escalaCostos').value === 'residencial' ? COSTOS_RESIDENCIAL : COSTOS_COMERCIAL;
   const moduloWp = Number($('moduloWp').value);
   const cobertura = Number($('cobertura').value);
@@ -519,7 +631,7 @@ function calcularYRenderizar() {
   const inmueble = leerInmueble();
 
   let input;
-  if (!esDomestica) {
+  if (!esDom) {
     const periodoDias = Number($('periodoDias').value);
     const periodoKwh = Number($('periodoKwh').value);
     const dap = Number($('dap').value);
@@ -751,6 +863,8 @@ $('btnEnviarWhatsapp').addEventListener('click', () => {
 $('btnRefrescar').addEventListener('click', () => {
   if (!$('pantallaClientes').hidden) {
     renderListaClientes();
+  } else if (!$('pantallaEnvios').hidden) {
+    renderListaEnvios();
   } else if (!$('pantallaProyectos').hidden) {
     renderListaProyectos();
   } else if (!$('pantallaCliente').hidden && proyectoActual) {

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Envía los datos de tu recibo CFE</title>
+  <meta name="description" content="Página para cargar los datos de tu recibo CFE y recibir tu cotización de paneles solares -- GESTORIA Y PROYECTOS SOELRB." />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <meta name="theme-color" content="#163b4c" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Envía los datos de tu recibo CFE</h1>
+    <p class="subtitulo">GESTORIA Y PROYECTOS SOELRB — para preparar tu cotización de paneles solares</p>
+  </header>
+
+  <main>
+    <section class="tarjeta" id="tarjetaIntro">
+      <p class="nota">Llena estos datos para que te preparemos una cotización de paneles solares. Primero elige tu
+        tarifa; después puedes subir una foto o el PDF de tu recibo para que el resto se llene solo, o escribirlo
+        a mano. No se te va a cobrar nada por enviar esta información.</p>
+      <div class="fila">
+        <label>1. Elige tu tarifa CFE
+          <select id="tarifa">
+            <option value="" selected disabled>Elige tu tarifa...</option>
+            <option value="GDMTO">GDMTO (media tensión, con demanda)</option>
+            <option value="GDMTH">GDMTH (media tensión, con demanda, por horario)</option>
+            <option value="GDBT">GDBT (baja tensión, con demanda)</option>
+            <option value="PDBT">PDBT (baja tensión, sin demanda)</option>
+            <option value="01">01 (doméstica / casa-habitación)</option>
+            <option value="DAC">DAC (doméstica alto consumo)</option>
+          </select>
+        </label>
+      </div>
+      <p class="nota">¿No sabes cuál es tu tarifa? Busca la palabra "TARIFA:" impresa en tu recibo de CFE, cerca
+        de tus datos. Si de plano no la encuentras, sube tu recibo abajo y la detectamos por ti.</p>
+    </section>
+
+    <div id="restoFormularioCliente" hidden>
+      <section class="tarjeta">
+        <h3>2. Sube tu recibo (opcional, llena los datos solo)</h3>
+        <p class="nota">Puedes subir el PDF o una foto de tu recibo de CFE. Si son varias fotos (ej. anverso y
+          reverso), selecciónalas todas juntas. Esto puede tardar hasta 1 minuto.</p>
+        <input type="file" id="archivoRecibo" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
+        <p class="nota" id="estadoRecibo"></p>
+        <p class="nota aviso" id="avisoReconciliacion" hidden></p>
+      </section>
+
+      <section class="tarjeta">
+        <h3>3. Datos de tu recibo</h3>
+        <p class="nota">Si subiste tu recibo arriba, revisa que estos datos coincidan -- los campos que no se
+          detectaron solos quedan marcados en naranja. Si no lo subiste, llénalos a mano viendo tu recibo.</p>
+
+        <section id="bloqueNoDomestica">
+          <div class="fila">
+            <label>Días del período<input id="periodoDias" type="number" value="30" min="1" /></label>
+            <label>kWh del período<input id="periodoKwh" type="number" value="1000" min="0.01" step="0.01" /></label>
+            <label>DAP (alumbrado público), por período<input id="dap" type="number" value="197" min="0" step="0.01" /></label>
+          </div>
+          <h4>Desglose de cargos del período (MXN)</h4>
+          <div class="fila cargos">
+            <label>Suministro<input id="c_suministro" type="number" value="0" step="0.01" /></label>
+            <label>Distribución<input id="c_distribucion" type="number" value="0" step="0.01" /></label>
+            <label>Transmisión<input id="c_transmision" type="number" value="0" step="0.01" /></label>
+            <label>CENACE<input id="c_cenace" type="number" value="0" step="0.01" /></label>
+            <label>Energía<input id="c_energia" type="number" value="0" step="0.01" /></label>
+            <label>Capacidad<input id="c_capacidad" type="number" value="0" step="0.01" /></label>
+            <label>SCnMEM<input id="c_scnmem" type="number" value="0" step="0.01" /></label>
+          </div>
+          <h4>Columna "$/kW" del recibo</h4>
+          <p class="nota">En la tabla de tu recibo, busca la columna "$/kW" de Distribución y Capacidad. Si trae un
+            importe (no $0.00), marca "Sí hay demanda".</p>
+          <div class="fila">
+            <fieldset>
+              <legend>Distribución</legend>
+              <label><input type="radio" name="rkDist" value="demanda" checked /> Trae importe en $/kW (SÍ hay demanda)</label>
+              <label><input type="radio" name="rkDist" value="mercado" /> Aparece en $0.00 (NO hay demanda)</label>
+            </fieldset>
+            <fieldset>
+              <legend>Capacidad</legend>
+              <label><input type="radio" name="rkCap" value="demanda" checked /> Trae importe en $/kW (SÍ hay demanda)</label>
+              <label><input type="radio" name="rkCap" value="mercado" /> Aparece en $0.00 (NO hay demanda)</label>
+            </fieldset>
+          </div>
+          <h4>Cargos extra del recibo (si aplican)</h4>
+          <div class="fila">
+            <label><input type="checkbox" id="traeBt" /> Trae cargo de 2% en baja tensión</label>
+            <label>Monto del 2% (MXN)<input id="btMonto" type="number" value="0" min="0" step="0.01" disabled /></label>
+            <label><input type="checkbox" id="traeBonus" /> Trae bonificación por factor de potencia</label>
+            <label>Monto de la bonificación (MXN, positivo)<input id="bonusMonto" type="number" value="0" min="0" step="0.01" disabled /></label>
+          </div>
+        </section>
+
+        <section id="bloqueDomestica" hidden>
+          <div class="fila">
+            <label>Días del período<input id="d_periodoDias" type="number" value="60" /></label>
+            <label>kWh del período<input id="d_periodoKwh" type="number" value="400" step="0.01" /></label>
+            <label>DAP del período (MXN)<input id="d_dap" type="number" value="0" step="0.01" /></label>
+          </div>
+          <p class="nota">No hace falta llenar los escalones de la tarifa doméstica -- con tus días y kWh del
+            período es suficiente, nosotros calculamos el resto.</p>
+        </section>
+      </section>
+
+      <section class="tarjeta">
+        <h3>4. Tus datos de contacto</h3>
+        <div class="fila">
+          <label>Tu nombre<input id="nombreDeclarado" type="text" placeholder="Nombre de quien va a recibir la cotización" /></label>
+          <label>Teléfono / WhatsApp (opcional)<input id="telefonoDeclarado" type="text" /></label>
+        </div>
+        <div class="fila">
+          <label>¿Algo que quieras aclarar? (opcional)<input id="notasCliente" type="text" placeholder="Ej. el recibo es de mi negocio, no de mi casa" /></label>
+        </div>
+        <div class="acciones"><button id="btnEnviar" class="btn-primario">Enviar mis datos</button></div>
+        <p class="nota" id="estadoEnvio"></p>
+      </section>
+    </div>
+
+    <section class="tarjeta" id="tarjetaConfirmacion" hidden>
+      <h2>✓ ¡Listo, recibimos tus datos!</h2>
+      <p>Gracias. Nos vamos a poner en contacto contigo con tu cotización. Si quieres mandarnos otro recibo (de
+        otro servicio o inmueble), puedes <a href="#" id="linkOtroEnvio">llenar este formulario de nuevo</a>.</p>
+    </section>
+  </main>
+
+  <footer class="pie-cliente">
+    <p class="nota">GESTORIA Y PROYECTOS SOELRB. Tus datos se usan únicamente para preparar tu cotización.</p>
+  </footer>
+
+  <script src="lib/pdf.min.js"></script>
+  <script src="lib/tesseract.min.js"></script>
+  <script type="module" src="js/clienteForm.js"></script>
+</body>
+</html>
