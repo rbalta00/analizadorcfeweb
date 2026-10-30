@@ -211,6 +211,35 @@ se reinventa una formula aqui, solo se traduce.
       cliente) se reubico en la pantalla de Clientes, con descarga directa -- no se
       elimino la funcionalidad, solo se saco de la pestana de PDF de una cotizacion
       especifica, que no era su lugar natural.
+      **Extension pedida por el usuario**: el boton de guardar ahora trae un selector
+      "Guardar esta cotización con el cliente" con TODOS los clientes registrados
+      (agrupados gobierno/particular), no solo el cliente desde el que se abrio --
+      si se elige uno distinto, la cotizacion se MUEVE a ese cliente
+      (`clientes.moverProyecto()`, saca el proyecto del cliente origen y lo mete al
+      destino, ambos persistidos). Verificado en Chrome: mover una cotizacion de
+      prueba de un cliente a otro y de regreso, sin perder datos.
+- [x] **Checklist fijo de "qué hace falta para un presupuesto real"** (pedido
+      explicito del usuario: "esta cotizacion esta hecha unicamente con la
+      informacion del recibo... independientemente de que el recibo este completo
+      tambien indica las notas aclaratorias de todo lo que se necesita"). Nuevo
+      `REQUISITOS_PRESUPUESTO_REAL` en `js/notas.js` (10 items: levantamiento en
+      sitio, tension/fases reales, tablero/interruptor/punto de conexion, distancia
+      de cableado, precios vigentes con proveedor, historial de 12 meses, confirmar
+      tarifa con CFE, tramite de interconexion, verificar titular/domicilio, obra
+      adicional no incluida) -- SIEMPRE se muestra en la seccion 17, sin importar
+      que tan completo haya venido el recibo (a diferencia de `generarNotas()`, que
+      solo avisa de problemas puntuales de ESE recibo en particular; ambas listas
+      conviven, separadas con su propio encabezado).
+      **Division de pagina en el PDF**: agregar el checklist fijo + las notas del
+      recibo ya no cabian juntas en una sola hoja A4 (el PDF no tiene paginacion
+      automatica). Se dividio la pagina 17 de Python en DOS paginas propias de este
+      port (`pagina17` = checklist fijo, `pagina17b` = notas de ese recibo), ambas
+      dentro del mismo bloque apagable `pendientes` -- el PDF completo pasa de 21 a
+      22 paginas cuando todos los bloques estan activos. Las 21 SECCIONES en
+      pantalla NO cambian (la division es solo del lado del PDF; en pantalla no hay
+      limite de alto, ambos bloques de contenido caben en la seccion 17 de
+      siempre). Verificado visualmente en Chrome: paginas 17 y 18 del PDF completo,
+      ninguna se desborda.
 - [ ] Fotografias del inmueble (condiciones del inmueble) -- declarado como
       pendiente real, no se construyo esta sesion.
 - [ ] Historial/seguimiento agregado entre TODOS los clientes (hoy cada

@@ -4,7 +4,7 @@
 // resultado.js/motor.js; este archivo solo lee/escribe el DOM y el almacenamiento.
 import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo,
-  listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto,
+  listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES } from './secciones.js';
 import { construirResultado } from './resultado.js';
@@ -185,6 +185,30 @@ $('archivoReciboNuevoProyecto').addEventListener('change', async (e) => {
 // =====================================================================
 // Pantalla: una cotizacion/proyecto (captura + 21 secciones)
 // =====================================================================
+// Llena el selector de "con qué cliente registrado guardar esta cotización" --
+// pedido explícito del usuario, para poder reasignarla a otro cliente ya registrado
+// en vez de que quede fija al cliente desde el que se abrió.
+function poblarSelectClienteGuardar() {
+  const sel = $('selectClienteGuardar');
+  sel.innerHTML = '';
+  const { gobierno, particular } = clientesAgrupadosPorTipo();
+  const agregarGrupo = (etiqueta, lista) => {
+    if (!lista.length) return;
+    const og = document.createElement('optgroup');
+    og.label = etiqueta;
+    for (const c of lista) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.nombre;
+      og.append(opt);
+    }
+    sel.append(og);
+  };
+  agregarGrupo('Gobierno', gobierno);
+  agregarGrupo('Particulares', particular);
+  sel.value = clienteActual.id;
+}
+
 function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   clienteActual = obtenerCliente(clienteId);
   proyectoActual = clienteActual ? obtenerProyecto(clienteActual, proyectoId) : null;
@@ -205,6 +229,8 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('estadoRecibo').textContent = '';
   $('avisoReconciliacion').hidden = true;
   $('estadoCalculo').textContent = '';
+  $('estadoGuardadoCotizacion').textContent = '';
+  poblarSelectClienteGuardar();
   aplicarFormulario(proyectoActual.formulario);
   aplicarInmueble(proyectoActual.inmueble);
   renderIndice(null);
@@ -606,14 +632,28 @@ $('btnResumenEjecutivo').addEventListener('click', () => {
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Resumen_ejecutivo'));
 });
 
-// Marca esta cotizacion como guardada/confirmada para este cliente -- los datos ya se
-// autoguardan en cada calculo (guardarProyecto), esto deja ademas un registro visible
-// (fecha) de que la cotizacion se reviso y se dio por buena, mostrado en la lista de
-// cotizaciones del cliente en vez del generico "con datos capturados".
+// Marca esta cotizacion como guardada/confirmada para el cliente elegido en el
+// selector -- los datos ya se autoguardan en cada calculo (guardarProyecto), esto
+// deja ademas un registro visible (fecha) de que la cotizacion se reviso y se dio
+// por buena, mostrado en la lista de cotizaciones del cliente en vez del generico
+// "con datos capturados". Si se elige un cliente DISTINTO al que la tenia abierta,
+// la cotizacion se MUEVE a ese cliente (pedido explicito del usuario: poder elegir
+// con que cliente registrado se guarda, no solo el que estaba abierto).
 $('btnGuardarCotizacion').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   proyectoActual.cotizacionGuardadaEn = new Date().toISOString();
-  guardarProyecto(clienteActual, proyectoActual);
+  const clienteDestinoId = $('selectClienteGuardar').value;
+  if (clienteDestinoId && clienteDestinoId !== clienteActual.id) {
+    const destino = moverProyecto(clienteActual.id, clienteDestinoId, proyectoActual);
+    if (!destino) { alert('No se pudo mover la cotización a ese cliente.'); return; }
+    clienteActual = destino;
+    $('clienteNombreBarra').textContent = clienteActual.nombre;
+    $('clienteTipoBarra').textContent = clienteActual.tipo === 'gobierno' ? 'Gobierno' : 'Particular';
+    $('clienteTipoBarra').className = `chip-tipo chip-tipo-${clienteActual.tipo}`;
+    poblarSelectClienteGuardar();
+  } else {
+    guardarProyecto(clienteActual, proyectoActual);
+  }
   $('estadoGuardadoCotizacion').className = 'nota ok';
   $('estadoGuardadoCotizacion').textContent =
     `✓ Guardada con el cliente "${clienteActual.nombre}", cotización "${proyectoActual.nombre}".`;

@@ -75,6 +75,8 @@ main { max-width: 980px; margin: 0 auto; padding: 16px; }
 @media (prefers-color-scheme: dark) { .tarjeta h2, .tarjeta h3 { color: #8fd0e0; } }
 
 .fila { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
+.fila-guardar { align-items: flex-end; }
+.fila-guardar select { min-width: 220px; }
 .fila.cargos label { min-width: 130px; }
 label {
   display: flex;

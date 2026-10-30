@@ -16,9 +16,9 @@ export const BLOQUES_COTIZACION = [
   ['presupuesto', 'Presupuesto resumen y detalle de materiales (págs. 11–12)', false],
   ['recuperacion', 'Recuperación de la inversión y flujo a 25 años (págs. 13–14)', false],
   ['pagos_100', 'Pagos mensuales y qué tan cerca del 100% de ahorro (págs. 15–16)', false],
-  ['pendientes', 'Qué falta para cerrar el ahorro (pág. 17)', false],
-  ['alcance', 'Alcance, condiciones, entrega y mantenimiento (págs. 18–19)', false],
-  ['glosario_fuentes', 'Glosario y fuentes (págs. 20–21)', false],
+  ['pendientes', 'Qué falta para cerrar el ahorro, requisitos y notas del recibo (págs. 17–18)', false],
+  ['alcance', 'Alcance, condiciones, entrega y mantenimiento (págs. 19–20)', false],
+  ['glosario_fuentes', 'Glosario y fuentes (págs. 21–22)', false],
 ];
 
 export function todosLosBloques() {

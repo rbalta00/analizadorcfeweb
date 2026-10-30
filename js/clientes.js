@@ -158,3 +158,20 @@ export function eliminarProyecto(cliente, proyectoId) {
   cliente.proyectos = (cliente.proyectos || []).filter(p => p.id !== proyectoId);
   return guardarCliente(cliente);
 }
+
+// Mueve una cotizacion de un cliente a otro (ej. se capturo bajo el cliente
+// equivocado, o se decide que en realidad corresponde a otro ya registrado). `proyecto`
+// se recibe completo (no se vuelve a leer de storage) para no perder cambios en
+// memoria que todavia no se hubieran guardado.
+export function moverProyecto(clienteOrigenId, clienteDestinoId, proyecto) {
+  if (clienteOrigenId === clienteDestinoId) return obtenerCliente(clienteDestinoId);
+  const origen = obtenerCliente(clienteOrigenId);
+  const destino = obtenerCliente(clienteDestinoId);
+  if (!origen || !destino) return null;
+  origen.proyectos = (origen.proyectos || []).filter(p => p.id !== proyecto.id);
+  guardarCliente(origen);
+  destino.proyectos = destino.proyectos || [];
+  destino.proyectos.push(proyecto);
+  guardarCliente(destino);
+  return destino;
+}

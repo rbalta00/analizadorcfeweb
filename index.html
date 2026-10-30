@@ -248,8 +248,13 @@
       <div class="acciones acciones-pdf">
         <button id="btnGenerarPdf" class="btn-primario">Cotización completa</button>
         <button id="btnResumenEjecutivo" class="btn-secundario">Resumen ejecutivo (1 página)</button>
-        <button id="btnGuardarCotizacion" class="btn-secundario">💾 Guardar cotización con este cliente</button>
         <button id="btnEnviarWhatsapp" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
+      </div>
+      <div class="fila fila-guardar">
+        <label>Guardar esta cotización con el cliente
+          <select id="selectClienteGuardar"></select>
+        </label>
+        <button id="btnGuardarCotizacion" class="btn-secundario">💾 Guardar cotización</button>
       </div>
       <p class="nota" id="estadoGuardadoCotizacion"></p>
       <p class="nota">El botón de WhatsApp abre el chat con un resumen en texto ya escrito — WhatsApp no

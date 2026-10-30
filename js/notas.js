@@ -101,3 +101,21 @@ export function generarNotas(leido, r, esDomestica) {
 
   return notas;
 }
+
+// Checklist FIJO, independiente de que el recibo se haya leído completo o no -- pedido
+// explícito del usuario: esta cotización se arma unicamente con la informacion del
+// recibo de CFE, asi que esto SIEMPRE hace falta confirmar antes de que se pueda
+// convertir en un presupuesto real de ese servicio (a diferencia de generarNotas(),
+// que solo avisa de problemas puntuales de ESTE recibo en particular).
+export const REQUISITOS_PRESUPUESTO_REAL = [
+  'Levantamiento físico en el sitio: área real disponible de techo/azotea, orientación, sombras, obstáculos y estado de la estructura -- nada de esto se puede confirmar solo con el recibo.',
+  'Tensión y número de fases reales del servicio (el recibo no siempre lo trae impreso, y no se debe adivinar por el número de hilos).',
+  'Estado del tablero eléctrico, el interruptor principal y el punto de conexión disponible para el sistema.',
+  'Distancia real de cableado entre el inversor/paneles y el punto de conexión -- afecta el costo de cable AC/DC presupuestado, que aquí es una provisión genérica.',
+  'Confirmación de precios vigentes con el proveedor para módulo, inversor y estructura -- los precios usados aquí son de lista y pueden estar vencidos.',
+  'Historial real de consumo de los últimos 12 meses, si este cálculo se basó en un solo período extrapolado.',
+  'Confirmar con CFE la tarifa, la demanda contratada y la clasificación de cargos si hay cualquier duda sobre lo leído del recibo.',
+  'Trámite y tiempos reales de interconexión (medición neta) con CFE para este servicio específico.',
+  'Verificar que el titular y el domicilio del recibo correspondan exactamente al inmueble que se va a intervenir.',
+  'Cualquier obra adicional no incluida en este presupuesto (refuerzo estructural, cambio de transformador, impermeabilización, rehabilitación eléctrica ajena al sistema).',
+];

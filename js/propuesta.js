@@ -1,10 +1,16 @@
-// Generador del PDF de la cotizacion -- port 1:1 de app/propuesta.py (21 paginas),
-// usando pdfComponents.js (ver ese archivo para la diferencia de arquitectura frente a
-// reportlab). Cada pagina es una funcion (doc, r, numero) => void: dibuja desde
-// CONTENT_TOP hacia abajo, pensada para caber en UNA sola pagina A4 (mismo criterio
-// que Python: "recortar para que quepa"). `numero` se pasa ya resuelto (tras filtrar
-// por bloques activos) para poder escribir el encabezado "NN | Titulo" igual que
-// Python renumera dinamicamente segun BLOQUES_COTIZACION/secciones_activas.
+// Generador del PDF de la cotizacion -- port de app/propuesta.py (que tiene 21
+// paginas), usando pdfComponents.js (ver ese archivo para la diferencia de
+// arquitectura frente a reportlab). Cada pagina es una funcion (doc, r, numero) =>
+// void: dibuja desde CONTENT_TOP hacia abajo, pensada para caber en UNA sola pagina
+// A4 (mismo criterio que Python: "recortar para que quepa"). `numero` se pasa ya
+// resuelto (tras filtrar por bloques activos) para poder escribir el encabezado "NN |
+// Titulo" igual que Python renumera dinamicamente segun BLOQUES_COTIZACION/secciones_activas.
+// OJO: aqui son 22 paginas fuente (no 21): la pagina 17 de Python ("que hace falta
+// para cerrar el ahorro") se dividio en DOS paginas propias de este port --17 y 17b--
+// porque agregar el checklist fijo de REQUISITOS_PRESUPUESTO_REAL (pedido del
+// usuario, ver notas.js) mas las notas del recibo ya no cabian juntas en una sola
+// hoja A4 sin paginacion automatica. Las 21 SECCIONES en pantalla (secciones.js) no
+// cambian -- esa division es solo del lado del PDF.
 import {
   CONTENT_W, CONTENT_TOP, headX, subX, bodyX, spacer, cardsRow, notice, table, curve,
   groupedBarChart, horizontalBarChart, gauge, buildPdf,
@@ -12,6 +18,7 @@ import {
 import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA } from './util.js';
 import { BLOQUES_COTIZACION } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
+import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 
@@ -413,11 +420,20 @@ function pagina16(doc, r, numero) {
 // ---------- Pagina 17: que falta ----------
 function pagina17(doc, r, numero) {
   let y = encabezado(doc, numero, 'Qué hace falta para cerrar el ahorro', r.titular);
+  y = bodyX(doc, y, 'Esta cotización se calculó únicamente con la información del recibo de CFE que se ' +
+    'cargó o capturó — sin importar si ese recibo venía completo o no, esto SIEMPRE hace falta confirmar ' +
+    'antes de poder ofrecer un presupuesto real y firme de este servicio:');
+  table(doc, y, ['Pendiente para un presupuesto real'], REQUISITOS_PRESUPUESTO_REAL.map(x => [x]), { small: true });
+}
+
+// ---------- Pagina 17b: notas especificas de ESTE recibo ----------
+function pagina17b(doc, r, numero) {
+  let y = encabezado(doc, numero, 'Qué hace falta para cerrar el ahorro: notas de este cálculo', r.titular);
   const notas = r.notas || [];
   if (notas.length) {
     for (const n of notas) { y = notice(doc, y, n); y = spacer(y, 6); }
   } else {
-    notice(doc, y, 'Sin pendientes detectados automáticamente; revisar de todas formas el recibo original antes de presentar una oferta firme.');
+    notice(doc, y, 'Sin pendientes adicionales detectados automáticamente en este recibo en particular.');
   }
 }
 
@@ -496,8 +512,8 @@ const PAGINAS = [
   ['consumo_sistema', pagina05], ['consumo_sistema', pagina06], ['produccion', pagina07], ['ambiental', pagina08],
   ['ahorro_pagos', pagina09], ['ahorro_pagos', pagina10], ['presupuesto', pagina11], ['presupuesto', pagina12],
   ['recuperacion', pagina13], ['recuperacion', pagina14], ['pagos_100', pagina15], ['pagos_100', pagina16],
-  ['pendientes', pagina17], ['alcance', pagina18], ['alcance', pagina19], ['glosario_fuentes', pagina20],
-  ['glosario_fuentes', pagina21],
+  ['pendientes', pagina17], ['pendientes', pagina17b], ['alcance', pagina18], ['alcance', pagina19],
+  ['glosario_fuentes', pagina20], ['glosario_fuentes', pagina21],
 ];
 
 // generarPdf(r, {secciones}) -- secciones: array de claves de BLOQUES_COTIZACION a

@@ -7,6 +7,7 @@ import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_P
 import { barraHorizontal, barraAgrupada, gauge, curvaFlujo } from './charts.js';
 import { bloqueDeSeccion } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
+import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
 
 function el(tag, cls, html) {
   const e = document.createElement(tag);
@@ -551,11 +552,17 @@ function s16(r, _leido, onToggle) {
 // ---------- 17: que falta ----------
 function s17(r, leido, onToggle) {
   const art = crearSeccion(17, 'Qué hace falta para cerrar el ahorro', '¿Qué pendientes hay antes de ofertar en firme?', r, onToggle);
+  art.append(badgeEstado('pendiente'));
+  art.append(p('Esta cotización se calculó únicamente con la información del recibo de CFE que se cargó o ' +
+    'capturó — sin importar si ese recibo venía completo o no, esto SIEMPRE hace falta confirmar antes de ' +
+    'poder ofrecer un presupuesto real y firme de este servicio:'));
+  art.append(tabla(['Pendiente para un presupuesto real'], REQUISITOS_PRESUPUESTO_REAL.map(x => [x]), { small: true }));
   const notas = r.notas || [];
+  art.append(el('h3', null, 'Notas específicas de este cálculo'));
   if (notas.length) {
     for (const n of notas) art.append(avisoCream(n));
   } else {
-    art.append(avisoCream('Sin pendientes detectados automáticamente; revisar de todas formas el recibo original antes de presentar una oferta firme.'));
+    art.append(avisoCream('Sin pendientes adicionales detectados automáticamente en este recibo en particular.'));
   }
   void leido;
   return art;
