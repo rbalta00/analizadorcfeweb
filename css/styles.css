@@ -78,12 +78,18 @@ main { max-width: 980px; margin: 0 auto; padding: 16px; }
 .fila-guardar { align-items: flex-end; }
 .fila-guardar select { min-width: 220px; }
 
-/* Campos que el lector de recibo NO pudo detectar solo -- revisar y llenar a mano. */
+/* Campos que el lector de recibo NO pudo detectar solo -- revisar y llenar a mano.
+   Tambien se usa en #grupoRateKw (un <div>, no un input) para marcar la columna
+   "$/kW" cuando no se detecto, por eso la regla de fieldset/div por separado. */
 input.campo-no-detectado, select.campo-no-detectado {
   border-color: #c99a2e; background: #fff8e8; box-shadow: 0 0 0 1px #c99a2e inset;
 }
+div.campo-no-detectado {
+  border: 1px solid #c99a2e; background: #fff8e8; border-radius: 8px; padding: 8px;
+}
 @media (prefers-color-scheme: dark) {
   input.campo-no-detectado, select.campo-no-detectado { background: #3a2f10; }
+  div.campo-no-detectado { background: #3a2f10; }
 }
 
 .previsualizacion-sembrado { margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

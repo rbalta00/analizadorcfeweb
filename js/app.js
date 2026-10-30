@@ -423,7 +423,18 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
     mostrarEstadoLecturaRecibo(camposIniciales);
     intentarAutoCalcular(camposIniciales);
   } else if (proyectoActual.formulario) {
-    try { calcularYRenderizar(); } catch (e) { console.error('No se pudo recalcular automáticamente al reabrir:', e); }
+    // Restaura las marcas naranja guardadas (si el proyecto viene de un recibo leido,
+    // o de un envio de cliente asignado desde la bandeja) antes de decidir si se
+    // puede recalcular solo al reabrir -- mismo criterio que al leer un recibo nuevo.
+    if (proyectoActual.campos) marcarCamposNoDetectados(proyectoActual.campos);
+    const faltan = faltantesVisiblesParaCalcular();
+    if (faltan.length) {
+      $('estadoCalculo').className = 'nota aviso';
+      $('estadoCalculo').textContent = 'Faltan datos para calcular (marcados en naranja arriba): ' +
+        faltan.map(f => f.label).join(', ') + '. Complétalos y pulsa "Calcular".';
+    } else {
+      try { calcularYRenderizar(); } catch (e) { console.error('No se pudo recalcular automáticamente al reabrir:', e); }
+    }
   }
 }
 
@@ -525,11 +536,21 @@ const CAMPO_A_INPUT = {
   dap: 'dap', suministro: 'c_suministro', distribucion: 'c_distribucion', transmision: 'c_transmision',
   cenace: 'c_cenace', energia: 'c_energia', capacidad: 'c_capacidad', scnmem: 'c_scnmem',
 };
+const ETIQUETA_CAMPO = {
+  tarifa: 'Tarifa', periodoDias: 'Días del período', periodoKwh: 'kWh del período', dap: 'DAP',
+  c_suministro: 'Suministro', c_distribucion: 'Distribución', c_transmision: 'Transmisión',
+  c_cenace: 'CENACE', c_energia: 'Energía', c_capacidad: 'Capacidad', c_scnmem: 'SCnMEM',
+  grupoRateKw: 'Columna "$/kW" (Distribución/Capacidad)',
+};
 
 // Marca en naranja los campos del formulario que el recibo NO trajo solos -- pedido
 // explicito del usuario: "me marcas los datos que no se leyeron" en vez de solo un
-// texto plano. Se limpia la marca de un campo en cuanto el usuario escribe algo ahi
-// (ver el listener de 'input' delegado mas abajo).
+// texto plano. Ademas de los inputs normales, marca el grupo de radios "$/kW"
+// (#grupoRateKw) cuando no se detecto esa columna -- es el unico dato que no es un
+// <input>/<select> simple. Se limpia la marca de un campo en cuanto el usuario
+// escribe/elige algo ahi (ver los listeners delegados mas abajo). Estas marcas son
+// ahora la fuente de verdad para decidir si se puede calcular (ver
+// `faltantesVisiblesParaCalcular`) -- no solo cosmeticas.
 function marcarCamposNoDetectados(campos) {
   document.querySelectorAll('#tabCaptura .campo-no-detectado').forEach(el2 => el2.classList.remove('campo-no-detectado'));
   for (const campo of campos.campos_no_encontrados || []) {
@@ -537,12 +558,37 @@ function marcarCamposNoDetectados(campos) {
     const el2 = inputId && $(inputId);
     if (el2) el2.classList.add('campo-no-detectado');
   }
+  if (!esDomestica($('tarifa').value) && !campos.rate_kw_detectado) {
+    $('grupoRateKw').classList.add('campo-no-detectado');
+  }
 }
 $('tabCaptura').addEventListener('input', (e) => {
   if (e.target.classList && e.target.classList.contains('campo-no-detectado')) {
     e.target.classList.remove('campo-no-detectado');
   }
 });
+// Las radios no disparan 'input' de forma confiable en todos los navegadores, y si el
+// usuario deja la opcion por defecto (ya marcada) un 'change' tampoco dispara -- por
+// eso se limpia con 'click', que siempre dispara aunque no cambie el valor: con eso
+// basta para considerar que Isaac ya revisó esa columna.
+$('grupoRateKw').addEventListener('click', () => {
+  $('grupoRateKw').classList.remove('campo-no-detectado');
+});
+
+// Datos obligatorios para que el calculo sea correcto -- si el recibo no los trajo
+// Y siguen marcados en naranja (el usuario no los llenó a mano todavía), NO se debe
+// calcular con el valor por defecto ($0.00 u otro) porque el resultado saldria mal.
+// Pedido explicito del usuario: "debes pedir todo completo para que no hagas mal los
+// cálculos" + "lo que sí tienes que marcar en la app los datos que faltan". Si nunca
+// se leyó un recibo (captura 100% manual desde cero), no hay nada marcado y esto no
+// bloquea nada -- solo protege el caso real: un recibo SE leyó, algo no se detectó, y
+// el formulario se habría quedado con un valor por defecto sin que nadie lo notara.
+function faltantesVisiblesParaCalcular() {
+  if (!$('tarifa').value) return [{ id: 'tarifa', label: ETIQUETA_CAMPO.tarifa }];
+  return Array.from(document.querySelectorAll('#tabCaptura .campo-no-detectado'))
+    .filter(el2 => el2.offsetParent !== null)
+    .map(el2 => ({ id: el2.id, label: ETIQUETA_CAMPO[el2.id] || el2.id }));
+}
 
 function mostrarEstadoLecturaRecibo(campos) {
   const estadoEl = $('estadoRecibo');
@@ -559,12 +605,9 @@ function mostrarEstadoLecturaRecibo(campos) {
 }
 
 function intentarAutoCalcular(campos) {
-  const esDom = esDomestica($('tarifa').value);
   const tarifaOk = campos.tarifa && TARIFAS_SOPORTADAS.has(campos.tarifa);
-  const datosOk = esDom
-    ? (campos.periodo_dias && campos.periodo_kwh)
-    : (campos.periodo_dias && campos.periodo_kwh && campos.rate_kw_detectado);
-  if (tarifaOk && datosOk) {
+  const faltan = tarifaOk ? faltantesVisiblesParaCalcular() : [{ id: 'tarifa', label: ETIQUETA_CAMPO.tarifa }];
+  if (!faltan.length) {
     try {
       calcularYRenderizar();
       $('estadoCalculo').className = 'nota ok';
@@ -577,9 +620,9 @@ function intentarAutoCalcular(campos) {
       return false;
     }
   }
-  $('estadoCalculo').className = 'nota';
-  $('estadoCalculo').textContent = 'No se detectaron automáticamente todos los datos necesarios (tarifa y/o ' +
-    'columna "$/kW"); revisa el formulario y pulsa Calcular.';
+  $('estadoCalculo').className = 'nota aviso';
+  $('estadoCalculo').textContent = 'No se calculó automáticamente: faltan datos marcados en naranja arriba (' +
+    faltan.map(f => f.label).join(', ') + '). Complétalos a mano y pulsa "Calcular".';
   return false;
 }
 
@@ -617,6 +660,16 @@ function llenarFormularioDesdeRecibo(c) {
 
 // ---------------- Calcular ----------------
 $('btnCalcular').addEventListener('click', () => {
+  const faltan = faltantesVisiblesParaCalcular();
+  if (faltan.length) {
+    $('estadoCalculo').className = 'nota aviso';
+    $('estadoCalculo').textContent = 'Faltan datos para calcular (marcados en naranja arriba): ' +
+      faltan.map(f => f.label).join(', ') + '. Complétalos antes de calcular -- si se calcula con un dato ' +
+      'que falta, el resultado sale mal.';
+    const primero = document.getElementById(faltan[0].id);
+    if (primero) primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
   try {
     calcularYRenderizar();
     $('estadoCalculo').className = 'nota ok';

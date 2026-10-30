@@ -353,6 +353,50 @@ se reinventa una formula aqui, solo se traduce.
         numero fijo). Verificado interceptando `window.open` en consola: el texto y
         el link (`https://cotizador-fv-cfe-web.vercel.app/cliente.html`) salen
         correctos.
+      - **El calculo ahora SE BLOQUEA si faltan datos marcados en naranja** -- pedido
+        explicito del usuario ("debes pedir todo completo para que no hagas mal los
+        calculos" + "lo que si tienes que marcar en la app los datos que faltan").
+        Antes, el marcado naranja de campos no detectados por el recibo (ver
+        "Recibo en varias fotos..." mas abajo) era solo cosmetico: si el usuario no
+        los llenaba, el calculo seguia adelante usando el valor por defecto del
+        campo (normalmente $0.00), dando un resultado incorrecto sin avisar.
+        - Nueva funcion `faltantesVisiblesParaCalcular()` (`js/app.js`) -- fuente de
+          verdad unica: escanea `#tabCaptura` por elementos `.campo-no-detectado`
+          actualmente VISIBLES (ignora los del bloque domestico/no-domestico que
+          esta oculto segun la tarifa elegida). La columna "$/kW" (radios
+          `rkDist`/`rkCap`, que no son un input/select simple) se agrupo en un nuevo
+          `<div id="grupoRateKw">` para poder marcarlo/limpiarlo igual que un campo
+          normal -- se limpia con un `click` en el grupo (no `change`, porque si el
+          usuario deja la opcion ya marcada por defecto un `change` no dispara).
+        - Gatea los 3 lugares donde se calcula: boton "Calcular" (bloquea y hace
+          scroll al primer campo faltante), auto-calculo al leer un recibo nuevo
+          (ya no calcula solo si falta algo, solo lo marca y pide completar), y al
+          REABRIR un proyecto ya guardado (antes recalculaba a ciegas con
+          `proyectoActual.formulario` guardado; ahora si `proyectoActual.campos`
+          trae `campos_no_encontrados`, se vuelven a marcar y se bloquea otra vez).
+          Este ultimo caso es el que mas importaba: un envio asignado desde la
+          bandeja (📥 Envíos de clientes) nunca pasa por el boton "Calcular", así
+          que sin este cambio se habria calculado en silencio con cargos en $0.00
+          si el cliente no los lleno bien en `cliente.html`.
+        - La captura 100% manual (sin leer ningun recibo, `ultimoLeido`/
+          `proyectoActual.campos` null) NO se bloquea -- no hay nada que marcar, es
+          el caso legitimo donde Isaac decide los numeros el mismo.
+        - **Hueco conocido, no cerrado todavia**: `cliente.html` (la pagina publica)
+          no exige que el cliente llene los 7 conceptos de cargos antes de enviar
+          (solo valida tarifa + dias/kWh + nombre) -- un cliente podria enviar el
+          formulario con los cargos en su valor por defecto sin que nada lo marque
+          como "no detectado" (`campos_leidos` solo se llena si de verdad subio un
+          recibo y el OCR corrio). Si esto pasa, la nueva validacion de arriba SI
+          lo atrapa al abrir el proyecto (no calcula solo), pero depende de que
+          Isaac note el aviso y revise a mano -- no hay honestamente ningun marcado
+          naranja en ese caso porque nunca se leyo un recibo. Pendiente si se quiere
+          cerrar: exigir los 7 campos en `cliente.html` tambien cuando no se adjunta
+          recibo.
+        - Verificado en Chrome real (sin UI completa, inyectando los eventos):
+          marcar `c_distribucion`/`c_capacidad`/`grupoRateKw` -> Calcular bloquea
+          con el mensaje y los nombres correctos -> llenar los campos + click en
+          el grupo "$/kW" -> Calcular procede y calcula normal. Tambien verificado
+          que la captura 100% manual (sin marcas) calcula sin bloquear.
 
 ## Como probarlo en el navegador
 ```
