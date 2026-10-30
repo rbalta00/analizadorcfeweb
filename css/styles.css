@@ -96,6 +96,18 @@ fieldset label { flex-direction: row; align-items: center; font-size: 0.85rem; }
   cursor: pointer;
 }
 .btn-primario:active { opacity: 0.85; }
+.btn-secundario {
+  background: var(--card-bg);
+  color: var(--teal);
+  border: 1px solid var(--teal);
+  border-radius: 8px;
+  padding: 11px 20px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-secundario:active { opacity: 0.85; }
+.acciones-pdf { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .btn-link {
   background: none;
   border: none;

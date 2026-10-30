@@ -157,6 +157,15 @@ se reinventa una formula aqui, solo se traduce.
       cliente como "particular" y confirmar que se agrupa aparte del de
       gobierno. Sin errores de consola propios de la app (el unico ruido son
       mensajes conocidos de la extension de Chrome, no de este codigo).
+- [x] **Resumen ejecutivo (1 pagina) + Guia de presentacion (1 pagina, generica)**
+      (`js/resumen.js`, port 1:1 de `app/resumen.py`). Dos botones nuevos en la
+      pestana de PDF: "Resumen ejecutivo" (usa el `r` ya calculado del cliente
+      abierto) y "Guia para presentar" (no depende de ningun caso). Verificado
+      visualmente en Chrome contra el caso real de Abue -- mismos numeros.
+      **Bug real encontrado y corregido**: la flecha Unicode "->" en 3 frases de
+      la guia salia como un glifo roto en el PDF (jsPDF + Helvetica estandar no
+      soporta ese caracter, a diferencia del navegador en pantalla) -- se
+      reemplazo por "->" en el texto que va al PDF.
 - [ ] Fotografias del inmueble (condiciones del inmueble) -- declarado como
       pendiente real, no se construyo esta sesion.
 - [ ] Historial/seguimiento agregado entre TODOS los clientes (hoy cada

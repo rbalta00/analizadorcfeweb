@@ -212,7 +212,11 @@
     <section class="tarjeta" id="tabPdf" hidden>
       <h2>Exportar PDF</h2>
       <p class="nota">Usa las mismas secciones activadas arriba. Revisa el documento antes de enviarlo al cliente.</p>
-      <div class="acciones"><button id="btnGenerarPdf" class="btn-primario">Generar y ver PDF</button></div>
+      <div class="acciones acciones-pdf">
+        <button id="btnGenerarPdf" class="btn-primario">Cotización completa</button>
+        <button id="btnResumenEjecutivo" class="btn-secundario">Resumen ejecutivo (1 página)</button>
+        <button id="btnGuiaPresentacion" class="btn-secundario">Guía para presentar</button>
+      </div>
       <div id="visorPdf"></div>
     </section>
   </main>

@@ -8,6 +8,7 @@ import {
 import { renderSeccion, TITULOS_SECCIONES } from './secciones.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf } from './propuesta.js';
+import { generarResumenEjecutivo, generarGuiaPresentacion } from './resumen.js';
 import { leerRecibo } from './leerRecibo.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion } from './bloques.js';
@@ -431,9 +432,7 @@ function observarSecciones() {
 $('btnToggleIndice').addEventListener('click', () => $('indiceSecciones').classList.toggle('indice-abierto'));
 
 // ---------------- PDF ----------------
-$('btnGenerarPdf').addEventListener('click', () => {
-  if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  const doc = generarPdf(ultimoResultado, { secciones: clienteActual.seccionesActivas });
+function mostrarPdfEnVisor(doc, nombreArchivo) {
   const blobUrl = doc.output('bloburl');
   const visor = $('visorPdf');
   visor.innerHTML = '';
@@ -443,14 +442,33 @@ $('btnGenerarPdf').addEventListener('click', () => {
   const btnDescargar = document.createElement('button');
   btnDescargar.className = 'btn-primario';
   btnDescargar.textContent = 'Descargar PDF';
-  btnDescargar.addEventListener('click', () => {
-    const nombreArchivo = `Cotizacion_${(clienteActual.nombre || 'cliente').replace(/[^a-z0-9]+/gi, '_')}.pdf`;
-    doc.save(nombreArchivo);
-  });
+  btnDescargar.addEventListener('click', () => doc.save(nombreArchivo));
   const acciones = document.createElement('div');
   acciones.className = 'acciones';
   acciones.append(btnDescargar);
   visor.append(acciones, iframe);
+  visor.scrollIntoView({ behavior: 'smooth' });
+}
+
+function nombreArchivoCliente(prefijo) {
+  return `${prefijo}_${(clienteActual.nombre || 'cliente').replace(/[^a-z0-9]+/gi, '_')}.pdf`;
+}
+
+$('btnGenerarPdf').addEventListener('click', () => {
+  if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  const doc = generarPdf(ultimoResultado, { secciones: clienteActual.seccionesActivas });
+  mostrarPdfEnVisor(doc, nombreArchivoCliente('Cotizacion'));
+});
+
+$('btnResumenEjecutivo').addEventListener('click', () => {
+  if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  const doc = generarResumenEjecutivo(ultimoResultado);
+  mostrarPdfEnVisor(doc, nombreArchivoCliente('Resumen_ejecutivo'));
+});
+
+$('btnGuiaPresentacion').addEventListener('click', () => {
+  const doc = generarGuiaPresentacion();
+  mostrarPdfEnVisor(doc, 'Guia_para_presentar_cotizacion.pdf');
 });
 
 // =====================================================================
