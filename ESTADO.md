@@ -8,8 +8,8 @@ da 0, por como Streamlit sirve sus archivos estaticos). El patron de
 (otro proyecto del usuario, ya funciona como PWA instalada) -- ese proyecto
 NO se toca, solo se usa como referencia de que esa configuracion si funciona.
 
-Repo git independiente (no es parte del repo de `app/`), proyecto nuevo, no
-empujado a GitHub todavia -- preguntar antes de crear el repo remoto.
+Repo git independiente (no es parte del repo de `app/`). Repo privado en GitHub:
+`rbalta00/cotizador-fv-cfe-web` — https://github.com/rbalta00/cotizador-fv-cfe-web
 
 ## Por que existe
 La app de Streamlit (`cfe-presupuestos/app`) sigue siendo la fuente de verdad
@@ -213,8 +213,10 @@ se reinventa una formula aqui, solo se traduce.
       version -- fuera del alcance de "las 21 secciones", deliberadamente no
       tocadas esta sesion).
 - [ ] Decidir si esto reemplaza a `app/` o conviven mientras se termina.
-- [ ] Decidir si se crea el repo en GitHub y donde se despliega (Vercel,
-      igual que las demas apps del usuario, es lo mas consistente).
+- [ ] Decidir donde se despliega (Vercel, igual que las demas apps del usuario, es
+      lo mas consistente) -- el repo de GitHub ya existe (`rbalta00/cotizador-fv-cfe-web`,
+      privado), falta conectarlo a un hosting real para que no dependa de correr
+      `python -m http.server` a mano.
 
 ## Como probarlo en el navegador
 ```
