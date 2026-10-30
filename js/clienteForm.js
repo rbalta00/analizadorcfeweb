@@ -21,6 +21,7 @@ const CAMPO_A_INPUT = {
   tarifa: 'tarifa', periodo_dias: 'periodoDias', periodo_kwh: 'periodoKwh', dap: 'dap',
   suministro: 'c_suministro', distribucion: 'c_distribucion', transmision: 'c_transmision',
   cenace: 'c_cenace', energia: 'c_energia', capacidad: 'c_capacidad', scnmem: 'c_scnmem',
+  energia_base: 'c_energia_base', energia_intermedia: 'c_energia_intermedia', energia_punta: 'c_energia_punta',
 };
 function marcarCamposNoDetectados(campos) {
   document.querySelectorAll('.campo-no-detectado').forEach(el => el.classList.remove('campo-no-detectado'));
@@ -111,6 +112,7 @@ $('btnEnviar').addEventListener('click', async () => {
       bt_monto: f.traeBt && !dom ? (Number(f.btMonto) || 0) : 0,
       bonus_monto: f.traeBonus && !dom ? (Number(f.bonusMonto) || 0) : 0,
       escalones: dom ? { basicoKwh: f.dBasicoKwh, basicoRate: f.dBasicoRate, interKwh: f.dInterKwh, interRate: f.dInterRate, excedRate: f.dExcedRate } : null,
+      historial: (dom ? f.historialDom : f.historialNoDom).filter(v => v != null).map(Number),
       campos_leidos: ultimoLeido,
       uso_ocr: ultimoLeido ? !!ultimoLeido.uso_ocr : false,
     };

@@ -149,15 +149,27 @@
           <label>kWh del período<input id="periodoKwh" type="number" value="1000" min="0.01" step="0.01" /></label>
           <label>DAP (alumbrado público), por período<input id="dap" type="number" value="197" min="0" step="0.01" /></label>
         </div>
+        <h4>Historial de consumo (opcional, mejora la precisión del dimensionamiento)</h4>
+        <p class="nota">Si tu recibo trae la gráfica/tabla de "Historial de consumo" (normalmente los últimos 12
+          meses), captura el kWh de cada uno -- el sistema se dimensiona con el promedio real en vez de
+          extrapolar un solo período. Llena los que tengas, los demás déjalos en blanco.</p>
+        <div class="fila historial" id="gridHistorialNoDom"></div>
         <h4>Desglose de cargos del período (MXN)</h4>
         <div class="fila cargos">
           <label>Suministro<input id="c_suministro" type="number" value="0" step="0.01" /></label>
           <label>Distribución<input id="c_distribucion" type="number" value="0" step="0.01" /></label>
           <label>Transmisión<input id="c_transmision" type="number" value="0" step="0.01" /></label>
           <label>CENACE<input id="c_cenace" type="number" value="0" step="0.01" /></label>
-          <label>Energía<input id="c_energia" type="number" value="0" step="0.01" /></label>
+          <span id="grupoEnergiaUnica"><label>Energía<input id="c_energia" type="number" value="0" step="0.01" /></label></span>
           <label>Capacidad<input id="c_capacidad" type="number" value="0" step="0.01" /></label>
           <label>SCnMEM<input id="c_scnmem" type="number" value="0" step="0.01" /></label>
+        </div>
+        <div class="fila cargos" id="grupoEnergiaGDMTH" hidden>
+          <p class="nota" style="flex-basis:100%">Tarifa GDMTH (por horario): tu recibo trae la Energía partida en 3 renglones
+            "Generación Base/Intermedia/Punta" en vez de uno solo -- captura cada uno.</p>
+          <label>Energía Base<input id="c_energia_base" type="number" value="0" step="0.01" /></label>
+          <label>Energía Intermedia<input id="c_energia_intermedia" type="number" value="0" step="0.01" /></label>
+          <label>Energía Punta<input id="c_energia_punta" type="number" value="0" step="0.01" /></label>
         </div>
         <h4>Columna "$/kW" del recibo — decide si Distribución/Capacidad bajan con los paneles</h4>
         <div class="fila" id="grupoRateKw">
@@ -199,6 +211,11 @@
           <label>Días del período<input id="d_periodoDias" type="number" value="60" /></label>
           <label>kWh del período<input id="d_periodoKwh" type="number" value="400" step="0.01" /></label>
         </div>
+        <h4>Historial de consumo (opcional, mejora la precisión del dimensionamiento)</h4>
+        <p class="nota">Si tu recibo trae la gráfica/tabla de "Historial de consumo" (normalmente los últimos 6
+          bimestres), captura el kWh de cada uno -- el sistema se dimensiona con el promedio real en vez de
+          extrapolar un solo período. Llena los que tengas, los demás déjalos en blanco.</p>
+        <div class="fila historial" id="gridHistorialDom"></div>
       </section>
 
       <h3>4. Sistema propuesto</h3>

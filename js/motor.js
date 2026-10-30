@@ -185,8 +185,22 @@ export const COSTOS_COMERCIAL = {
   fleteMxn: 5500, manoObraMxnWp: 2.5, contingencia: 0.08, margenSobreVenta: 0.25, iva: 0.16,
 };
 
-const DIAS_MES_REF = 30.5;
+export const DIAS_MES_REF = 30.5;
 const HORAS_UTILES_REF = 4.5;
+
+// Promedia varios periodos reales de historial (kWh por periodo, el mismo numero que
+// aparece en la grafica "Historial de consumo" del recibo) a un consumo mensual
+// normalizado -- mas representativo que extrapolar un solo periodo porque promedia
+// variacion estacional. `diasPorPeriodo` depende de la tarifa: ~30.5 para tarifas que
+// se facturan mensual (GDMTO/GDMTH/GDBT/PDBT), ~61 para domesticas/01/DAC que se
+// facturan bimestral -- SIN esto, promediar kWh/periodo directo subestimaria a la
+// mitad el consumo mensual real de un cliente domestico (cada periodo cubre 2 meses).
+export function consumoMensualDesdeHistorial(valoresKwh, diasPorPeriodo, diasMes = DIAS_MES_REF) {
+  const vals = (valoresKwh || []).filter(v => v != null && !Number.isNaN(Number(v)) && Number(v) > 0).map(Number);
+  if (!vals.length) return null;
+  const promedioPeriodo = vals.reduce((s, v) => s + v, 0) / vals.length;
+  return { consumoMensual: promedioPeriodo / diasPorPeriodo * diasMes, periodosUsados: vals.length };
+}
 
 export function generacionMensualPanel(moduloWp, horasUtiles = HORAS_UTILES_REF, diasMes = DIAS_MES_REF) {
   return moduloWp / 1000 * diasMes * horasUtiles;

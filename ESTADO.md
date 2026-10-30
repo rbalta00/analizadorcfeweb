@@ -439,6 +439,115 @@ se reinventa una formula aqui, solo se traduce.
           la tasa correcta -> editar el precio del panel y Recalcular actualiza
           inversion/enganche/ISR consistentemente. `node js/test_motor.mjs` sigue
           reproduciendo exacto los 8 numeros de Abue (no se rompio nada existente).
+      - **Bug real encontrado y corregido, mismo dia**: el usuario pidio revisar que
+        `cliente.html` pidiera TODOS los datos necesarios para calcular, "cada
+        tarifa tendra datos distintos... no le vas a pedir los mismos datos a un
+        cliente residencial que a un GDMTO". Al revisar se encontraron dos huecos
+        reales, uno de ellos un bug de calculo silencioso (no solo un hueco del
+        formulario):
+        - **GDMTH (tarifa por horario) perdia su cargo de Energia por completo.**
+          `recibo.js` SI detecta correctamente los 3 renglones "Generacion Base/
+          Intermedia/Punta" de un recibo GDMTH real (confirmado en la auditoria del
+          2026-10-27), pero no existia NINGUN campo en el formulario (ni interno ni
+          publico) para mostrarlos o capturarlos a mano -- la unica casilla que
+          habia era "Energia" (singular), que para GDMTH se quedaba siempre en $0.00
+          porque nada la llenaba. Como "energia" no esta en la lista de conceptos
+          reducibles especial de GDMTH (ver `CONCEPTO_PUNTA` en motor.js), esto NO
+          era solo un campo faltante: **todo el cargo de Energia desaparecia del
+          calculo**, subestimando brutalmente el consumo/ahorro de cualquier cliente
+          GDMTH procesado por la app web (la app de Streamlit no tiene este bug --
+          ahi tampoco hay captura manual, pero el motor de Python si arma bien el
+          cargo desde `leer_recibo.py`... revisar si la web realmente heredaba el
+          mismo problema o era exclusivo de esta migracion, no confirmado a fondo,
+          pero el fix aplica igual).
+          - Arreglado: nuevo grupo de 3 campos "Energía Base/Intermedia/Punta"
+            (`c_energia_base`/`c_energia_intermedia`/`c_energia_punta`), que
+            reemplaza al campo unico "Energía" SOLO cuando la tarifa es GDMTH (toggle
+            en `conectarEventosFormularioRecibo`, igual patron que domestica/no
+            domestica). `llenarFormularioDesdeReciboCampos` ahora SI mapea
+            `campos.energia_base/intermedia/punta` detectados por OCR a estos 3
+            campos. `calcularYRenderizar()` arma `cargos.energia_base/intermedia/
+            punta` en vez de `cargos.energia` cuando la tarifa es GDMTH -- el motor
+            (`motor.js`) ya sabia tratar `energia_punta` como NO reducible (el sol no
+            genera en horario punta), simplemente nunca recibia el dato.
+          - El bloqueo de calculo incompleto (ver arriba) se extendio para cubrir
+            este caso especifico: como `energia_base/intermedia/punta` NO se
+            inicializan en `null` dentro de `extraerCampos()` salvo que se detecten
+            de verdad (a proposito, para no generar falsas alarmas en tarifas que no
+            son GDMTH), nunca aparecian en `campos_no_encontrados` -- se agrego una
+            verificacion aparte en `marcarCamposNoDetectados()` que los marca en
+            naranja directo contra `campos` cuando la tarifa es GDMTH y siguen sin
+            detectarse, para que un recibo GDMTH no legible no se quede calculando
+            en silencio con $0 en energia.
+          - Mismo cambio en `cliente.html`, con copy claro para el cliente final
+            ("tu recibo trae la Energía partida en 3 renglones... copia el importe
+            de cada uno").
+        - **Los escalones de la tarifa domestica (01/DAC) no se podian capturar a
+          mano en `cliente.html`** -- a proposito, decision original: "no hace falta
+          llenarlos, se usan valores de fabrica". Esto chocaba con el pedido nuevo
+          del usuario (el cliente debe poder meter TODO a mano si hace falta) y
+          tenia un efecto secundario real: como el helper `$()` compartido devuelve
+          un elemento "vacio" (`value: ''`) para un campo que no existe en la
+          pagina, `leerFormularioRecibo()` mandaba `escalones: {basicoKwh: '', ...}`
+          (string vacio, NO `null`) a Supabase -- y como `formularioDesdeEnvio()` usa
+          `??` (que solo substituye en `null`/`undefined`, no en `''`), Isaac
+          hubiera visto los campos de escalon EN BLANCO (no los valores por defecto
+          razonables) al asignar un envio domestico desde la bandeja. Arreglado
+          agregando los mismos 3 campos de escalones que ya tiene `index.html`
+          (Basico/Intermedio/Excedente, limites y tarifas) a `cliente.html`, con
+          copy que le dice al cliente donde buscarlos en su propio recibo -- esto
+          tambien resuelve el bug de las cadenas vacias de raiz (ya no hay campos
+          ausentes, hay valores reales).
+        - Verificado en Chrome real: `cliente.html` con tarifa GDMTH muestra los 3
+          campos de energia (no el unico) y con tarifa 01 muestra los escalones con
+          sus valores por defecto; envio de prueba interceptando `fetch` confirma que
+          `cargos.energiaBase/energiaIntermedia/energiaPunta` SI viajan en el payload
+          enviado a Supabase. En `index.html`: marcar los 3 campos de energia GDMTH
+          como no detectados bloquea el calculo con el mensaje correcto; llenarlos y
+          calcular reproduce "Energía base/intermedia/punta" en la seccion de
+          desglose de cargos. `node js/test_motor.mjs` sigue en verde.
+      - **Historial de consumo, ahora capturable a mano y usado de verdad en el
+        calculo** (antes solo se mostraba como texto de contexto si el OCR lo
+        detectaba -- el dimensionamiento siempre usaba un solo periodo). Pedido del
+        usuario: "es importante... la idea es entregar bien calculado el sistema" --
+        si el cliente no lo llena, "lo hago yo o el equipo", asi que se agrego en las
+        DOS paginas (`index.html` Y `cliente.html`), no solo una.
+        - Nueva funcion `consumoMensualDesdeHistorial()` en `motor.js`: promedia los
+          periodos capturados (kWh por periodo) a un consumo mensual normalizado.
+          Distingue tarifas que se facturan mensual (GDMTO/GDMTH/GDBT/PDBT, ~30.5
+          dias/periodo) de las domesticas (01/DAC, que se facturan BIMESTRAL, ~61
+          dias/periodo) -- sin esto, promediar kWh/periodo directo habria subestimado
+          a la mitad el consumo real de un cliente domestico (cada periodo cubre 2
+          meses, no 1).
+        - `construirResultado()` (`resultado.js`) prefiere el historial (manual si se
+          capturo, si no el que trajo el OCR del recibo) sobre la extrapolacion de un
+          solo periodo, cuando hay al menos 1 periodo con dato. Tambien ajusta
+          `dailyKwh` (la simulacion mes a mes de la factura) al mismo promedio -- si
+          no, el sistema quedaria dimensionado para el consumo promedio real pero el
+          ahorro se calcularia contra el periodo mas reciente (que puede ser un mes
+          atipico), dando numeros inconsistentes entre si. Sin historial, el
+          comportamiento es IDENTICO al de antes (verificado: Abue sigue
+          reproduciendo exacto sin tocar nada de historial).
+        - UI: grupo de campos numericos generado por JS (`inicializarGridsHistorial()`
+          en `formularioRecibo.js`, para no duplicar 18 inputs casi identicos entre
+          las 2 paginas) -- 12 casillas para tarifas que se facturan mensual, 6 para
+          domesticas, dentro del bloque de cada familia de tarifa (se muestran/
+          ocultan con el mismo toggle que ya existia). Opcional, no bloquea el
+          calculo si se deja vacio -- es mejora de precision, no dato obligatorio.
+        - Si el OCR SI detecta el historial impreso en el recibo, se precarga en
+          estos mismos campos (visible y editable, no solo guardado internamente).
+        - `cliente.html`: el historial capturado a mano viaja al envio (columna nueva
+          `historial` jsonb en `envios_cliente`, migracion `agrega_historial_a_envios_cliente`
+          aplicada a Supabase) y `formularioDesdeEnvio()` en `app.js` lo recupera al
+          asignar el envio a un cliente -- no se pierde en el camino.
+        - Verificado en Chrome real: llenar 3 periodos a mano en `index.html`
+          (1200/1300/1100) recalcula "Consumo normalizado promedio de 3 periodos
+          reales de historial: 1200.00 kWh/mes" (promedio exacto); en tarifa
+          domestica, 2 periodos (400/600) da "250.00 kWh/mes" (promedio 500/bimestre
+          ÷ 61 dias × 30.5 = mitad, confirma el ajuste bimestral); sin historial
+          sigue igual que antes. En `cliente.html`, envio de prueba interceptando
+          `fetch` confirma `historial: [150, 180]` en el payload. `node
+          js/test_motor.mjs` sigue en verde (no se rompio nada ya validado).
 
 ## Como probarlo en el navegador
 ```

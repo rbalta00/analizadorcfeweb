@@ -19,15 +19,62 @@ export function esDomestica(tarifa) {
   return DOMESTICAS.has(tarifa);
 }
 
+// Genera los campos numericos del historial de consumo -- 12 periodos para tarifas que
+// se facturan mensual, 6 para domesticas/01/DAC que se facturan bimestral (ver
+// motor.js consumoMensualDesdeHistorial). Se generan por JS en vez de escribirlos a
+// mano en el HTML para no mantener 18 inputs casi identicos duplicados entre
+// index.html y cliente.html -- ambas paginas solo ponen el contenedor vacio
+// (#gridHistorialNoDom / #gridHistorialDom) y llaman esta funcion una vez al cargar.
+export function inicializarGridsHistorial() {
+  const specs = [['gridHistorialNoDom', 'hist_nd_', 12], ['gridHistorialDom', 'hist_d_', 6]];
+  for (const [contId, prefijo, n] of specs) {
+    const cont = document.getElementById(contId);
+    if (!cont || cont.childElementCount) continue;
+    for (let i = 1; i <= n; i++) {
+      const label = document.createElement('label');
+      label.textContent = `P${i}`;
+      const input = document.createElement('input');
+      input.type = 'number'; input.step = '0.01'; input.min = '0';
+      input.id = prefijo + i;
+      input.placeholder = 'kWh';
+      label.append(input);
+      cont.append(label);
+    }
+  }
+}
+
+function leerGridHistorial(prefijo, n) {
+  const valores = [];
+  for (let i = 1; i <= n; i++) {
+    const v = $(prefijo + i).value;
+    valores.push(v === '' ? null : v);
+  }
+  return valores;
+}
+
+function aplicarGridHistorial(prefijo, n, valores) {
+  for (let i = 1; i <= n; i++) {
+    const el2 = document.getElementById(prefijo + i);
+    if (el2) el2.value = (valores && valores[i - 1] != null) ? valores[i - 1] : '';
+  }
+}
+
 // Conecta los listeners de tarifa (muestra/oculta el bloque domestico vs. no domestico)
 // y de los checkboxes de cargos extra (2% BT / bonificacion FP). onCambioTarifa(dom) es
 // opcional, para que quien use este modulo reaccione al cambio (ej. mostrar/ocultar
 // otras secciones de su propio formulario).
 export function conectarEventosFormularioRecibo(onCambioTarifa) {
+  inicializarGridsHistorial();
   $('tarifa').addEventListener('change', () => {
     const dom = esDomestica($('tarifa').value);
     $('bloqueNoDomestica').hidden = dom;
     $('bloqueDomestica').hidden = !dom;
+    // GDMTH trae la Energia partida en 3 renglones (Base/Intermedia/Punta) en vez de
+    // uno solo -- ver motor.js (CONCEPTO_PUNTA no es reducible, a diferencia de un
+    // campo "energia" generico). Las demas tarifas usan el campo unico de siempre.
+    const esGdmth = $('tarifa').value === 'GDMTH';
+    $('grupoEnergiaUnica').hidden = esGdmth;
+    $('grupoEnergiaGDMTH').hidden = !esGdmth;
     if (onCambioTarifa) onCambioTarifa(dom);
   });
   $('traeBt').addEventListener('change', () => { $('btMonto').disabled = !$('traeBt').checked; });
@@ -41,6 +88,7 @@ export function leerFormularioRecibo() {
     cargos: {
       suministro: $('c_suministro').value, distribucion: $('c_distribucion').value, transmision: $('c_transmision').value,
       cenace: $('c_cenace').value, energia: $('c_energia').value, capacidad: $('c_capacidad').value, scnmem: $('c_scnmem').value,
+      energiaBase: $('c_energia_base').value, energiaIntermedia: $('c_energia_intermedia').value, energiaPunta: $('c_energia_punta').value,
     },
     rkDist: document.querySelector('input[name="rkDist"]:checked')?.value || 'demanda',
     rkCap: document.querySelector('input[name="rkCap"]:checked')?.value || 'demanda',
@@ -50,6 +98,7 @@ export function leerFormularioRecibo() {
     dInterKwh: $('d_interKwh').value, dInterRate: $('d_interRate').value,
     dExcedRate: $('d_excedRate').value, dDap: $('d_dap').value,
     dPeriodoDias: $('d_periodoDias').value, dPeriodoKwh: $('d_periodoKwh').value,
+    historialNoDom: leerGridHistorial('hist_nd_', 12), historialDom: leerGridHistorial('hist_d_', 6),
   };
 }
 
@@ -63,6 +112,12 @@ export function aplicarFormularioRecibo(f) {
   for (const k of ['suministro', 'distribucion', 'transmision', 'cenace', 'energia', 'capacidad', 'scnmem']) {
     $('c_' + k).value = cargos[k] ?? 0;
   }
+  $('c_energia_base').value = cargos.energiaBase ?? 0;
+  $('c_energia_intermedia').value = cargos.energiaIntermedia ?? 0;
+  $('c_energia_punta').value = cargos.energiaPunta ?? 0;
+  const esGdmth = (f?.tarifa || 'GDMTO') === 'GDMTH';
+  $('grupoEnergiaUnica').hidden = esGdmth;
+  $('grupoEnergiaGDMTH').hidden = !esGdmth;
   const rkDistEl = document.querySelector(`input[name="rkDist"][value="${f?.rkDist || 'demanda'}"]`);
   if (rkDistEl) rkDistEl.checked = true;
   const rkCapEl = document.querySelector(`input[name="rkCap"][value="${f?.rkCap || 'demanda'}"]`);
@@ -73,6 +128,8 @@ export function aplicarFormularioRecibo(f) {
   $('d_interKwh').value = f?.dInterKwh ?? 130; $('d_interRate').value = f?.dInterRate ?? 1.385;
   $('d_excedRate').value = f?.dExcedRate ?? 4.054; $('d_dap').value = f?.dDap ?? 0;
   $('d_periodoDias').value = f?.dPeriodoDias ?? 60; $('d_periodoKwh').value = f?.dPeriodoKwh ?? 400;
+  aplicarGridHistorial('hist_nd_', 12, f?.historialNoDom);
+  aplicarGridHistorial('hist_d_', 6, f?.historialDom);
 }
 
 // Autollena el formulario a partir de lo que extraerCampos() (recibo.js) detecto solo
@@ -91,6 +148,15 @@ export function llenarFormularioDesdeReciboCampos(c) {
     for (const k of ['suministro', 'distribucion', 'transmision', 'cenace', 'energia', 'capacidad', 'scnmem']) {
       if (c[k] != null) $('c_' + k).value = c[k];
     }
+    // GDMTH: si el recibo trae Energia partida en Base/Intermedia/Punta, se detecta
+    // aparte (ver recibo.js) y hay que llenar esos 3 campos, no el "Energia" unico.
+    if (c.energia_base != null || c.energia_intermedia != null || c.energia_punta != null) {
+      $('grupoEnergiaUnica').hidden = true;
+      $('grupoEnergiaGDMTH').hidden = false;
+      if (c.energia_base != null) $('c_energia_base').value = c.energia_base;
+      if (c.energia_intermedia != null) $('c_energia_intermedia').value = c.energia_intermedia;
+      if (c.energia_punta != null) $('c_energia_punta').value = c.energia_punta;
+    }
     if (c.rate_kw_detectado) {
       const rkDistEl = document.querySelector(`input[name="rkDist"][value="${c.rate_kw_detectado.distribucion > 0 ? 'demanda' : 'mercado'}"]`);
       if (rkDistEl) rkDistEl.checked = true;
@@ -103,5 +169,11 @@ export function llenarFormularioDesdeReciboCampos(c) {
     if (c.periodo_dias != null) $('d_periodoDias').value = c.periodo_dias;
     if (c.periodo_kwh != null) $('d_periodoKwh').value = c.periodo_kwh;
     if (c.dap != null) $('d_dap').value = c.dap;
+  }
+  // Si el recibo trae impresa la grafica/tabla de historial, precarga los campos de
+  // historial para que se vea y se pueda corregir a mano -- no solo quede guardado
+  // internamente. Los mas recientes van primero (igual orden que recibo.js).
+  if (c.historial && c.historial.length) {
+    aplicarGridHistorial(dom ? 'hist_d_' : 'hist_nd_', dom ? 6 : 12, c.historial.map(h => h.kwh));
   }
 }

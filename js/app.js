@@ -228,6 +228,8 @@ function formularioDesdeEnvio(envio) {
     dDap: envio.es_domestica ? (envio.dap || 0) : 0,
     dPeriodoDias: envio.es_domestica ? envio.periodo_dias : 60,
     dPeriodoKwh: envio.es_domestica ? envio.periodo_kwh : 400,
+    historialNoDom: envio.es_domestica ? [] : (envio.historial || []),
+    historialDom: envio.es_domestica ? (envio.historial || []) : [],
     moduloWp: 605, cobertura: 1.0, horasUtiles: 4.5, escalaCostos: 'residencial', escalamiento: 4.0,
   };
 }
@@ -541,11 +543,13 @@ const CAMPO_A_INPUT = {
   tarifa: 'tarifa', no_servicio: 'noServicio', periodo_dias: 'periodoDias', periodo_kwh: 'periodoKwh',
   dap: 'dap', suministro: 'c_suministro', distribucion: 'c_distribucion', transmision: 'c_transmision',
   cenace: 'c_cenace', energia: 'c_energia', capacidad: 'c_capacidad', scnmem: 'c_scnmem',
+  energia_base: 'c_energia_base', energia_intermedia: 'c_energia_intermedia', energia_punta: 'c_energia_punta',
 };
 const ETIQUETA_CAMPO = {
   tarifa: 'Tarifa', periodoDias: 'Días del período', periodoKwh: 'kWh del período', dap: 'DAP',
   c_suministro: 'Suministro', c_distribucion: 'Distribución', c_transmision: 'Transmisión',
   c_cenace: 'CENACE', c_energia: 'Energía', c_capacidad: 'Capacidad', c_scnmem: 'SCnMEM',
+  c_energia_base: 'Energía Base', c_energia_intermedia: 'Energía Intermedia', c_energia_punta: 'Energía Punta',
   grupoRateKw: 'Columna "$/kW" (Distribución/Capacidad)',
 };
 
@@ -566,6 +570,17 @@ function marcarCamposNoDetectados(campos) {
   }
   if (!esDomestica($('tarifa').value) && !campos.rate_kw_detectado) {
     $('grupoRateKw').classList.add('campo-no-detectado');
+  }
+  // GDMTH: 'energia_base'/'energia_intermedia'/'energia_punta' NO se inicializan en
+  // null dentro de extraerCampos() salvo que se detecten de verdad (ver recibo.js) --
+  // por eso NO aparecen en campos_no_encontrados cuando simplemente no se detectaron
+  // (a diferencia del resto de los campos). Hay que revisarlos aparte contra `campos`
+  // directamente, si no, un recibo GDMTH que no se pudo leer se quedaria sin marcar
+  // nada (el "Energia" generico esta oculto para esta tarifa) y calcularia con $0.
+  if ($('tarifa').value === 'GDMTH') {
+    for (const campo of ['energia_base', 'energia_intermedia', 'energia_punta']) {
+      if (campos[campo] == null) $(CAMPO_A_INPUT[campo]).classList.add('campo-no-detectado');
+    }
   }
 }
 $('tabCaptura').addEventListener('input', (e) => {
@@ -702,6 +717,8 @@ function calcularYRenderizar() {
   const inmueble = leerInmueble();
   const aplicaIsr = $('aplicaIsr').checked;
   const tasaIsrPct = Number($('tasaIsr').value);
+  const historialCrudo = esDom ? leerFormularioRecibo().historialDom : leerFormularioRecibo().historialNoDom;
+  const historialManual = historialCrudo.filter(v => v != null).map(Number);
 
   let input;
   if (!esDom) {
@@ -711,8 +728,18 @@ function calcularYRenderizar() {
     const cargos = {
       suministro: Number($('c_suministro').value), distribucion: Number($('c_distribucion').value),
       transmision: Number($('c_transmision').value), cenace: Number($('c_cenace').value),
-      energia: Number($('c_energia').value), capacidad: Number($('c_capacidad').value), scnmem: Number($('c_scnmem').value),
+      capacidad: Number($('c_capacidad').value), scnmem: Number($('c_scnmem').value),
     };
+    // GDMTH: Energia va partida en Base/Intermedia/Punta (Punta NO es reducible -- el
+    // sol no genera en horario punta, ver motor.js CONCEPTO_PUNTA). Las demas tarifas
+    // usan un solo campo "Energia", completamente reducible.
+    if (tarifa === 'GDMTH') {
+      cargos.energia_base = Number($('c_energia_base').value);
+      cargos.energia_intermedia = Number($('c_energia_intermedia').value);
+      cargos.energia_punta = Number($('c_energia_punta').value);
+    } else {
+      cargos.energia = Number($('c_energia').value);
+    }
     const rateKw = {
       distribucion: document.querySelector('input[name="rkDist"]:checked').value === 'demanda' ? 1.0 : 0.0,
       capacidad: document.querySelector('input[name="rkCap"]:checked').value === 'demanda' ? 1.0 : 0.0,
@@ -724,7 +751,7 @@ function calcularYRenderizar() {
     const fpBonusPct = traeBonus ? bonusMonto / (baseAprox + btMonto) : 0.0;
     input = { titular, domicilio, noServicio, tarifa, esDomestica: false, periodoDias, periodoKwh, dap, cargos,
       rateKw, btPct, fpBonusPct, moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
-      aplicaIsr, tasaIsrPct };
+      aplicaIsr, tasaIsrPct, historialManual };
   } else {
     const periodoDias = Number($('d_periodoDias').value);
     const periodoKwh = Number($('d_periodoKwh').value);
@@ -735,7 +762,7 @@ function calcularYRenderizar() {
     ];
     input = { titular, domicilio, noServicio, tarifa, esDomestica: true, periodoDias, periodoKwh, escalones,
       dapDomestica: Number($('d_dap').value), moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
-      aplicaIsr, tasaIsrPct };
+      aplicaIsr, tasaIsrPct, historialManual };
   }
 
   const r = construirResultado(input);

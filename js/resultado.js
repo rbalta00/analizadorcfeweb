@@ -6,6 +6,7 @@
 import {
   construirInvoice, construirInvoiceDomestica, pisoDeAhorro, flujoMensualAnual,
   dimensionarHorasSol, normalizarConsumoMensual, presupuestar, costoInversor, flujo25Anios, R,
+  consumoMensualDesdeHistorial, DIAS_MES_REF,
 } from './motor.js';
 import { generarNotas } from './notas.js';
 import { fechaEstudioEs } from './util.js';
@@ -16,7 +17,7 @@ export function construirResultado(input) {
     periodoDias, periodoKwh, dap, cargos, rateKw, btPct, fpBonusPct,
     moduloWp, cobertura, horasUtiles, costos, escalamientoPct,
     escalones, dapDomestica,
-    leido, inmueble, aplicaIsr, tasaIsrPct,
+    leido, inmueble, aplicaIsr, tasaIsrPct, historialManual,
   } = input;
 
   let invoice, meta, pagoRecurrentePeriodo, piso, ahorroMax, pctMax, cargosFinal;
@@ -37,13 +38,40 @@ export function construirResultado(input) {
     meta = { tieneDemandaContratada: false, reducibles: ['energia'], noReducibles: [] };
   }
 
-  const dailyKwh = periodoKwh / periodoDias;
-  const consumoMensual = normalizarConsumoMensual(periodoKwh, periodoDias);
+  // Consumo base para dimensionar: si hay historial real (varios periodos, a mano o
+  // detectado del recibo) se promedia -- mas representativo que extrapolar un solo
+  // periodo porque suaviza variacion estacional. diasPorPeriodo distingue tarifas que
+  // se facturan mensual (~30.5 dias) de las domesticas/01/DAC, que se facturan
+  // bimestral (~61 dias) -- sin esto, promediar kWh/periodo directo subestimaria a la
+  // mitad el consumo mensual real de un cliente domestico.
+  const diasPorPeriodoHistorial = esDomestica ? DIAS_MES_REF * 2 : DIAS_MES_REF;
+  const historialOcr = (leido && leido.historial) ? leido.historial.map(h => h.kwh) : null;
+  const historialUsado = (historialManual && historialManual.length) ? historialManual : historialOcr;
+  const desdeHistorial = historialUsado ? consumoMensualDesdeHistorial(historialUsado, diasPorPeriodoHistorial) : null;
+
+  let consumoMensual, dailyKwh, metodoGeneracion, basisConsumo;
+  if (desdeHistorial) {
+    consumoMensual = desdeHistorial.consumoMensual;
+    // El promedio del historial tambien alimenta la simulacion de factura (dailyKwh)
+    // -- si no, el sistema quedaria dimensionado para el consumo promedio real pero
+    // el ahorro se calcularia contra el periodo mas reciente, que puede ser atipico
+    // (mes bajo/alto), dando un ahorro inconsistente con el tamano del sistema.
+    dailyKwh = consumoMensual / DIAS_MES_REF;
+    metodoGeneracion = `Horas-sol fijas (${horasUtiles} h/día, criterio del usuario, no oficial de CFE/PVGIS). ` +
+      `Consumo normalizado promedio de ${desdeHistorial.periodosUsados} periodos reales de historial: ` +
+      `${consumoMensual.toFixed(2)} kWh/mes (30.5 días) -- mas representativo que un solo periodo.`;
+    basisConsumo = `historial real de ${desdeHistorial.periodosUsados} periodos` +
+      (historialManual && historialManual.length ? ' (capturados a mano)' : ' (impresos en el recibo)');
+  } else {
+    dailyKwh = periodoKwh / periodoDias;
+    consumoMensual = normalizarConsumoMensual(periodoKwh, periodoDias);
+    metodoGeneracion = `Horas-sol fijas (${horasUtiles} h/día, criterio del usuario, no oficial de CFE/PVGIS). ` +
+      `Consumo normalizado de este servicio: ${consumoMensual.toFixed(2)} kWh/mes (30.5 días), a partir del período ` +
+      `real facturado (${periodoKwh} kWh en ${periodoDias} días).`;
+    basisConsumo = `extrapolación de un solo período (${periodoDias} días)`;
+  }
   const { n, kwp, genAnual } = dimensionarHorasSol(consumoMensual, moduloWp, cobertura, horasUtiles);
   const monthlyE = Array(12).fill(genAnual / kwp);
-  const metodoGeneracion = `Horas-sol fijas (${horasUtiles} h/día, criterio del usuario, no oficial de CFE/PVGIS). ` +
-    `Consumo normalizado de este servicio: ${consumoMensual.toFixed(2)} kWh/mes (30.5 días), a partir del período ` +
-    `real facturado (${periodoKwh} kWh en ${periodoDias} días).`;
 
   const pres = presupuestar(n, kwp, moduloWp, costos);
   const rows = flujoMensualAnual(invoice, dailyKwh, monthlyE, kwp, 1);
@@ -56,9 +84,6 @@ export function construirResultado(input) {
   const payback = ahorroAnual > 0 ? pres.inversion / ahorroAnual : null;
   const om1 = pres.inversion * 0.01;
   const annualKwh = consumoMensual * 12;
-  const basisConsumo = (leido && leido.historial_meses_cubiertos)
-    ? `historial real de ${leido.historial_meses_cubiertos} meses impreso en el recibo`
-    : `extrapolación de un solo período (${periodoDias} días)`;
 
   // Deduccion fiscal ISR (Art. 34 fraccion XIII LISR) -- opcional, solo clientes
   // privados/comerciales que pagan ISR (gobierno NO). No afecta el ahorro de factura,
