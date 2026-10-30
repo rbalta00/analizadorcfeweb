@@ -1,0 +1,10 @@
+{
+  "name": "cotizador-fv-cfe-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Version PWA (HTML/JS/CSS, sin frameworks) del cotizador fotovoltaico CFE -- misma funcionalidad que cfe-presupuestos/app (Streamlit/Python), reconstruida para poder instalarse como app real. Ver ESTADO.md.",
+  "type": "module",
+  "scripts": {
+    "test": "node js/test_motor.mjs"
+  }
+}
