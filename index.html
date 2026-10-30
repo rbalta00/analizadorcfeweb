@@ -36,7 +36,10 @@
           </select>
         </label>
       </div>
-      <div class="acciones"><button id="btnCrearCliente" class="btn-primario">+ Nuevo cliente</button></div>
+      <div class="acciones acciones-pdf">
+        <button id="btnCrearCliente" class="btn-primario">+ Nuevo cliente</button>
+        <button id="btnGuiaPresentacionGeneral" class="btn-secundario">📖 Guía para presentar (genérica)</button>
+      </div>
     </section>
 
     <section class="tarjeta">
@@ -245,9 +248,10 @@
       <div class="acciones acciones-pdf">
         <button id="btnGenerarPdf" class="btn-primario">Cotización completa</button>
         <button id="btnResumenEjecutivo" class="btn-secundario">Resumen ejecutivo (1 página)</button>
-        <button id="btnGuiaPresentacion" class="btn-secundario">Guía para presentar</button>
+        <button id="btnGuardarCotizacion" class="btn-secundario">💾 Guardar cotización con este cliente</button>
         <button id="btnEnviarWhatsapp" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
       </div>
+      <p class="nota" id="estadoGuardadoCotizacion"></p>
       <p class="nota">El botón de WhatsApp abre el chat con un resumen en texto ya escrito — WhatsApp no
         permite adjuntar el PDF automáticamente desde un enlace; adjúntalo a mano (ya descargado arriba).</p>
       <div id="visorPdf"></div>

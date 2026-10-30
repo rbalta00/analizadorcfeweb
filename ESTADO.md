@@ -201,6 +201,16 @@ se reinventa una formula aqui, solo se traduce.
       dio el usuario. Limitacion real explicada en la propia interfaz: WhatsApp no
       permite adjuntar un archivo desde un enlace, asi que el PDF (ya descargado con
       los botones de al lado) se adjunta a mano.
+- [x] **Boton "Guardar cotización con este cliente"** (pestana de PDF, reemplaza al
+      boton "Guia para presentar" que vivia ahi -- pedido explicito del usuario). Los
+      datos de la cotizacion ya se autoguardan en cada calculo; este boton deja ademas
+      un registro visible (`proyecto.cotizacionGuardadaEn`) de que esa cotizacion
+      especifica se reviso y se dio por buena, mostrado en la lista de cotizaciones
+      del cliente ("✓ cotización guardada el DD/MM/AAAA") en vez del generico "con
+      datos capturados". La "Guia para presentar" (generica, no depende de ningun
+      cliente) se reubico en la pantalla de Clientes, con descarga directa -- no se
+      elimino la funcionalidad, solo se saco de la pestana de PDF de una cotizacion
+      especifica, que no era su lugar natural.
 - [ ] Fotografias del inmueble (condiciones del inmueble) -- declarado como
       pendiente real, no se construyo esta sesion.
 - [ ] Historial/seguimiento agregado entre TODOS los clientes (hoy cada

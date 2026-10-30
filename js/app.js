@@ -82,6 +82,14 @@ $('btnCrearCliente').addEventListener('click', () => {
   mostrarPantallaProyectos(c.id);
 });
 
+// Guia generica (no depende de ningun cliente/cotizacion) -- vive aqui, no en la
+// pestana de PDF de una cotizacion especifica, porque no cambia de un caso a otro.
+// Se descarga directo (no hay un visor de PDF en esta pantalla).
+$('btnGuiaPresentacionGeneral').addEventListener('click', () => {
+  const doc = generarGuiaPresentacion();
+  doc.save('Guia_para_presentar_cotizacion.pdf');
+});
+
 function mostrarPantallaClientes() {
   $('pantallaClientes').hidden = false;
   $('pantallaProyectos').hidden = true;
@@ -96,7 +104,9 @@ function mostrarPantallaClientes() {
 function tarjetaProyecto(p) {
   const div = document.createElement('div');
   div.className = 'tarjeta-cliente';
-  const estado = p.formulario ? 'con datos capturados' : 'sin datos capturados todavía';
+  const estado = p.cotizacionGuardadaEn
+    ? `✓ cotización guardada el ${new Date(p.cotizacionGuardadaEn).toLocaleDateString('es-MX')}`
+    : (p.formulario ? 'con datos capturados, cotización sin guardar todavía' : 'sin datos capturados todavía');
   div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(p.nombre)}</strong>` +
     `<span class="nota">${estado} · actualizado ${new Date(p.actualizadoEn).toLocaleDateString('es-MX')}</span></div>`;
   div.addEventListener('click', () => abrirProyecto(clienteActual.id, p.id));
@@ -596,9 +606,17 @@ $('btnResumenEjecutivo').addEventListener('click', () => {
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Resumen_ejecutivo'));
 });
 
-$('btnGuiaPresentacion').addEventListener('click', () => {
-  const doc = generarGuiaPresentacion();
-  mostrarPdfEnVisor(doc, 'Guia_para_presentar_cotizacion.pdf');
+// Marca esta cotizacion como guardada/confirmada para este cliente -- los datos ya se
+// autoguardan en cada calculo (guardarProyecto), esto deja ademas un registro visible
+// (fecha) de que la cotizacion se reviso y se dio por buena, mostrado en la lista de
+// cotizaciones del cliente en vez del generico "con datos capturados".
+$('btnGuardarCotizacion').addEventListener('click', () => {
+  if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  proyectoActual.cotizacionGuardadaEn = new Date().toISOString();
+  guardarProyecto(clienteActual, proyectoActual);
+  $('estadoGuardadoCotizacion').className = 'nota ok';
+  $('estadoGuardadoCotizacion').textContent =
+    `✓ Guardada con el cliente "${clienteActual.nombre}", cotización "${proyectoActual.nombre}".`;
 });
 
 // WhatsApp no permite adjuntar un archivo desde un enlace wa.me, solo abrir un chat con
