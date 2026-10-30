@@ -1,0 +1,109 @@
+:root {
+  --navy: #163b4c;
+  --teal: #0f8b8d;
+  --gold: #c99a2e;
+  --grey: #5e737c;
+  --bg: #eaecf1;
+  --card-bg: #ffffff;
+  --border: #d7dce2;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #11161a; --card-bg: #1b2227; --border: #2b343b; --grey: #9aa7ad; }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: #1a1f24;
+}
+@media (prefers-color-scheme: dark) { body { color: #e7ebed; } }
+
+.topbar {
+  background: var(--navy);
+  color: #fff;
+  padding: 16px 20px;
+  position: relative;
+}
+.topbar h1 { margin: 0; font-size: 1.3rem; }
+.topbar .subtitulo { margin: 2px 0 0; font-size: 0.85rem; opacity: 0.8; }
+.btn-instalar {
+  margin-top: 10px;
+  background: var(--gold);
+  color: #1a1f24;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+main { max-width: 920px; margin: 0 auto; padding: 16px; }
+
+.tarjeta {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.tarjeta h2 { margin-top: 0; font-size: 1.05rem; color: var(--navy); }
+.tarjeta h3 { font-size: 0.9rem; color: var(--grey); margin: 14px 0 8px; }
+@media (prefers-color-scheme: dark) { .tarjeta h2 { color: #8fd0e0; } }
+
+.fila { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
+.fila.cargos label { min-width: 130px; }
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--grey);
+  flex: 1 1 160px;
+}
+input, select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: var(--card-bg);
+  color: inherit;
+}
+fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; flex: 1 1 220px; }
+fieldset label { flex-direction: row; align-items: center; font-size: 0.85rem; }
+
+.acciones { text-align: center; margin: 20px 0; }
+.btn-primario {
+  background: var(--teal);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 32px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-primario:active { opacity: 0.85; }
+
+.tarjetas-metricas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.metrica {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+.metrica .valor { font-size: 1.3rem; font-weight: 700; color: var(--navy); }
+@media (prefers-color-scheme: dark) { .metrica .valor { color: #8fd0e0; } }
+.metrica .etiqueta { font-size: 0.75rem; color: var(--grey); margin-top: 4px; }
+
+.nota { font-size: 0.82rem; color: var(--grey); }
+
+@media (max-width: 480px) {
+  main { padding: 12px; }
+  .fila { flex-direction: column; }
+}

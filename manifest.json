@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "Cotizador FV CFE",
+  "short_name": "Cotizador FV CFE",
+  "description": "Cotizador fotovoltaico CFE de Gestoria y Proyectos SOELRB.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EAECF1",
+  "theme_color": "#163b4c",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
