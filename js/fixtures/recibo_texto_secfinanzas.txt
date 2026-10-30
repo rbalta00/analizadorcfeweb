@@ -1,0 +1,180 @@
+c
+4 JEC, poner SN , Eon
+
+Comisión Federal
+
+Comisión Federal de Electricidad? Ciudad de México.
+
+CALLE 11 ORIENTE 2224
+20 SUR Y 24SUR—
+AZCARATE 08H
+C.P.72501 ES
+PUEBLA/PUE.
+
+NO. DE SERVICIO:220890101496
+RMMU:72501 89-01-06 GEP8-50101 001 CFE
+
+Costos de la energía en el Mercado Eléctrico Mayorista
+
+Fecha, hora y lugar de Impreslon:09/04/2026 10:57:58hrs3 NorteNo 6118Barrio San MiguelAmozoc de MotaPueblaPueblaMexicoCP 72980
+
+RMU:72501 89-01-06 GEP8-50101 001 CFE
+01 220890101496 260417 000301359 6
+
+OR AO]
+E
+
+|
+| [a] É 82DV08B017000060Gestion Zona
+
+E
+
+CFE-contigo SO O
+
+de Electricidad
+
+Av. Paseo de la Reforma 164, Col. Juárez,
+Alcaldía: Cuauhtémoc, Código Postal: 06600,
+
+RFC: CFE370814QI0
+
+GOBIERNO DEL ESTADO DE PUEBLA TOTAL A PAGAR:
+
+PERIODO FACTURADO:28 FEB 26-31 MAR 26
+
+KMI:503 - ¿CORTE A PARTIR:18 ABR20 On
+
+Subtotal (MXN)
+
+CUENTA:82DV08B017000060
+TARIFA:GDMTH NO. MEDIDOR:MY469F MULTIPLICADOR:350 FECHA LÍMITE DE PAGO:17 ABR 26
+CARGA CONECTADA kW:532 CONTRATAD)
+Concepto 4 Precio (1
+
+kWh base 21,463
+
+KWh intermedia 56,836
+
+Kkwh punta 12,082
+
+kW base: 20
+
+KW intermedia 242
+
+KW punta 202
+
+KWMax 242
+
+KVArh 10,016
+
+Factor de potencia % 99.39
+
+Desglose del importe a pagar
+
+Concepto $ S/KW S/kWh Importe (MXN) Concepto Importe (MXN
+
+Suministro 335.36 0.00 0.00 335.36 Cargo Fijo((3)) 335.36
+Distribución 0.00 31,980,16 0.00 31,980.16 Energia 265,671.87
+Transmisión 0.00 0.00 16,277.62 16,277.62 Bonificacion Factor de Potencia((3)) -6,384.16
+CENACE 0.00 0.00 686.89 686.89 Subtotal 259,622.57
+Generación B 0.00 0.00 18,400.23 18,400.23 IVA 16% 41,539.61
+A 0.00 0.00 96,825.50 95,825.50 Facturacion del Periodo 301,162.18
+Generación P 0.00 0.00 23,295.30 23,295.30 Derecho de Alumbrado Publico((2)) 197.00
+Capacidad 0.00 78,582.04 0.00 78,582.04 A PANgEo 42
+SCAMEM1) 0.00 0.00 623,63 623.63 pies Bao
+
+MEE : = Total 301,359.60
+TOTAL 335.36 110,562.20 155,109.16 266,006.73
+
+(1) SCAMEM: Costos relacionados con los servicios del Mercado. (2) DAP: Derecho al Alumbrado Público. (3) Cargos o créditos: Diversos conceptos que se pueden incluir en el aviso recibo relacionados con el suministro.
+
+$301,359
+
+(TRESCIENTOS UN MIL TRESCIENTOS CINCUENTA Y NUEVE
+PESOS M.N.)
+
+
+CONSUMO HISTÓRICO
+
+]
+1]
+[200
+, , :
+4 0 200 y
+
+[sc |
+4 ¿ |
+B : |
+
+MAY25  JUN2S JULZS  AGO2S SEP2S ocrs Novas ENE25 FEBZ5 MARS
+Mes
+' energia 1: demanda
+
+Energia lawh
+z
+3
+
+an000 |
+
+42000
+36000 |
+30000 |
+24.000 |
+18,000 |
+12000 |
+6000!
+o!
+
+Periodo Demanda kW Consumo total kWh Factor potencia % Factor carga %
+
+JUL 25 241 94,453 99,52 52,68 2.8395
+AGO 25 251 93,019 99.49 49.81 2.9328
+SEP 25 254 92,048 99.43 50.33 2.9165
+oct 25 254 75,052 99.51 49,25 2.8809
+OCT 25 232 18,772 99,48 56.19 3.0852
+NOV 25 230 83,041 29.46 50.15 3.0617
+DIC 25 229 85,419 99.49 50.14 2.9269
+ENE 26 223 87,013 99.47 52.45 2.8140
+FEB 26 236 81,338 99.36 51.29 2.9422
+MAR 26 242 90,381 99.39 50.20 2.8725
+
+Dat
+
+Fiscales dol Receptor Cadena Original Este documento es una representación impresa de un PPD ]
+
+APC: GEP850101186 Razón Social: GOBIERNO DEL ESTADO DE PUEBLA Régimen Fiscal: Personas Morales con Finas no Lucrativos Uso CFDI: Gastos en general CP: 72801 AC Follo: 000474700489 Folio Fiscal: 620978 |
+72-6923-4779-9283-06£D88D7E292 N, Certificado del SAT: 0000 1000000700926429 No. certficaco del CSD Fecha y hora de ceriificación: 2026-04-02118:20:07 Unidad de medida: kWh
+
+II1-1162037872-6929,4779-2289-05ED88075E9212026-04-02T18:20-07X2nppPaeyQ/b+uBHGISVCIAAO!SW/ORyEAS 1]vFL TCOGKTGu472bS 10 XDMINKYKOVONNANUUANgExBoyiNwKpogDgFPaVAreXAWYInbZI2/0wKov
+AYDESIZKAIO8BNB7IONAFEFScimtaENDyBGOSZiy7EK228ivTiolgobGURnaPZCKNe0lbsz1HUTVA100/mVIEGPH/LyGhejaC 19L+EbSÍ1tiULYrRObHSUIPILZHecIvISpyQTEpROPANBSP=Ltu+ONUSMOX7 SHNDKICWK
+OmStaQ7ookHt0K7+P807 pazuQutdu8iPiL PEQHoiSmNA==|gLvAaxai09/08S0s1wCK+4xSpgató|C2x--Bpb2x04AXnz Yd/OlqZGOBjIBzCwTNIaBOuadxkZSDUREZ1, Ono COVA GU Sra
+
+TIFOSWOSNW
+[BOSOyP3ECbXROrBIZZCroXzUx Y m IS9eQhmZh 1 5HIEI42I6UVL17pcriE27P7Mn7yendrarinSglzPaxmCs9510492/0L0UBOITHSVHZASWEWSY TUJOMBCOXe 1OV2JWAT2MTPStgzAGOZO2WIE/3VPMm! ¡SuggDnH7TebSEn/al
+1x1086hATo/OMnslp arpas? UESO==(0000 (000000 POO9LOdZdf | y ma oz
+
+PO USCIS VETAADISM/ORYEAS ¡IE TC9GKTGu472bS ¡QqtxDMINKYAKOVOMNANUUAXgeXxBo IN wWKpOgDoFPAVAr=XAWYKnbZI2/0wKomwEsIMEDOXopYnESIZAlOBENS7IOMAFFFSdmiAEHDyBGOSIZ7EK228wTI0!
+gebGURnaPZCKNel0tbsz PUTO MNESPA/YGhef0 IL +EOSUL VACAS PIC ZHOO VO SpaSpARSEPOUUsONUBWOK] INDICO ARCO: POUR
+
+A EOS CIA SOGTIaIC2s ahora A EZ OVAL ACUC IICOrA RNA ZOY7/FO ANOS MIBASO)PIBCDAXRQLBZZoNIZ UN m SS Qhmzh15HIEIAZI5u
+17pcE2787Mn7yandnorkhaalzPaxmC: ¡92/01 OU! 'Sy-ZASWEWPSYTUJOMBCOXe1OV2JLWAT2MTPétazAqCZ92WIE/3vPMm7 HmwbeqbugBDnH?TObSEWVal1x1OGShATo/OMnsUpyrzHpze2UE9Q==
+
+Instancias y recursos a disposición de los usuarios para atender quejas: CFE Profeco
+¡AVISO IMPORTANTE! —— Comisión Fodaraide Electricidad" MU:
+
+- Corte a partir de 18 ABR 26.
+- Cada kWh que ahorras suma el futuro del planeta. ¡La eficiencia energetica es bienestar!
+- Servicio a Clientes Telefono 071.
+
+- Tu comprobante fiscal es emitido por Comision Federal de Electricidad con el RFC CFE 370814010
+
+Conoce los servicios de los diferentes suministradores: A1ip//usuariocalificado.cre.gob.m/UsuarioCalificado/ListadoSuministrador
+
+TAMBIEN PUEDES PAGAR TU RECIBO EN:
+
+<< “metan Y Soriana  tomere>
+Baoco, Alis, Multa, Banca dal Majo, Bages Añieca; BaOCóopdl.
+
+Darro 0H Discastar, Baricoryer, Kitvrsa; Bahlandel, Bañamar. Bacjerciio, comal] HSR
+¿Son más de:100,000 establecimientos autorizados, congulta el portal cfo:mx an la sección medios de pago.
+

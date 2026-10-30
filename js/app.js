@@ -1,12 +1,13 @@
-// Interfaz minima: lee los campos de entrada manual (paridad con la ruta de captura a
-// mano que ya existe en cotizador_app.py cuando no hay OCR), llama al motor portado en
-// motor.js, y muestra los resultados. Primera version sin lectura de recibo (OCR) --
-// ver web/ESTADO.md para lo que falta.
+// Interfaz: lee el recibo (PDF/foto, con OCR de respaldo) o permite captura manual,
+// llama al motor portado en motor.js, y muestra los resultados.
 import {
   construirInvoice, construirInvoiceDomestica, pisoDeAhorro, flujoMensualAnual,
   dimensionarHorasSol, normalizarConsumoMensual, presupuestar, costoInversor,
   flujo25Anios, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, ErrorDeClasificacion,
 } from './motor.js';
+import { leerRecibo } from './leerRecibo.js';
+
+window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 
 const M = (x) => `$${x.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const PCT = (x) => `${(100 * x).toFixed(1)}%`;
@@ -19,6 +20,66 @@ $('tarifa').addEventListener('change', () => {
   $('bloqueNoDomestica').hidden = esDomestica;
   $('bloqueDomestica').hidden = !esDomestica;
 });
+
+const TARIFAS_SOPORTADAS = new Set(['GDMTO', 'GDMTH', 'GDBT', 'PDBT', '01', 'DAC']);
+
+$('archivoRecibo').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const estadoEl = $('estadoRecibo');
+  const avisoEl = $('avisoReconciliacion');
+  avisoEl.hidden = true;
+  estadoEl.className = 'nota';
+  estadoEl.textContent = 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)...';
+  $('archivoRecibo').disabled = true;
+  try {
+    const campos = await leerRecibo(file);
+    llenarFormularioDesdeRecibo(campos);
+    const faltantes = campos.campos_no_encontrados.filter(k => k !== 'demanda_contratada_kw');
+    estadoEl.className = campos.uso_ocr ? 'nota' : 'nota ok';
+    estadoEl.textContent = (campos.uso_ocr
+      ? 'Se usó OCR (el PDF no traía texto aprovechable, o era una foto/escaneo). Revisa con más cuidado los datos.'
+      : 'Se leyó el texto del recibo directamente.')
+      + (faltantes.length ? ` No se encontraron solos (complétalos abajo): ${faltantes.join(', ')}.` : '');
+    if (campos.reconciliacion_advertencia) {
+      avisoEl.hidden = false;
+      avisoEl.textContent = '🛑 ' + campos.reconciliacion_advertencia;
+    }
+  } catch (err) {
+    estadoEl.className = 'nota';
+    estadoEl.textContent = 'Error al leer el recibo: ' + err.message;
+    console.error(err);
+  } finally {
+    $('archivoRecibo').disabled = false;
+  }
+});
+
+function llenarFormularioDesdeRecibo(c) {
+  if (c.titular) $('titular').value = c.titular;
+  if (c.domicilio) $('domicilio').value = c.domicilio;
+  if (c.no_servicio) $('noServicio').value = c.no_servicio;
+  if (c.tarifa && TARIFAS_SOPORTADAS.has(c.tarifa)) {
+    $('tarifa').value = c.tarifa;
+    $('tarifa').dispatchEvent(new Event('change'));
+  }
+  const esDomestica = DOMESTICAS.has($('tarifa').value);
+  if (!esDomestica) {
+    if (c.periodo_dias != null) $('periodoDias').value = c.periodo_dias;
+    if (c.periodo_kwh != null) $('periodoKwh').value = c.periodo_kwh;
+    if (c.dap != null) $('dap').value = c.dap;
+    for (const k of ['suministro', 'distribucion', 'transmision', 'cenace', 'energia', 'capacidad', 'scnmem']) {
+      if (c[k] != null) $('c_' + k).value = c[k];
+    }
+    if (c.rate_kw_detectado) {
+      document.querySelector(`input[name="rkDist"][value="${c.rate_kw_detectado.distribucion > 0 ? 'demanda' : 'mercado'}"]`).checked = true;
+      document.querySelector(`input[name="rkCap"][value="${c.rate_kw_detectado.capacidad > 0 ? 'demanda' : 'mercado'}"]`).checked = true;
+    }
+  } else {
+    if (c.periodo_dias != null) $('d_periodoDias').value = c.periodo_dias;
+    if (c.periodo_kwh != null) $('d_periodoKwh').value = c.periodo_kwh;
+    if (c.dap != null) $('d_dap').value = c.dap;
+  }
+}
 
 $('btnCalcular').addEventListener('click', () => {
   const resultadoEl = $('resultado');

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8" /><title>Prueba extraccion PDF + OCR</title></head>
+<body>
+  <h1>Prueba: extraccion de texto (nativo o OCR) + campos</h1>
+  <input type="file" id="archivo" accept=".pdf,.jpg,.jpeg,.png,.webp" />
+  <div id="estado"></div>
+  <pre id="salida" style="white-space: pre-wrap; border: 1px solid #ccc; padding: 10px; max-height: 500px; overflow: auto;"></pre>
+
+  <script src="lib/pdf.min.js"></script>
+  <script src="lib/tesseract.min.js"></script>
+  <script type="module">
+    import { leerRecibo } from './js/leerRecibo.js';
+
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+
+    document.getElementById('archivo').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      document.getElementById('estado').textContent = 'Leyendo (puede tardar si usa OCR)...';
+      const t0 = performance.now();
+      try {
+        const campos = await leerRecibo(file);
+        const t1 = performance.now();
+        const { texto_crudo, ...camposSinCrudo } = campos;
+        document.getElementById('estado').textContent = `Listo en ${((t1 - t0) / 1000).toFixed(1)}s. uso_ocr=${campos.uso_ocr}`;
+        document.getElementById('salida').textContent =
+          '--- TEXTO EXTRAIDO ---\n' + texto_crudo + '\n\n' +
+          '--- CAMPOS ---\n' + JSON.stringify(camposSinCrudo, null, 2);
+        window.__campos = campos;
+      } catch (err) {
+        document.getElementById('estado').textContent = 'ERROR: ' + err.message;
+        console.error(err);
+      }
+    });
+  </script>
+</body>
+</html>

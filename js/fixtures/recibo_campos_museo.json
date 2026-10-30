@@ -1,0 +1,107 @@
+{
+  "tarifa": "GDMTH",
+  "no_servicio": "221990403445",
+  "no_medidor": "RA502X",
+  "multiplicador": 80,
+  "titular": "MUSEOS PUEBLA",
+  "domicilio": "4 NTE 203 MUSEO, CENT.MAC/ 10 OTE 07G, C.P.72000, PUEBLA,PUE.",
+  "demanda_contratada_kw": 328.0,
+  "periodo_dias": 31,
+  "periodo_kwh": 4355.0,
+  "periodo_label": "30 ABR 26 al 31 MAY 26",
+  "suministro": 335.36,
+  "distribucion": 1643.84,
+  "transmision": 784.34,
+  "cenace": 33.1,
+  "energia": null,
+  "capacidad": 4236.32,
+  "scnmem": 30.05,
+  "dap": 197.0,
+  "bt_monto": 267.67,
+  "bonus_monto": -341.28,
+  "rate_kw_detectado": {
+    "distribucion": 1.0,
+    "capacidad": 1.0
+  },
+  "historial": [
+    {
+      "mes": "MAY",
+      "anio": 25,
+      "kwh": 5841.0
+    },
+    {
+      "mes": "JUN",
+      "anio": 25,
+      "kwh": 5997.0
+    },
+    {
+      "mes": "JUL",
+      "anio": 25,
+      "kwh": 6086.0
+    },
+    {
+      "mes": "AGO",
+      "anio": 25,
+      "kwh": 5908.0
+    },
+    {
+      "mes": "SEP",
+      "anio": 25,
+      "kwh": 5765.0
+    },
+    {
+      "mes": "OCT",
+      "anio": 25,
+      "kwh": 1039.0
+    },
+    {
+      "mes": "NOV",
+      "anio": 25,
+      "kwh": 5000.0
+    },
+    {
+      "mes": "DIC",
+      "anio": 25,
+      "kwh": 5004.0
+    },
+    {
+      "mes": "ENE",
+      "anio": 26,
+      "kwh": 5652.0
+    },
+    {
+      "mes": "FEB",
+      "anio": 26,
+      "kwh": 4634.0
+    },
+    {
+      "mes": "MAR",
+      "anio": 26,
+      "kwh": 4737.0
+    },
+    {
+      "mes": "ABR",
+      "anio": 26,
+      "kwh": 4299.0
+    },
+    {
+      "mes": "MAY",
+      "anio": 26,
+      "kwh": 4355.0
+    }
+  ],
+  "energia_base": 1028.62,
+  "energia_intermedia": 4927.18,
+  "energia_punta": 364.56,
+  "rate_kw_via_ocr": false,
+  "subtotal_resumen": 13309.76,
+  "iva_resumen": 2129.56,
+  "total_resumen": 15636.62,
+  "historial_anual_kwh": 58476.0,
+  "historial_meses_cubiertos": 12,
+  "rate_kw_advertencia": null,
+  "reconciliacion_diff": -0.0,
+  "reconciliacion_advertencia": null,
+  "uso_ocr": false,
+  "campos_no_encontrados": []
+}

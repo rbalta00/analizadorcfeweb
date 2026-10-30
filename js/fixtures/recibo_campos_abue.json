@@ -1,0 +1,54 @@
+{
+  "tarifa": "GDMTO",
+  "no_servicio": "258260200990",
+  "no_medidor": "0EEV00",
+  "multiplicador": 80,
+  "titular": "SEDIF CASA DEL ABUE II",
+  "domicilio": "103 PONIENTE 1559, BLVD CARMELITAS, MAYORAZGO 08H, C.P.72480, PUEBLA,PUE.",
+  "demanda_contratada_kw": 77.0,
+  "periodo_dias": 32,
+  "periodo_kwh": 2400.0,
+  "periodo_label": "26 MAR 26 al 27 ABR 26",
+  "suministro": 353.02,
+  "distribucion": 951.6,
+  "transmision": 432.24,
+  "cenace": 18.24,
+  "energia": 3182.4,
+  "capacidad": 2134.43,
+  "scnmem": 16.56,
+  "dap": 197.0,
+  "bt_monto": 141.77,
+  "bonus_monto": -180.76,
+  "rate_kw_detectado": {
+    "distribucion": 1.0,
+    "capacidad": 1.0
+  },
+  "historial": [
+    {
+      "mes": "FEB",
+      "anio": 26,
+      "kwh": 400.0
+    },
+    {
+      "mes": "MAR",
+      "anio": 26,
+      "kwh": 1920.0
+    },
+    {
+      "mes": "ABR",
+      "anio": 26,
+      "kwh": 2400.0
+    }
+  ],
+  "rate_kw_via_ocr": false,
+  "subtotal_resumen": 7049.5,
+  "iva_resumen": 1127.92,
+  "total_resumen": 8375.11,
+  "historial_anual_kwh": 18880.0,
+  "historial_meses_cubiertos": 3,
+  "rate_kw_advertencia": null,
+  "reconciliacion_diff": 0.0,
+  "reconciliacion_advertencia": null,
+  "uso_ocr": false,
+  "campos_no_encontrados": []
+}

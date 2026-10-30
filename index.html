@@ -19,7 +19,17 @@
 
   <main>
     <section class="tarjeta">
-      <h2>1. Datos del cliente y la tarifa</h2>
+      <h2>1. Recibo CFE</h2>
+      <p class="nota">Sube el PDF o una foto del recibo para llenar los datos solo. Si el texto no se puede leer
+        directo del PDF (foto, escaneo, o PDF con fuente codificada), se usa OCR en el propio navegador -- puede
+        tardar hasta 1 minuto. Revisa siempre los datos llenados antes de calcular.</p>
+      <input type="file" id="archivoRecibo" accept=".pdf,.jpg,.jpeg,.png,.webp" />
+      <p class="nota" id="estadoRecibo"></p>
+      <p class="nota aviso" id="avisoReconciliacion" hidden></p>
+    </section>
+
+    <section class="tarjeta">
+      <h2>2. Datos del cliente y la tarifa</h2>
       <div class="fila">
         <label>Titular / inmueble<input id="titular" type="text" /></label>
         <label>Tarifa CFE
@@ -40,7 +50,7 @@
     </section>
 
     <section class="tarjeta" id="bloqueNoDomestica">
-      <h2>2. Datos del recibo</h2>
+      <h2>3. Datos del recibo</h2>
       <div class="fila">
         <label>Dias del periodo<input id="periodoDias" type="number" value="30" min="1" /></label>
         <label>kWh del periodo<input id="periodoKwh" type="number" value="1000" min="0.01" step="0.01" /></label>
@@ -72,7 +82,7 @@
     </section>
 
     <section class="tarjeta" id="bloqueDomestica" hidden>
-      <h2>2. Escalones de la tarifa domestica</h2>
+      <h2>3. Escalones de la tarifa domestica</h2>
       <div class="fila">
         <label>Limite Basico (kWh)<input id="d_basicoKwh" type="number" value="150" /></label>
         <label>Tarifa Basico ($/kWh)<input id="d_basicoRate" type="number" value="1.140" step="0.001" /></label>
@@ -92,7 +102,7 @@
     </section>
 
     <section class="tarjeta">
-      <h2>3. Sistema propuesto</h2>
+      <h2>4. Sistema propuesto</h2>
       <div class="fila">
         <label>Potencia del modulo (W)<input id="moduloWp" type="number" value="605" /></label>
         <label>Cobertura objetivo del consumo<input id="cobertura" type="number" value="1.0" step="0.05" /></label>
@@ -111,13 +121,15 @@
     </div>
 
     <section class="tarjeta" id="resultado" hidden>
-      <h2>4. Resultado</h2>
+      <h2>5. Resultado</h2>
       <div class="tarjetas-metricas" id="metricas"></div>
       <p class="nota" id="notaClasificacion"></p>
       <p class="nota">Supone que la tarifa de CFE sube el porcentaje indicado arriba cada año (criterio del estudio, no oficial de CFE).</p>
     </section>
   </main>
 
+  <script src="lib/pdf.min.js"></script>
+  <script src="lib/tesseract.min.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

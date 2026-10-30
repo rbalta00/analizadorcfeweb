@@ -1,0 +1,41 @@
+{
+  "tarifa": "PDBT",
+  "no_servicio": "221931008575",
+  "no_medidor": "B876T5",
+  "multiplicador": 1,
+  "titular": "GOBIERNO DEL ESTADO DE PUEBLA",
+  "domicilio": "REFORMA 703 ANGELOPOLIS, 11 OTE 2224 COL AZCARATE Y C.P. 72501, CENT.5/MAYO/11/N-R/107G, C.P.72000, PUEBLA,PUE.",
+  "demanda_contratada_kw": 7.0,
+  "periodo_dias": 32,
+  "periodo_kwh": 5061.0,
+  "periodo_label": "26 MAR 26 al 27 ABR 26",
+  "suministro": 33.54,
+  "distribucion": 5905.17,
+  "transmision": 911.49,
+  "cenace": 38.46,
+  "energia": 7206.86,
+  "capacidad": 4448.62,
+  "scnmem": 34.92,
+  "dap": 197.0,
+  "bt_monto": null,
+  "bonus_monto": null,
+  "rate_kw_detectado": {
+    "distribucion": 0.0,
+    "capacidad": 0.0
+  },
+  "historial": null,
+  "rate_kw_via_ocr": false,
+  "subtotal_resumen": 18579.06,
+  "iva_resumen": 2972.65,
+  "total_resumen": 21749.01,
+  "historial_anual_kwh": null,
+  "historial_meses_cubiertos": null,
+  "rate_kw_advertencia": "El recibo declara 7 kW de demanda contratada, pero la columna \"$/kW\" leida dice que Distribucion/Capacidad no son por demanda. Verificar con cuidado.",
+  "reconciliacion_diff": 0.0,
+  "reconciliacion_advertencia": null,
+  "uso_ocr": false,
+  "campos_no_encontrados": [
+    "historial_anual_kwh",
+    "historial_meses_cubiertos"
+  ]
+}

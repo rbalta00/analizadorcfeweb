@@ -3,7 +3,7 @@
 // en esta maquina -- ver web/ESTADO.md. Los datos (historial de cotizaciones) nunca
 // pasan por aqui, viven en localStorage del navegador, no en este cache.
 
-const CACHE_NOMBRE = "cfe-cotizador-v1";
+const CACHE_NOMBRE = "cfe-cotizador-v2";
 
 const ARCHIVOS_APP_SHELL = [
   "./",
@@ -12,9 +12,15 @@ const ARCHIVOS_APP_SHELL = [
   "css/styles.css",
   "js/app.js",
   "js/motor.js",
+  "js/recibo.js",
+  "js/pdftext.js",
+  "js/ocr.js",
+  "js/leerRecibo.js",
   "lib/jspdf.umd.min.js",
   "lib/pdf.min.js",
   "lib/pdf.worker.min.js",
+  "lib/tesseract.min.js",
+  "lib/tesseract-worker.min.js",
   "assets/icon-192.png",
   "assets/icon-512.png",
   "assets/apple-touch-icon.png",

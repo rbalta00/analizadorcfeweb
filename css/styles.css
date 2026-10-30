@@ -102,6 +102,18 @@ fieldset label { flex-direction: row; align-items: center; font-size: 0.85rem; }
 .metrica .etiqueta { font-size: 0.75rem; color: var(--grey); margin-top: 4px; }
 
 .nota { font-size: 0.82rem; color: var(--grey); }
+.nota.aviso {
+  background: #fdecea;
+  color: #7a1f14;
+  border: 1px solid #f3b4ac;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+@media (prefers-color-scheme: dark) {
+  .nota.aviso { background: #3a1613; color: #ffb4a8; border-color: #6e2b22; }
+}
+.nota.ok { color: var(--teal); }
+input[type="file"] { padding: 6px 0; }
 
 @media (max-width: 480px) {
   main { padding: 12px; }

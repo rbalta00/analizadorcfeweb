@@ -42,11 +42,41 @@ se reinventa una formula aqui, solo se traduce.
       Streamlit. Probado en navegador real con los datos reales de Casa del
       Abue Sur: mismos 8 numeros exactos que el motor Python
       ($304,411.97 inversion, $221,864.98 VAN, 17.4% TIR, etc.).
-- [ ] Lectura de recibo (OCR / texto de PDF) -- pendiente, sigue siendo la
-      pieza mas grande que falta. Hoy la interfaz solo soporta captura
-      manual. En Python usa Tesseract + PyMuPDF + regex; en el navegador
-      requeriria algo como Tesseract.js + pdf.js (pdf.js ya esta vendorizado
-      en `lib/`, falta Tesseract.js y portar las regex de leer_recibo.py).
+- [x] **Lectura de recibo** (`js/recibo.js` + `js/pdftext.js` + `js/ocr.js` +
+      `js/leerRecibo.js`): texto nativo del PDF con pdf.js, con fallback a OCR
+      (Tesseract.js, vendorizado en `lib/`) cuando el texto no es legible
+      (foto/escaneo, o PDF con fuente codificada -- mismo criterio
+      `textoPareceLegible` que Python). Las regex de extraccion de campos
+      estan portadas 1:1 desde `leer_recibo.py`, incluida la verificacion
+      aritmetica de reconciliacion agregada esta sesion. Conectado a la
+      interfaz: subir el archivo en la seccion 1 llena solo el resto del
+      formulario (igual que `cotizador_app.py`).
+      Verificado con `npm test` (js/test_recibo.mjs) contra el TEXTO real de
+      4 recibos ya leidos por Python (GDMTO, GDMTH con 3 franjas horarias,
+      PDBT, y un caso OCR con reconciliacion fallida) -- cero diferencias.
+      Verificado ademas en navegador real con los ARCHIVOS PDF reales
+      (no el texto pre-extraido): Abue y Museo San Pedro de Arte dieron
+      exactamente los mismos campos que Python, incluido el flujo completo
+      subir PDF -> autollenado -> Calcular -> mismos 8 numeros de siempre.
+      El caso de OCR dificil (Secretaria de Finanzas, que Python tambien
+      manda a revision manual) corrio end-to-end en 56.5s y la verificacion
+      de reconciliacion lo marco correctamente para revisar a mano -- los
+      valores especificos que lee el OCR no son identicos a los de Python
+      (son dos motores/modelos de OCR distintos), pero la red de seguridad
+      funciona igual en ambos.
+      Dos bugs reales encontrados y corregidos en el camino: (1) reconstruir
+      lineas reordenando todo por Y global mezclaba columnas distintas del
+      PDF que comparten altura (el domicilio con la caja de "Total a
+      pagar") -- se corrigio para seguir el orden original del content
+      stream, igual que pypdf; (2) pdf.js "desprende" el ArrayBuffer la
+      primera vez que se abre un PDF, asi que reabrirlo para el fallback de
+      OCR reventaba -- se corrigio para abrir el documento una sola vez y
+      reusarlo.
+      Pendiente: vendorizar el modelo de espanol de Tesseract (hoy se
+      descarga del CDN de Tesseract.js la primera vez que se usa OCR,
+      requiere internet esa vez; despues el navegador lo cachea).
+      `test_pdf.html` queda en el repo como herramienta de depuracion para
+      probar un recibo nuevo rapido sin pasar por toda la interfaz.
 - [ ] Generador de PDF de 21 paginas con secciones apagables (hoy usa
       reportlab en Python; jsPDF ya esta vendorizado en `lib/` para esto).
 - [ ] Historial / seguimiento de clientes (hoy CSV local; en el navegador

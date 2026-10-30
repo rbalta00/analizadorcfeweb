@@ -1,0 +1,115 @@
+  
+Mes
+ 
+Precios $/kWh
+  Mes  Factor de potencia
+Días de mes Consumo prom. diario Energía kWh
+Factor de proporción Demanda máxima $/kW Precios $/kW Importe (MXN)
+ 
+ 
+ 
+Concepto No. medidor Diferencia TotalesLectura actualMedida  Estimada  Lectura anteriorEstimada  Medida  
+Concepto   
+ 
+Desglose del importe a pagar
+ 
+Importe (MXN) Importe (MXN)Concepto
+Costos de la energía en el Mercado Eléctrico Mayorista 
+$/kWh$/kW$  
+ 
+ 
+(1) SCnMEM: Costos relacionados con los servicios del Mercado. (2) DAP: Derecho al Alumbrado Público. (3) Cargos o créditos: Diversos conceptos que se pueden incluir en el aviso recibo relacionados con el suministro.
+RFC: CFE370814QI0
+Comisión Federal de Electricidad
+Av. Paseo de la Reforma 164, Col. Juárez,
+Alcaldía: Cuauhtémoc, Código Postal: 06600,
+Ciudad de México. 
+GOBIERNO DEL ESTADO DE PUEBLA
+REFORMA 703   ANGELOPOLIS
+11 OTE 2224 COL AZCARATE Y C.P. 72501
+CENT.5/MAYO/11/N-R/107G
+C.P.72000
+PUEBLA,PUE.
+NO. DE SERVICIO:221931008575
+RMU:72000 93-10-12 GEP8-50101  001 CFE
+CUENTA:77DV07B017730180
+FECHA LÍMITE DE PAGO:14 MAY 26
+CARGA CONECTADA kW:7 DEMANDA CONTRATADA kW:7 CORTE A PARTIR:15 MAY 26
+TARIFA:PDBT MULTIPLICADOR:1
+NO HILOS:3
+NO. MEDIDOR:B876T5
+PERIODO FACTURADO:26 MAR 26-27 ABR 26
+TOTAL A PAGAR:
+$21,749
+$21,749
+(VEINTIUN MIL SETECIENTOS CUARENTA Y NUEVE PESOS  
+M.N.)
+(VEINTIUN MIL SETECIENTOS CUARENTA Y NUEVE PESOS  
+M.N.)
+X X 
+0
+Suministro 33.54 0.00 0.00 33.54
+Distribución 0.00 0.00 5,905.17 5,905.17
+Transmisión 0.00 0.00 911.49 911.49
+CENACE 0.00 0.00 38.46 38.46
+Energía 0.00 0.00 7,206.86 7,206.86
+Capacidad 0.00 0.00 4,448.62 4,448.62
+SCnMEM(1) 0.00 0.00 34.92 34.92
+ 
+ 
+ 
+TOTAL 33.54 0.00 18,545.51 18,579.05
+Fecha, hora y lugar de impresion:04/05/2026 14:00:35hrs3 NorteNum 5CentroSan Pedro CholulaPueblaPueblaMexicoCP 72760
+72000 93-10-12 GEP8-50101  001 CFE
+77DV07B017730180Gestion Zona
+01 221931008575 260514 000021749 2
+-1-
+kWh B876T5 62,613 57,552 5,061 5,061
+Cargo Fijo((3)) 33.54
+Energia 18,545.52
+Subtotal 18,579.06
+IVA 16% 2,972.65
+Facturacion del Periodo 21,551.71
+DAP((2)) 197.00
+Adeudo Anterior 21,630.30
+Su Pago -21,630.00
+Total 21,749.01
+Periodo  Factor carga % Precio medio (MXN)Consumo total kWh Factor potencia %Demanda kW
+CONSUMO HISTÓRICO
+ 
+ 
+ 
+¡AVISO IMPORTANTE!
+Conoce los servicios de los diferentes suministradores: http://usuariocalificado.cre.gob.mx/UsuarioCalificado/ListadoSuministrador
+Instancias y recursos a disposición de los usuarios para atender quejas: 
+Datos Fiscales del Receptor     Cadena Original     Este documento es una representación impresa de un CFDI PPD
+RFC: GEP8501011S6 Razón Social: GOBIERNO DEL ESTADO DE PUEBLA Régimen Fiscal: Personas Morales con Fines no Lucrativos Uso CFDI: Gastos en general CP: 72501 AC Folio: 001262656193 Folio Fiscal: 6A5F62
+85-54B3-4A77-B13C-5FB7FF73333E N. Certificado del SAT: 00001000000700926429 No. certificado del CSD:  Fecha y hora de certificación: 2026-04-28T18:05:09 Unidad de medida: kWh
+||1.1|6A5F6285-54B3-4A77-B13C-5FB7FF73333E|2026-04-28T18:05:09|ckLINLwrJV+S9xpI8xoz2E1ZMZz2V+uuTgGslDK0AvQLpBF5Ai6/Mvye0yH76y53IE2V2BFiOms6743MnIdCc+0nMzOT4rCZKnWRggX5A+3cCqcPVIoe5
+v6pu5neZPwiQKfivr2/RKMJ3RnzPtIR1UqY6UHYp90j9Web2+FlfH+THG9p3Tt818B4eG09rciD9ayNDj1zNXBPJQRQymXcFZhv//Zv4T+ZtERuWY/bnh6y9xafnY4UmDVnqUErmwLiepsY0/lEvm/H7vIuXjCvM/AfORf0xgQlnbMAoSSsc
+0P18geUeiZh3GybRQWjrAJjmd1P+Op3CXz9j8FAxQEKKw==|flBhetK85f2CpGUyh4vF0uOKnRj+lZW3YFW+rFOgt/Q86CJFNln0ptkFwYYPRlk8zvIKnFH8NtwHGDGY3GA8yA5ufE62XcfCeE48v/U+iujDMr6c1C+g9w5oFHOeBRIxNOXr
+6YKs+SRS2cML6N/beTZuTKfQNpNe6XYV5z1vY42ptwGa7nuZ348KFshfvbBGc/B3xAQelepZfeZ/9t7plvXe+tcbVYgFAYtrYn/bWUg2Rqx0sOpNCkr6k7QKagfnAStvOhVbuOeArZ6KN9E0T1qJxBPzAXS7LyyeMXXNrmtF28fx4zvGKDY3
+U0bSJptxni1DjoA8kqjKyGYJIcXkEQ==|00001000000700926429||
+ckLINLwrJV+S9xpI8xoz2E1ZMZz2V+uuTgGslDK0AvQLpBF5Ai6/Mvye0yH76y53IE2V2BFiOms6743MnIdCc+0nMzOT4rCZKnWRggX5A+3cCqcPVIoe5v6pu5neZPwiQKfivr2/RKMJ3RnzPtIR1UqY6UHYp90j9Web2+FlfH+THG9p3Tt8
+18B4eG09rciD9ayNDj1zNXBPJQRQymXcFZhv//Zv4T+ZtERuWY/bnh6y9xafnY4UmDVnqUErmwLiepsY0/lEvm/H7vIuXjCvM/AfORf0xgQlnbMAoSSsc0P18geUeiZh3GybRQWjrAJjmd1P+Op3CXz9j8FAxQEKKw==
+flBhetK85f2CpGUyh4vF0uOKnRj+lZW3YFW+rFOgt/Q86CJFNln0ptkFwYYPRlk8zvIKnFH8NtwHGDGY3GA8yA5ufE62XcfCeE48v/U+iujDMr6c1C+g9w5oFHOeBRIxNOXr6YKs+SRS2cML6N/beTZuTKfQNpNe6XYV5z1vY42ptwGa7nuZ
+348KFshfvbBGc/B3xAQelepZfeZ/9t7plvXe+tcbVYgFAYtrYn/bWUg2Rqx0sOpNCkr6k7QKagfnAStvOhVbuOeArZ6KN9E0T1qJxBPzAXS7LyyeMXXNrmtF28fx4zvGKDY3U0bSJptxni1DjoA8kqjKyGYJIcXkEQ==
+- Clave de registro: CLV_REG Cuota Energética: 0 Consumida: 0
+- Corte a partir de 15 MAY 26.
+- Cada kWh que ahorras suma el futuro del planeta. ¡La eficiencia energetica es bienestar!
+- Servicio a Clientes Telefono 071.
+- Tu comprobante fiscal es emitido por Comision Federal de Electricidad con el RFC CFE 370814QI0
+-2-
+ABR 25 0 4,868 3.8930
+MAY 25 0 5,277 3.8925
+JUN 25 0 5,782 3.9510
+JUL 25 0 5,203 3.9896
+AGO 25 0 5,578 3.9922
+SEP 25 0 5,098 3.9728
+OCT 25 0 5,298 3.9726
+NOV 25 0 4,532 3.8976
+DIC 25 0 5,113 3.7728
+ENE 26 0 5,161 3.6679
+FEB 26 0 4,541 3.6698
+MAR 26 0 5,033 3.6711
+ABR 26 0 5,061 3.6710
