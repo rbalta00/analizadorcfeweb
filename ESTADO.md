@@ -549,6 +549,35 @@ se reinventa una formula aqui, solo se traduce.
           `fetch` confirma `historial: [150, 180]` en el payload. `node
           js/test_motor.mjs` sigue en verde (no se rompio nada ya validado).
 
+### Bug real encontrado por el usuario probando con recibos reales (2026-10-30, noche)
+- El usuario pidio confirmar que subir un recibo marca en naranja lo que no se
+  detecto. Se probo con 3 recibos REALES (no fixtures): Abue (GDMTO, `index.html`),
+  Museo San Pedro de Arte (GDMTH, `index.html`) y COBAEP Plantel 26 (PDBT, via OCR,
+  `cliente.html`) -- los primeros dos salieron perfectos (todo detectado, nada
+  marcado, calculo automatico correcto, incluyendo las bandas de energia GDMTH y el
+  historial precargado). El tercero (COBAEP) expuso un bug real: el mensaje decia
+  "quedaron marcados en naranja abajo" pero **0 campos se marcaban de verdad**.
+- **Causa**: `campos_no_encontrados` tambien incluye campos internos sin casilla en
+  el formulario (`multiplicador`, `demanda_contratada_kw`, `historial_anual_kwh`,
+  `historial_meses_cubiertos` -- estos 2 ultimos CASI SIEMPRE van a faltar ahora,
+  porque la mayoria de los recibos no traen la grafica de historial impresa). El
+  mensaje (`mostrarEstadoLecturaRecibo` en `app.js`, y su copia en `clienteForm.js`)
+  contaba TODO lo que viniera en esa lista para decidir si decir "quedaron
+  marcados", sin filtrar por si de verdad tenian un input que marcar -- mientras que
+  `marcarCamposNoDetectados()` (la funcion que SI marca) siempre filtro
+  correctamente por `CAMPO_A_INPUT`. Dos logicas distintas que se desincronizaron.
+- **Arreglado** en las dos paginas: el mensaje ahora filtra `campos_no_encontrados`
+  por `CAMPO_A_INPUT` (lo mismo que ya usaba el marcado real) antes de decidir si
+  decir "quedaron marcados" -- y de paso, en vez de listar los nombres tecnicos en
+  ingles/snake_case (`c_distribucion`), ahora usa las mismas etiquetas legibles que
+  ya existian para el bloqueo de calculo (`ETIQUETA_CAMPO`, ej. "Distribución").
+  **El marcado en si NUNCA estuvo roto** -- el bloqueo de calculo de `index.html`
+  (que escanea `.campo-no-detectado` directo en el DOM, no la lista cruda) nunca se
+  vio afectado por este bug, solo el texto del mensaje era enganoso.
+- Reverificado con el mismo recibo real de COBAEP tras el fix: el mensaje ahora dice
+  "¡Todo se detectó!" (correcto, los 4 campos sin casilla no cuentan). `node
+  js/test_motor.mjs` y `node js/test_recibo.mjs` siguen en verde.
+
 ## Como probarlo en el navegador
 ```
 cd web

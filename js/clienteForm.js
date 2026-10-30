@@ -23,6 +23,12 @@ const CAMPO_A_INPUT = {
   cenace: 'c_cenace', energia: 'c_energia', capacidad: 'c_capacidad', scnmem: 'c_scnmem',
   energia_base: 'c_energia_base', energia_intermedia: 'c_energia_intermedia', energia_punta: 'c_energia_punta',
 };
+const ETIQUETA_CAMPO = {
+  tarifa: 'Tarifa', periodoDias: 'Días del período', periodoKwh: 'kWh del período', dap: 'DAP',
+  c_suministro: 'Suministro', c_distribucion: 'Distribución', c_transmision: 'Transmisión',
+  c_cenace: 'CENACE', c_energia: 'Energía', c_capacidad: 'Capacidad', c_scnmem: 'SCnMEM',
+  c_energia_base: 'Energía Base', c_energia_intermedia: 'Energía Intermedia', c_energia_punta: 'Energía Punta',
+};
 function marcarCamposNoDetectados(campos) {
   document.querySelectorAll('.campo-no-detectado').forEach(el => el.classList.remove('campo-no-detectado'));
   for (const campo of campos.campos_no_encontrados || []) {
@@ -58,12 +64,19 @@ $('archivoRecibo').addEventListener('change', async (e) => {
     const campos = await leerReciboMultiple(files);
     ultimoLeido = campos;
     llenarFormularioDesdeReciboCampos(campos);
-    const faltantes = (campos.campos_no_encontrados || []).filter(k => k !== 'demanda_contratada_kw');
+    // Solo contar como "faltante" lo que de verdad tiene una casilla que marcar --
+    // campos_no_encontrados tambien trae cosas internas sin input propio (multiplicador,
+    // demanda_contratada_kw, historial_anual_kwh/meses_cubiertos) que antes se colaban
+    // en este mensaje diciendo "quedaron marcados en naranja" sin que nada se marcara
+    // de verdad. Bug real encontrado por el usuario probando un recibo real.
+    const faltantes = (campos.campos_no_encontrados || []).filter(k => CAMPO_A_INPUT[k]);
     estadoEl.className = campos.uso_ocr ? 'nota' : 'nota ok';
     estadoEl.textContent = (campos.uso_ocr
       ? 'Leímos tu recibo (tuvimos que usar reconocimiento de imagen, revisa los datos con cuidado).'
       : 'Leímos tu recibo directamente.')
-      + (faltantes.length ? ' Hay datos que no detectamos solos, quedaron marcados en naranja abajo: revísalos.' : ' ¡Todo se detectó!');
+      + (faltantes.length
+          ? ` Hay datos que no detectamos solos, quedaron marcados en naranja abajo: ${faltantes.map(k => ETIQUETA_CAMPO[CAMPO_A_INPUT[k]] || k).join(', ')}.`
+          : ' ¡Todo se detectó!');
     if (campos.reconciliacion_advertencia) {
       $('avisoReconciliacion').hidden = false;
       $('avisoReconciliacion').textContent = '🛑 Algo no cuadra en lo que leímos de tu recibo -- revisa los datos abajo con cuidado antes de enviar.';

@@ -614,12 +614,17 @@ function faltantesVisiblesParaCalcular() {
 function mostrarEstadoLecturaRecibo(campos) {
   const estadoEl = $('estadoRecibo');
   const avisoEl = $('avisoReconciliacion');
-  const faltantes = campos.campos_no_encontrados.filter(k => k !== 'demanda_contratada_kw');
+  // Solo contar como "faltante" lo que de verdad tiene una casilla que marcar --
+  // campos_no_encontrados tambien trae cosas internas sin input propio (multiplicador,
+  // demanda_contratada_kw, historial_anual_kwh/meses_cubiertos) que antes se colaban
+  // en este mensaje diciendo "quedaron marcados en naranja" sin que nada se marcara
+  // de verdad. Bug real encontrado por el usuario probando un recibo real.
+  const faltantes = campos.campos_no_encontrados.filter(k => CAMPO_A_INPUT[k]);
   estadoEl.className = campos.uso_ocr ? 'nota' : 'nota ok';
   estadoEl.textContent = (campos.uso_ocr
     ? 'Se usó OCR (el PDF no traía texto aprovechable, o era una foto/escaneo). Revisa con más cuidado los datos.'
     : 'Se leyó el texto del recibo directamente.')
-    + (faltantes.length ? ` No se encontraron solos (quedaron marcados en naranja abajo): ${faltantes.join(', ')}.` : '');
+    + (faltantes.length ? ` No se encontraron solos (quedaron marcados en naranja abajo): ${faltantes.map(k => ETIQUETA_CAMPO[CAMPO_A_INPUT[k]] || k).join(', ')}.` : '');
   avisoEl.hidden = !campos.reconciliacion_advertencia;
   if (campos.reconciliacion_advertencia) avisoEl.textContent = '🛑 ' + campos.reconciliacion_advertencia;
   marcarCamposNoDetectados(campos);
