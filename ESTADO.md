@@ -578,6 +578,33 @@ se reinventa una formula aqui, solo se traduce.
   "¡Todo se detectó!" (correcto, los 4 campos sin casilla no cuentan). `node
   js/test_motor.mjs` y `node js/test_recibo.mjs` siguen en verde.
 
+### Respaldo manual en la nube (2026-10-30, noche) -- "lo que trabaje se queda guardado donde sea"
+- Pedido del usuario tras el incidente de perdida de datos (ver arriba): quiere poder
+  ver sus clientes/cotizaciones desde cualquier dispositivo, no solo en el navegador
+  donde los capturo. Los clientes/proyectos siguen viviendo en `localStorage`
+  (`cfe_clientes_v1`) -- eso NO cambio -- pero ahora hay una copia opcional en
+  Supabase para llevarlos a otro lado.
+- **A PROPOSITO es manual** (botones "Subir"/"Traer"), no sincronizacion automatica en
+  tiempo real: dos dispositivos escribiendo al mismo tiempo sin que el usuario se
+  entere podria pisar datos reales en silencio -- el mismo tipo de error que ya paso
+  esta sesion con `localStorage.clear()`. "Traer de la nube" siempre pide confirmar
+  explicitamente antes de reemplazar lo que hay en el dispositivo actual.
+- Tabla nueva en Supabase (`cfe_respaldo`, migracion `crea_cfe_respaldo`): una sola
+  fila (singleton, sin login en esta app) con la lista COMPLETA de clientes como jsonb
+  -- mismo formato exacto que `cfe_clientes_v1`, sin transformar a tablas relacionales,
+  para no arriesgar bugs de conversion. RLS abierta a `anon` (mismo modelo que
+  `envios_cliente`).
+- `js/nube.js` (nuevo): `subirANube()` (lee `listarClientes()`, hace upsert de la unica
+  fila), `bajarDeNube()` (trae la fila y llama `reemplazarTodosLosClientes()`, nueva
+  funcion exportada en `clientes.js`), `consultarNube()` (solo consulta, sin bajar).
+- UI: 2 botones nuevos en la pantalla de Clientes ("☁️ Guardar copia en la nube" /
+  "⬇️ Traer de la nube") + nota explicando que el guardado normal es solo de este
+  dispositivo.
+- Verificado en Chrome real: subir con 1 cliente de prueba -> confirmado en Supabase
+  (`jsonb_array_length` correcto) -> borrar el cliente local (simula "otro
+  dispositivo vacio") -> Traer de la nube -> el cliente vuelve exacto. Limpiado
+  despues (cliente de prueba + fila de prueba en `cfe_respaldo`).
+
 ## Como probarlo en el navegador
 ```
 cd web

@@ -20,6 +20,7 @@ import {
   leerFormularioRecibo, aplicarFormularioRecibo, llenarFormularioDesdeReciboCampos,
 } from './formularioRecibo.js';
 import { supabaseListar, supabaseActualizar, supabaseEliminar } from './supabase.js';
+import { subirANube, bajarDeNube } from './nube.js';
 
 window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 
@@ -114,6 +115,49 @@ function mostrarPantallaClientes() {
   clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null;
   renderListaClientes();
 }
+
+// ---------------- Respaldo manual en la nube (subir/bajar, NO sincronizacion
+// automatica -- ver nube.js para la razon) ----------------
+$('btnSubirNube').addEventListener('click', async () => {
+  const estadoEl = $('estadoNube');
+  $('btnSubirNube').disabled = true;
+  estadoEl.className = 'nota';
+  estadoEl.textContent = 'Subiendo...';
+  try {
+    const { numClientes } = await subirANube();
+    estadoEl.className = 'nota ok';
+    estadoEl.textContent = `Listo: se guardó una copia de ${numClientes} cliente(s) en la nube. Ya puedes ` +
+      '"Traer de la nube" desde otro dispositivo.';
+  } catch (err) {
+    estadoEl.className = 'nota aviso';
+    estadoEl.textContent = 'No se pudo subir: ' + err.message;
+    console.error(err);
+  } finally {
+    $('btnSubirNube').disabled = false;
+  }
+});
+$('btnBajarNube').addEventListener('click', async () => {
+  const estadoEl = $('estadoNube');
+  if (!confirm('Esto va a REEMPLAZAR los clientes/cotizaciones guardados en ESTE dispositivo por lo último ' +
+               'que se subió a la nube desde cualquier otro. Lo que tengas aquí y no esté en la nube se pierde. ' +
+               '¿Continuar?')) return;
+  $('btnBajarNube').disabled = true;
+  estadoEl.className = 'nota';
+  estadoEl.textContent = 'Trayendo de la nube...';
+  try {
+    const { numClientes, actualizadoEn } = await bajarDeNube();
+    estadoEl.className = 'nota ok';
+    estadoEl.textContent = `Listo: ${numClientes} cliente(s) traídos de la nube ` +
+      `(subidos por última vez ${new Date(actualizadoEn).toLocaleString('es-MX')}).`;
+    mostrarPantallaClientes();
+  } catch (err) {
+    estadoEl.className = 'nota aviso';
+    estadoEl.textContent = 'No se pudo traer: ' + err.message;
+    console.error(err);
+  } finally {
+    $('btnBajarNube').disabled = false;
+  }
+});
 
 // =====================================================================
 // Pantalla: Envios de clientes (bandeja de entrada de cliente.html)

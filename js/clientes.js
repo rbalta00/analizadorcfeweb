@@ -107,6 +107,14 @@ export function eliminarCliente(id) {
   return guardarTodos(lista);
 }
 
+// Reemplaza TODOS los clientes de este navegador de una sola vez -- usado por
+// "Traer de la nube" (js/nube.js). A diferencia de guardarCliente() (que actualiza
+// uno), esto sobreescribe la lista completa, asi que quien lo llame debe confirmar
+// con el usuario antes (ver nube.js) -- no hay deshacer.
+export function reemplazarTodosLosClientes(lista) {
+  return guardarTodos(Array.isArray(lista) ? lista : []);
+}
+
 export function clientesAgrupadosPorTipo() {
   const todos = listarClientes();
   return {
