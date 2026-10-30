@@ -14,7 +14,58 @@ function el(tag, cls, html) {
   if (html != null) e.innerHTML = html;
   return e;
 }
-function p(texto) { return el('p', null, texto); }
+
+// ---------------------------------------------------------------------------
+// Texto editable: los parrafos (p) y avisos (avisoCream) de cada seccion se pueden
+// editar directo en pantalla (clic, escribir, clic afuera para guardar). El id de
+// cada parrafo se genera solo, por orden de aparicion dentro de la seccion
+// (sNN-tK) -- no requiere tocar cada llamada en s01..s21. `renderSeccion()` fija el
+// numero de seccion/los overrides/el callback de guardado antes de llamar a la
+// funcion sNN correspondiente.
+// OJO: esta edicion solo aplica a la vista en pantalla. El PDF (propuesta.js) arma
+// los mismos parrafos con llamadas propias (bodyX/notice), en un orden que no
+// siempre coincide 1:1 con el de aqui -- conectar el PDF es un paso aparte, no
+// hecho todavia (ver ESTADO.md).
+let _seccionActual = 0;
+let _contadorTexto = 0;
+let _overridesActuales = {};
+let _onEditarTextoActual = () => {};
+
+function siguienteTextoId() {
+  return `s${_seccionActual}-t${_contadorTexto++}`;
+}
+
+function textoEditable(tag, cls, textoDefecto) {
+  const id = siguienteTextoId();
+  const wrap = el('div', 'campo-editable');
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  e.classList.add('texto-editable');
+  e.contentEditable = 'true';
+  e.spellcheck = false;
+  e.dataset.textoId = id;
+  const editado = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
+  e.textContent = editado ? _overridesActuales[id] : textoDefecto;
+  e.addEventListener('paste', (ev) => {
+    ev.preventDefault();
+    const texto = (ev.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, texto);
+  });
+  e.addEventListener('focusout', () => _onEditarTextoActual(id, e.textContent, textoDefecto));
+  wrap.append(e);
+  if (editado) {
+    wrap.classList.add('campo-editado');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-restaurar-texto';
+    btn.textContent = '↺ Restaurar texto original';
+    btn.addEventListener('click', () => _onEditarTextoActual(id, null, textoDefecto));
+    wrap.append(btn);
+  }
+  return wrap;
+}
+
+function p(texto) { return textoEditable('p', null, texto); }
 
 function tarjetas(items) {
   const cont = el('div', 'tarjetas-metricas');
@@ -44,7 +95,7 @@ function tabla(headers, filas, { small = false } = {}) {
   return wrap;
 }
 
-function avisoCream(texto) { return el('div', 'aviso-cream', texto); }
+function avisoCream(texto) { return textoEditable('div', 'aviso-cream', texto); }
 function avisoRojo(texto) { return el('div', 'nota aviso', texto); }
 
 function detalle(resumen, nodoOArray) {
@@ -86,6 +137,8 @@ function toggleBloque(r, numero, onToggle) {
 }
 
 function crearSeccion(numero, titulo, pregunta, r, onToggle) {
+  _seccionActual = numero;
+  _contadorTexto = 0;
   const art = el('article', 'seccion');
   art.id = `seccion-${numero}`;
   const header = el('div', 'seccion-header');
@@ -593,8 +646,12 @@ export const TITULOS_SECCIONES = [
   'Fuentes y trazabilidad del cálculo',
 ];
 
-// renderSeccion(numero 1..21, r, leido, onToggle) -> HTMLElement
-export function renderSeccion(numero, r, leido, onToggle) {
+// renderSeccion(numero 1..21, r, leido, onToggle, onEditarTexto) -> HTMLElement
+// onEditarTexto(id, valorONull, textoDefecto): se llama al salir de un parrafo editado
+// (valor = texto nuevo) o al pulsar "Restaurar" (valor = null).
+export function renderSeccion(numero, r, leido, onToggle, onEditarTexto) {
+  _overridesActuales = r.textosEditados || {};
+  _onEditarTextoActual = onEditarTexto || (() => {});
   const fn = RENDERERS[numero - 1];
   return fn(r, leido, onToggle);
 }

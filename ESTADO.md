@@ -166,13 +166,48 @@ se reinventa una formula aqui, solo se traduce.
       la guia salia como un glifo roto en el PDF (jsPDF + Helvetica estandar no
       soporta ese caracter, a diferencia del navegador en pantalla) -- se
       reemplazo por "->" en el texto que va al PDF.
+- [x] **Texto editable de las 21 secciones** (`js/secciones.js`, `textoEditable()`):
+      cada parrafo y aviso de cada seccion se puede editar directo en pantalla (clic,
+      escribir, clic afuera para guardar -- se marca en dorado). Vaciar el campo o
+      pulsar "Restaurar texto original" regresa al texto de fabrica. Guardado por
+      proyecto/cotizacion, persiste entre sesiones. **Limitacion conocida, no
+      resuelta**: la edicion solo aplica a la vista en pantalla -- el PDF exportado
+      (`propuesta.js`) arma los mismos parrafos con llamadas propias en un orden que
+      no siempre coincide 1:1 con el de pantalla, asi que conectar las dos fuentes
+      de texto es trabajo aparte, no hecho todavia (quedo explicito en la app, no
+      oculto). Tambien: en secciones con contenido condicional (ej. la 17, que lista
+      una cantidad variable de notas segun el recibo), el id de cada parrafo depende
+      del ORDEN en que aparece, asi que una edicion podria desalinearse si cambia la
+      cantidad de parrafos tras recalcular con datos distintos -- riesgo aceptado,
+      no se construyo un id mas robusto (por contenido) por tiempo.
+- [x] **Un cliente puede tener varias cotizaciones/proyectos** (pedido explicito del
+      usuario). Modelo de datos migrado: `cliente.proyectos[]`, cada uno con su
+      propio formulario/recibo/condiciones del inmueble/bloques activos/textos
+      editados (antes vivian directo en el cliente). Los clientes guardados ANTES de
+      este cambio se migran solos la primera vez que se leen (se verifico con el
+      cliente real del usuario en su propio `localStorage`: sus datos quedaron
+      intactos, envueltos en una sola cotizacion). Pantalla nueva "Cotizaciones de
+      este cliente" entre Clientes y la vista de captura/secciones: lista de
+      cotizaciones, "+ Cotización en blanco", y subir un recibo AHI crea una
+      cotizacion nueva con los datos ya detectados (vs. subir un recibo DENTRO de
+      una cotizacion ya abierta, que sigue actualizando esa misma cotizacion, no
+      crea una nueva cada vez que se corrige un dato -- distincion explicada al
+      usuario, no asumida en silencio).
+- [x] **Boton "↻ Refrescar"** en la barra superior (visible en toda la app):
+      recarga la lista segun la pantalla activa, o recalcula la cotizacion abierta
+      con los datos actuales.
+- [x] **Boton "Enviar por WhatsApp"** (pestana de PDF): abre `wa.me` con un resumen
+      en texto (titular, inversion, ahorro, payback, VAN) ya escrito, al numero que
+      dio el usuario. Limitacion real explicada en la propia interfaz: WhatsApp no
+      permite adjuntar un archivo desde un enlace, asi que el PDF (ya descargado con
+      los botones de al lado) se adjunta a mano.
 - [ ] Fotografias del inmueble (condiciones del inmueble) -- declarado como
       pendiente real, no se construyo esta sesion.
 - [ ] Historial/seguimiento agregado entre TODOS los clientes (hoy cada
       cliente vive aislado en `localStorage`; compartir entre dispositivos
       seguiria requiriendo Supabase -- pendiente de decidir con el usuario).
-- [ ] Resumen ejecutivo / guia de presentacion (los 2 PDFs de 1 pagina que
-      existen en resumen.py).
+- [ ] Conectar el texto editado de las 21 secciones tambien al PDF exportado (hoy
+      solo se ve en pantalla, ver nota arriba).
 - [ ] Simulador de financiamiento, editor de precios de materiales y
       deduccion ISR (funcionalidades de `cotizador_app.py` no portadas a esta
       version -- fuera del alcance de "las 21 secciones", deliberadamente no

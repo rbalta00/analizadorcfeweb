@@ -1,9 +1,10 @@
-// Orquestacion de la app: pantalla de clientes (agrupados gobierno/particular) ->
-// pantalla de un cliente (captura de datos + recibo -> 21 secciones navegables ->
-// exportar PDF). Toda la logica de calculo vive en resultado.js/motor.js; este archivo
-// solo lee/escribe el DOM y el almacenamiento del cliente.
+// Orquestacion de la app: Clientes (agrupados gobierno/particular) -> Cotizaciones de
+// ese cliente (puede tener varias) -> captura de datos/recibo de una cotizacion -> 21
+// secciones navegables -> exportar PDF / WhatsApp. Toda la logica de calculo vive en
+// resultado.js/motor.js; este archivo solo lee/escribe el DOM y el almacenamiento.
 import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo,
+  listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES } from './secciones.js';
 import { construirResultado } from './resultado.js';
@@ -12,14 +13,19 @@ import { generarResumenEjecutivo, generarGuiaPresentacion } from './resumen.js';
 import { leerRecibo } from './leerRecibo.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion } from './bloques.js';
+import { M, PCT } from './util.js';
 
 window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 
 const $ = (id) => document.getElementById(id);
 const DOMESTICAS = new Set(['01', 'DAC']);
 const TARIFAS_SOPORTADAS = new Set(['GDMTO', 'GDMTH', 'GDBT', 'PDBT', '01', 'DAC']);
+// Numero de WhatsApp al que apunta "Enviar por WhatsApp" (dado por el usuario). 52 =
+// Mexico; WhatsApp no permite adjuntar archivos desde un enlace wa.me, solo texto.
+const WHATSAPP_NUMERO = '522218367792';
 
 let clienteActual = null;
+let proyectoActual = null;
 let ultimoResultado = null;
 let ultimoLeido = null;
 let seccionObserver = null;
@@ -36,17 +42,18 @@ function escapeHtml(s) {
 function tarjetaCliente(c) {
   const div = document.createElement('div');
   div.className = 'tarjeta-cliente';
-  const estado = c.formulario ? 'con datos capturados' : 'sin datos capturados todavía';
+  const n = (c.proyectos || []).length;
+  const estado = n ? `${n} cotización${n === 1 ? '' : 'es'}` : 'sin cotizaciones todavía';
   div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(c.nombre)}</strong>` +
     `<span class="nota">${estado} · actualizado ${new Date(c.actualizadoEn).toLocaleDateString('es-MX')}</span></div>`;
-  div.addEventListener('click', () => abrirCliente(c.id));
+  div.addEventListener('click', () => mostrarPantallaProyectos(c.id));
   const btnBorrar = document.createElement('button');
   btnBorrar.className = 'btn-link btn-borrar-cliente';
   btnBorrar.textContent = '🗑';
-  btnBorrar.title = 'Eliminar cliente';
+  btnBorrar.title = 'Eliminar cliente (y todas sus cotizaciones)';
   btnBorrar.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (confirm(`¿Eliminar a "${c.nombre}"? Esto borra sus datos guardados en este navegador, no se puede deshacer.`)) {
+    if (confirm(`¿Eliminar a "${c.nombre}" y sus ${n} cotización(es)? Esto borra todo lo guardado en este navegador, no se puede deshacer.`)) {
       eliminarCliente(c.id);
       renderListaClientes();
     }
@@ -72,41 +79,131 @@ $('btnCrearCliente').addEventListener('click', () => {
   const tipo = $('nuevoClienteTipo').value;
   const c = crearCliente({ nombre, tipo });
   $('nuevoClienteNombre').value = '';
-  abrirCliente(c.id);
+  mostrarPantallaProyectos(c.id);
 });
-
-$('btnVolverClientes').addEventListener('click', mostrarPantallaClientes);
 
 function mostrarPantallaClientes() {
   $('pantallaClientes').hidden = false;
+  $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
-  clienteActual = null; ultimoResultado = null; ultimoLeido = null;
+  clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null;
   renderListaClientes();
 }
 
 // =====================================================================
-// Pantalla: Cliente (captura + 21 secciones)
+// Pantalla: Cotizaciones/proyectos de un cliente
 // =====================================================================
-function abrirCliente(id) {
-  clienteActual = obtenerCliente(id);
+function tarjetaProyecto(p) {
+  const div = document.createElement('div');
+  div.className = 'tarjeta-cliente';
+  const estado = p.formulario ? 'con datos capturados' : 'sin datos capturados todavía';
+  div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(p.nombre)}</strong>` +
+    `<span class="nota">${estado} · actualizado ${new Date(p.actualizadoEn).toLocaleDateString('es-MX')}</span></div>`;
+  div.addEventListener('click', () => abrirProyecto(clienteActual.id, p.id));
+  const btnBorrar = document.createElement('button');
+  btnBorrar.className = 'btn-link btn-borrar-cliente';
+  btnBorrar.textContent = '🗑';
+  btnBorrar.title = 'Eliminar esta cotización';
+  btnBorrar.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (confirm(`¿Eliminar la cotización "${p.nombre}"? No se puede deshacer.`)) {
+      eliminarProyecto(clienteActual, p.id);
+      renderListaProyectos();
+    }
+  });
+  div.append(btnBorrar);
+  return div;
+}
+
+function renderListaProyectos() {
+  const cont = $('listaProyectos');
+  cont.innerHTML = '';
+  const proyectos = listarProyectos(clienteActual);
+  if (!proyectos.length) {
+    cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: 'Todavía no hay cotizaciones para este cliente. Sube un recibo o arranca una en blanco.' }));
+  }
+  for (const p of proyectos) cont.append(tarjetaProyecto(p));
+}
+
+function mostrarPantallaProyectos(clienteId) {
+  clienteActual = obtenerCliente(clienteId);
   if (!clienteActual) { mostrarPantallaClientes(); return; }
+  proyectoActual = null; ultimoResultado = null; ultimoLeido = null;
   $('pantallaClientes').hidden = true;
+  $('pantallaProyectos').hidden = false;
+  $('pantallaCliente').hidden = true;
+  $('clienteNombreBarraProyectos').textContent = clienteActual.nombre;
+  $('clienteTipoBarraProyectos').textContent = clienteActual.tipo === 'gobierno' ? 'Gobierno' : 'Particular';
+  $('clienteTipoBarraProyectos').className = `chip-tipo chip-tipo-${clienteActual.tipo}`;
+  $('estadoReciboNuevoProyecto').textContent = '';
+  renderListaProyectos();
+}
+
+$('btnVolverClientesDesdeProyectos').addEventListener('click', mostrarPantallaClientes);
+$('btnVolverProyectos').addEventListener('click', () => mostrarPantallaProyectos(clienteActual.id));
+
+$('btnNuevoProyectoBlanco').addEventListener('click', () => {
+  const proyecto = crearProyecto(clienteActual, {});
+  abrirProyecto(clienteActual.id, proyecto.id);
+});
+
+// Subir un recibo aquí (antes de abrir ninguna cotización) crea una cotización nueva
+// con los datos ya detectados -- pedido explícito del usuario. Si en cambio se sube un
+// recibo DENTRO de una cotización ya abierta (sección 1 más abajo), eso actualiza esa
+// MISMA cotización -- no crea una nueva cada vez que se corrige un dato.
+$('archivoReciboNuevoProyecto').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const estadoEl = $('estadoReciboNuevoProyecto');
+  estadoEl.className = 'nota';
+  estadoEl.textContent = 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)...';
+  $('archivoReciboNuevoProyecto').disabled = true;
+  try {
+    const campos = await leerRecibo(file);
+    const proyecto = crearProyecto(clienteActual, { nombre: campos.titular || undefined });
+    abrirProyecto(clienteActual.id, proyecto.id, { camposIniciales: campos });
+  } catch (err) {
+    estadoEl.className = 'nota';
+    estadoEl.textContent = 'Error al leer el recibo: ' + err.message;
+    console.error(err);
+  } finally {
+    $('archivoReciboNuevoProyecto').disabled = false;
+    e.target.value = '';
+  }
+});
+
+// =====================================================================
+// Pantalla: una cotizacion/proyecto (captura + 21 secciones)
+// =====================================================================
+function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
+  clienteActual = obtenerCliente(clienteId);
+  proyectoActual = clienteActual ? obtenerProyecto(clienteActual, proyectoId) : null;
+  if (!clienteActual || !proyectoActual) { mostrarPantallaProyectos(clienteId); return; }
+  $('pantallaClientes').hidden = true;
+  $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = false;
   $('clienteNombreBarra').textContent = clienteActual.nombre;
   $('clienteTipoBarra').textContent = clienteActual.tipo === 'gobierno' ? 'Gobierno' : 'Particular';
   $('clienteTipoBarra').className = `chip-tipo chip-tipo-${clienteActual.tipo}`;
-  ultimoLeido = clienteActual.campos || null;
+  $('proyectoNombreBarra').textContent = proyectoActual.nombre;
+  ultimoLeido = proyectoActual.campos || null;
   ultimoResultado = null;
   $('contenedorSecciones').innerHTML = '';
+  $('ayudaEdicion').hidden = true;
   $('tabPdf').hidden = true;
   $('visorPdf').innerHTML = '';
   $('estadoRecibo').textContent = '';
   $('avisoReconciliacion').hidden = true;
   $('estadoCalculo').textContent = '';
-  aplicarFormulario(clienteActual.formulario);
-  aplicarInmueble(clienteActual.inmueble);
+  aplicarFormulario(proyectoActual.formulario);
+  aplicarInmueble(proyectoActual.inmueble);
   renderIndice(null);
-  if (clienteActual.formulario) {
+  if (camposIniciales) {
+    ultimoLeido = camposIniciales;
+    llenarFormularioDesdeRecibo(camposIniciales);
+    mostrarEstadoLecturaRecibo(camposIniciales);
+    intentarAutoCalcular(camposIniciales);
+  } else if (proyectoActual.formulario) {
     try { calcularYRenderizar(); } catch (e) { console.error('No se pudo recalcular automáticamente al reabrir:', e); }
   }
 }
@@ -119,7 +216,7 @@ $('tarifa').addEventListener('change', () => {
 $('traeBt').addEventListener('change', () => { $('btMonto').disabled = !$('traeBt').checked; });
 $('traeBonus').addEventListener('change', () => { $('bonusMonto').disabled = !$('traeBonus').checked; });
 
-// ---------------- Formulario: leer/aplicar (snapshot persistido por cliente) ----------------
+// ---------------- Formulario: leer/aplicar (snapshot persistido por proyecto) ----------------
 function leerFormulario() {
   return {
     titular: $('titular').value, domicilio: $('domicilio').value, noServicio: $('noServicio').value,
@@ -198,12 +295,49 @@ function aplicarInmueble(inm) {
 }
 
 // ---------------- Recibo: leer + autollenar + auto-calcular ----------------
+function mostrarEstadoLecturaRecibo(campos) {
+  const estadoEl = $('estadoRecibo');
+  const avisoEl = $('avisoReconciliacion');
+  const faltantes = campos.campos_no_encontrados.filter(k => k !== 'demanda_contratada_kw');
+  estadoEl.className = campos.uso_ocr ? 'nota' : 'nota ok';
+  estadoEl.textContent = (campos.uso_ocr
+    ? 'Se usó OCR (el PDF no traía texto aprovechable, o era una foto/escaneo). Revisa con más cuidado los datos.'
+    : 'Se leyó el texto del recibo directamente.')
+    + (faltantes.length ? ` No se encontraron solos (complétalos abajo): ${faltantes.join(', ')}.` : '');
+  avisoEl.hidden = !campos.reconciliacion_advertencia;
+  if (campos.reconciliacion_advertencia) avisoEl.textContent = '🛑 ' + campos.reconciliacion_advertencia;
+}
+
+function intentarAutoCalcular(campos) {
+  const esDomestica = DOMESTICAS.has($('tarifa').value);
+  const tarifaOk = campos.tarifa && TARIFAS_SOPORTADAS.has(campos.tarifa);
+  const datosOk = esDomestica
+    ? (campos.periodo_dias && campos.periodo_kwh)
+    : (campos.periodo_dias && campos.periodo_kwh && campos.rate_kw_detectado);
+  if (tarifaOk && datosOk) {
+    try {
+      calcularYRenderizar();
+      $('estadoCalculo').className = 'nota ok';
+      $('estadoCalculo').textContent = 'Calculado automáticamente a partir del recibo. Revisa las 21 secciones abajo.';
+      return true;
+    } catch (err) {
+      $('estadoCalculo').className = 'nota aviso';
+      $('estadoCalculo').textContent = 'Se leyó el recibo pero no se pudo calcular automáticamente: ' +
+        err.message + ' Revisa el formulario y pulsa Calcular.';
+      return false;
+    }
+  }
+  $('estadoCalculo').className = 'nota';
+  $('estadoCalculo').textContent = 'No se detectaron automáticamente todos los datos necesarios (tarifa y/o ' +
+    'columna "$/kW"); revisa el formulario y pulsa Calcular.';
+  return false;
+}
+
 $('archivoRecibo').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const estadoEl = $('estadoRecibo');
-  const avisoEl = $('avisoReconciliacion');
-  avisoEl.hidden = true;
+  $('avisoReconciliacion').hidden = true;
   estadoEl.className = 'nota';
   estadoEl.textContent = 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)...';
   $('archivoRecibo').disabled = true;
@@ -211,37 +345,8 @@ $('archivoRecibo').addEventListener('change', async (e) => {
     const campos = await leerRecibo(file);
     ultimoLeido = campos;
     llenarFormularioDesdeRecibo(campos);
-    const faltantes = campos.campos_no_encontrados.filter(k => k !== 'demanda_contratada_kw');
-    estadoEl.className = campos.uso_ocr ? 'nota' : 'nota ok';
-    estadoEl.textContent = (campos.uso_ocr
-      ? 'Se usó OCR (el PDF no traía texto aprovechable, o era una foto/escaneo). Revisa con más cuidado los datos.'
-      : 'Se leyó el texto del recibo directamente.')
-      + (faltantes.length ? ` No se encontraron solos (complétalos abajo): ${faltantes.join(', ')}.` : '');
-    if (campos.reconciliacion_advertencia) {
-      avisoEl.hidden = false;
-      avisoEl.textContent = '🛑 ' + campos.reconciliacion_advertencia;
-    }
-
-    const esDomestica = DOMESTICAS.has($('tarifa').value);
-    const tarifaOk = campos.tarifa && TARIFAS_SOPORTADAS.has(campos.tarifa);
-    const datosOk = esDomestica
-      ? (campos.periodo_dias && campos.periodo_kwh)
-      : (campos.periodo_dias && campos.periodo_kwh && campos.rate_kw_detectado);
-    if (tarifaOk && datosOk) {
-      try {
-        calcularYRenderizar();
-        $('estadoCalculo').className = 'nota ok';
-        $('estadoCalculo').textContent = 'Calculado automáticamente a partir del recibo. Revisa las 21 secciones abajo.';
-      } catch (err) {
-        $('estadoCalculo').className = 'nota aviso';
-        $('estadoCalculo').textContent = 'Se leyó el recibo pero no se pudo calcular automáticamente: ' +
-          err.message + ' Revisa el formulario y pulsa Calcular.';
-      }
-    } else {
-      $('estadoCalculo').className = 'nota';
-      $('estadoCalculo').textContent = 'No se detectaron automáticamente todos los datos necesarios (tarifa y/o ' +
-        'columna "$/kW"); revisa el formulario y pulsa Calcular.';
-    }
+    mostrarEstadoLecturaRecibo(campos);
+    intentarAutoCalcular(campos);
   } catch (err) {
     estadoEl.className = 'nota';
     estadoEl.textContent = 'Error al leer el recibo: ' + err.message;
@@ -341,13 +446,22 @@ function calcularYRenderizar() {
   }
 
   const r = construirResultado(input);
-  r.seccionesActivas = clienteActual.seccionesActivas || todosLosBloques();
+  r.seccionesActivas = proyectoActual.seccionesActivas || todosLosBloques();
+  r.textosEditados = proyectoActual.textosEditados || {};
   ultimoResultado = r;
 
-  clienteActual.formulario = leerFormulario();
-  clienteActual.campos = ultimoLeido;
-  clienteActual.inmueble = inmueble;
-  guardarCliente(clienteActual);
+  // Si el proyecto todavia tiene su nombre generico de creacion ("Cotización N"), se
+  // renombra solo al titular detectado -- asi la lista de cotizaciones del cliente se
+  // identifica sin tener que abrir cada una.
+  if (/^Cotización \d+$/.test(proyectoActual.nombre) && titular && titular !== 'Cliente') {
+    proyectoActual.nombre = titular;
+    $('proyectoNombreBarra').textContent = proyectoActual.nombre;
+  }
+
+  proyectoActual.formulario = leerFormulario();
+  proyectoActual.campos = ultimoLeido;
+  proyectoActual.inmueble = inmueble;
+  guardarProyecto(clienteActual, proyectoActual);
 
   renderSecciones(r);
   $('tabPdf').hidden = false;
@@ -356,11 +470,25 @@ function calcularYRenderizar() {
 
 // ---------------- 21 secciones: render + navegacion ----------------
 function onToggleBloque(bloque, activo) {
-  const set = new Set(clienteActual.seccionesActivas);
+  const set = new Set(proyectoActual.seccionesActivas);
   if (activo) set.add(bloque); else set.delete(bloque);
-  clienteActual.seccionesActivas = [...set];
-  guardarCliente(clienteActual);
-  if (ultimoResultado) { ultimoResultado.seccionesActivas = clienteActual.seccionesActivas; renderSecciones(ultimoResultado); }
+  proyectoActual.seccionesActivas = [...set];
+  guardarProyecto(clienteActual, proyectoActual);
+  if (ultimoResultado) { ultimoResultado.seccionesActivas = proyectoActual.seccionesActivas; renderSecciones(ultimoResultado); }
+}
+
+function onEditarTexto(id, valor, textoDefecto) {
+  proyectoActual.textosEditados = proyectoActual.textosEditados || {};
+  if (valor == null || !valor.trim() || valor.trim() === textoDefecto.trim()) {
+    delete proyectoActual.textosEditados[id];
+  } else {
+    proyectoActual.textosEditados[id] = valor;
+  }
+  guardarProyecto(clienteActual, proyectoActual);
+  if (ultimoResultado) {
+    ultimoResultado.textosEditados = proyectoActual.textosEditados;
+    renderSecciones(ultimoResultado);
+  }
 }
 
 function agregarNavegacionSeccion(art, n) {
@@ -383,8 +511,9 @@ function agregarNavegacionSeccion(art, n) {
 function renderSecciones(r) {
   const cont = $('contenedorSecciones');
   cont.innerHTML = '';
+  $('ayudaEdicion').hidden = false;
   for (let n = 1; n <= 21; n++) {
-    const art = renderSeccion(n, r, ultimoLeido, onToggleBloque);
+    const art = renderSeccion(n, r, ultimoLeido, onToggleBloque, onEditarTexto);
     agregarNavegacionSeccion(art, n);
     cont.append(art);
   }
@@ -450,25 +579,63 @@ function mostrarPdfEnVisor(doc, nombreArchivo) {
   visor.scrollIntoView({ behavior: 'smooth' });
 }
 
-function nombreArchivoCliente(prefijo) {
-  return `${prefijo}_${(clienteActual.nombre || 'cliente').replace(/[^a-z0-9]+/gi, '_')}.pdf`;
+function nombreArchivoProyecto(prefijo) {
+  const base = `${clienteActual.nombre}_${proyectoActual.nombre}`.replace(/[^a-z0-9]+/gi, '_');
+  return `${prefijo}_${base}.pdf`;
 }
 
 $('btnGenerarPdf').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  const doc = generarPdf(ultimoResultado, { secciones: clienteActual.seccionesActivas });
-  mostrarPdfEnVisor(doc, nombreArchivoCliente('Cotizacion'));
+  const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas });
+  mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
 });
 
 $('btnResumenEjecutivo').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   const doc = generarResumenEjecutivo(ultimoResultado);
-  mostrarPdfEnVisor(doc, nombreArchivoCliente('Resumen_ejecutivo'));
+  mostrarPdfEnVisor(doc, nombreArchivoProyecto('Resumen_ejecutivo'));
 });
 
 $('btnGuiaPresentacion').addEventListener('click', () => {
   const doc = generarGuiaPresentacion();
   mostrarPdfEnVisor(doc, 'Guia_para_presentar_cotizacion.pdf');
+});
+
+// WhatsApp no permite adjuntar un archivo desde un enlace wa.me, solo abrir un chat con
+// texto ya escrito -- el PDF (ya descargado con los botones de arriba) se adjunta a
+// mano. El numero de destino lo dio el usuario directamente.
+$('btnEnviarWhatsapp').addEventListener('click', () => {
+  if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  const r = ultimoResultado;
+  const mensaje = `Cotización ${r.titular}\n` +
+    `Sistema: ${r.n} paneles (${r.kwp.toFixed(2)} kWp)\n` +
+    `Inversión: ${M(r.investment)}\n` +
+    `Ahorro año 1: ${M(r.ahorroAnual)} (${PCT(r.pctAhorro)})\n` +
+    `Recuperación: ${r.payback ? r.payback.toFixed(1) + ' años' : 'N/D'}\n` +
+    `VAN 25 años: ${M(r.van)}\n\n` +
+    'Adjunto el PDF de la cotización.';
+  const url = `https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent(mensaje)}`;
+  window.open(url, '_blank');
+});
+
+// ---------------- Refrescar (topbar, visible en toda la app) ----------------
+$('btnRefrescar').addEventListener('click', () => {
+  if (!$('pantallaClientes').hidden) {
+    renderListaClientes();
+  } else if (!$('pantallaProyectos').hidden) {
+    renderListaProyectos();
+  } else if (!$('pantallaCliente').hidden && proyectoActual) {
+    if (proyectoActual.formulario) {
+      try {
+        calcularYRenderizar();
+        $('estadoCalculo').className = 'nota ok';
+        $('estadoCalculo').textContent = 'Recalculado con los datos actuales.';
+      } catch (e) {
+        $('estadoCalculo').className = 'nota aviso';
+        $('estadoCalculo').textContent = 'Error al recalcular: ' + e.message;
+      }
+    }
+  }
 });
 
 // =====================================================================

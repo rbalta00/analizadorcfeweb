@@ -47,6 +47,17 @@ body {
   cursor: pointer;
 }
 .estado-instalado { font-size: 0.8rem; color: #bfe8c8; }
+.btn-refrescar {
+  background: none; border: 1px solid rgba(255,255,255,0.4); color: #fff;
+  border-radius: 8px; padding: 7px 12px; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.btn-refrescar:hover { background: rgba(255,255,255,0.12); }
+.btn-whatsapp {
+  background: #25d366; color: #063d1e; border: none; border-radius: 8px;
+  padding: 11px 20px; font-size: 0.92rem; font-weight: 700; cursor: pointer;
+}
+.btn-whatsapp:active { opacity: 0.85; }
+.chip-proyecto { font-size: 0.85rem; color: var(--grey); }
 
 main { max-width: 980px; margin: 0 auto; padding: 16px; }
 
@@ -225,6 +236,22 @@ input[type="file"] { padding: 6px 0; }
   font-size: 0.82rem; margin: 10px 0;
 }
 @media (prefers-color-scheme: dark) { .aviso-cream { background: #3a3012; color: #f0dca0; } }
+
+/* ===================== Texto editable (parrafos y avisos de cada seccion) ===================== */
+.campo-editable { position: relative; }
+.texto-editable {
+  border-radius: 6px; padding: 2px 4px; margin: 0 -4px;
+  outline: 1px dashed transparent; cursor: text;
+}
+.texto-editable:hover { outline-color: var(--border); }
+.texto-editable:focus { outline: 2px solid var(--teal); outline-offset: 1px; background: var(--bg); }
+.campo-editado > .texto-editable { outline: 1px solid var(--cfe-gold); background: #fffaf0; }
+@media (prefers-color-scheme: dark) { .campo-editado > .texto-editable { background: #2a2210; } }
+.btn-restaurar-texto {
+  display: block; background: none; border: none; color: var(--cfe-gold); font-size: 0.72rem;
+  font-weight: 600; cursor: pointer; padding: 2px 4px; margin-top: 2px;
+}
+.btn-restaurar-texto:hover { text-decoration: underline; }
 
 .detalle-calculo { margin: 10px 0; font-size: 0.85rem; }
 .detalle-calculo summary { cursor: pointer; color: var(--teal); font-weight: 600; }

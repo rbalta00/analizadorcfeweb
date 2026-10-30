@@ -15,6 +15,7 @@
     <h1>Cotizador fotovoltaico CFE</h1>
     <p class="subtitulo">GESTORIA Y PROYECTOS SOELRB</p>
     <div class="topbar-acciones">
+      <button id="btnRefrescar" class="btn-refrescar" title="Vuelve a leer los datos guardados y recalcula">↻ Refrescar</button>
       <button id="btnInstalar" class="btn-instalar" hidden>Instalar en esta PC</button>
       <span id="estadoInstalado" class="estado-instalado" hidden>✓ Instalada en este dispositivo</span>
     </div>
@@ -48,12 +49,37 @@
     </section>
   </main>
 
-  <!-- ================= PANTALLA: CAPTURA + SECCIONES (por cliente) ================= -->
+  <!-- ================= PANTALLA: PROYECTOS/COTIZACIONES de un cliente ================= -->
+  <main id="pantallaProyectos" hidden>
+    <div class="cliente-barra">
+      <button id="btnVolverClientesDesdeProyectos" class="btn-link">← Clientes</button>
+      <strong id="clienteNombreBarraProyectos"></strong>
+      <span id="clienteTipoBarraProyectos" class="chip-tipo"></span>
+    </div>
+
+    <section class="tarjeta">
+      <h2>Cotizaciones de este cliente</h2>
+      <p class="nota">Un mismo cliente puede tener varias cotizaciones (distintos tamaños de sistema,
+        actualizaciones, o predios distintos del mismo cliente). Sube un recibo para crear una cotización
+        nueva con los datos ya detectados, o arranca una en blanco.</p>
+      <input type="file" id="archivoReciboNuevoProyecto" accept=".pdf,.jpg,.jpeg,.png,.webp" />
+      <p class="nota" id="estadoReciboNuevoProyecto"></p>
+      <div class="acciones"><button id="btnNuevoProyectoBlanco" class="btn-secundario">+ Cotización en blanco</button></div>
+    </section>
+
+    <section class="tarjeta">
+      <h3>Historial de cotizaciones</h3>
+      <div id="listaProyectos" class="lista-clientes"></div>
+    </section>
+  </main>
+
+  <!-- ================= PANTALLA: CAPTURA + SECCIONES (de una cotizacion/proyecto) ================= -->
   <main id="pantallaCliente" hidden>
     <div class="cliente-barra">
-      <button id="btnVolverClientes" class="btn-link">← Clientes</button>
+      <button id="btnVolverProyectos" class="btn-link">← Cotizaciones</button>
       <strong id="clienteNombreBarra"></strong>
       <span id="clienteTipoBarra" class="chip-tipo"></span>
+      <span class="chip-proyecto">· <span id="proyectoNombreBarra"></span></span>
     </div>
 
     <nav id="indiceSecciones" class="indice-secciones">
@@ -207,6 +233,10 @@
     </section>
 
     <!-- Las 21 secciones se insertan aquí dinámicamente tras calcular -->
+    <p class="nota nota-ayuda-edicion" id="ayudaEdicion" hidden>✎ Los párrafos y avisos de cada sección se
+      pueden editar: haz clic directo en el texto, escribe, y clic afuera para guardar (se marca en dorado).
+      Borra todo el texto para restaurar el original. Por ahora esta edición solo se ve en pantalla; el PDF
+      exportado todavía usa el texto original.</p>
     <div id="contenedorSecciones"></div>
 
     <section class="tarjeta" id="tabPdf" hidden>
@@ -216,7 +246,10 @@
         <button id="btnGenerarPdf" class="btn-primario">Cotización completa</button>
         <button id="btnResumenEjecutivo" class="btn-secundario">Resumen ejecutivo (1 página)</button>
         <button id="btnGuiaPresentacion" class="btn-secundario">Guía para presentar</button>
+        <button id="btnEnviarWhatsapp" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
       </div>
+      <p class="nota">El botón de WhatsApp abre el chat con un resumen en texto ya escrito — WhatsApp no
+        permite adjuntar el PDF automáticamente desde un enlace; adjúntalo a mano (ya descargado arriba).</p>
       <div id="visorPdf"></div>
     </section>
   </main>
