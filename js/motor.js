@@ -267,6 +267,52 @@ export function costoInversor(materiales) {
   return m ? m.importeMxn : 0.0;
 }
 
+// Recalcula venta/iva/inversion/flujo a 25 anios/payback/ISR a partir de una tabla de
+// materiales YA EDITADA a mano (ej. se sobreescribe el precio del inversor con una
+// cotizacion real de proveedor). `ahorroAnual` NO cambia aqui -- depende del consumo y
+// la tarifa del recibo, no de cuanto cuesta el sistema. Puerto 1:1 de
+// dimensionamiento.recalcular_desde_materiales().
+export function recalcularDesdeMateriales(materiales, ahorroAnual, escalamientoTarifaPct = 0,
+                                           aplicaIsr = false, tasaIsrPct = 0, iva = 0.16) {
+  const ventaSinIva = R(materiales.reduce((s, m) => s + m.importeMxn, 0));
+  const ivaMonto = R(ventaSinIva * iva);
+  const investment = R(ventaSinIva + ivaMonto);
+  const om1 = R(investment * 0.01);
+  const costoInv = costoInversor(materiales);
+  const flujo25 = flujo25Anios(investment, ahorroAnual, 0.10, 25, (escalamientoTarifaPct || 0) / 100,
+                                0.01, 0.03, 0.005, costoInv);
+  const payback = ahorroAnual > 0 ? investment / ahorroAnual : null;
+  const out = {
+    ventaSinIva, iva: ivaMonto, investment, om1,
+    van: flujo25.van, tir: flujo25.tir, recuperacionAcumulada: flujo25.recuperacionAcumulada,
+    flujo25Rows: flujo25.flujo, payback,
+  };
+  if (aplicaIsr) {
+    const ahorroFiscalIsr = R(ventaSinIva * (tasaIsrPct / 100));
+    const inversionNetaIsr = R(investment - ahorroFiscalIsr);
+    const flujo25Isr = flujo25Anios(inversionNetaIsr, ahorroAnual, 0.10, 25, (escalamientoTarifaPct || 0) / 100,
+                                     0.01, 0.03, 0.005, costoInv);
+    const paybackNetoIsr = ahorroAnual > 0 ? inversionNetaIsr / ahorroAnual : null;
+    Object.assign(out, {
+      ahorroFiscalIsr, inversionNetaIsr, vanNetoIsr: flujo25Isr.van, tirNetoIsr: flujo25Isr.tir, paybackNetoIsr,
+    });
+  }
+  return out;
+}
+
+// Pago mensual de un credito simple de cuota fija (amortizacion francesa), para
+// comparar contra el ahorro mensual estimado. NO es una oferta de financiamiento
+// real: la tasa y el plazo reales los pone el banco/financiera que el cliente elija;
+// esto es solo una simulacion generica para la conversacion con el cliente. Puerto
+// 1:1 de dimensionamiento.pago_mensual_credito().
+export function pagoMensualCredito(monto, tasaAnual, plazoAnios) {
+  if (monto <= 0) return 0.0;
+  const tasaMensual = tasaAnual / 12;
+  const nMeses = plazoAnios * 12;
+  if (tasaMensual === 0) return monto / nMeses;
+  return monto * tasaMensual / (1 - Math.pow(1 + tasaMensual, -nMeses));
+}
+
 function npv(rate, flows) {
   return flows.reduce((s, v, i) => s + v / Math.pow(1 + rate, i), 0);
 }

@@ -5,7 +5,7 @@
 // graficas, tablas y exportaciones deben usar la misma fuente de calculo").
 import {
   construirInvoice, construirInvoiceDomestica, pisoDeAhorro, flujoMensualAnual,
-  dimensionarHorasSol, normalizarConsumoMensual, presupuestar, costoInversor, flujo25Anios,
+  dimensionarHorasSol, normalizarConsumoMensual, presupuestar, costoInversor, flujo25Anios, R,
 } from './motor.js';
 import { generarNotas } from './notas.js';
 import { fechaEstudioEs } from './util.js';
@@ -16,7 +16,7 @@ export function construirResultado(input) {
     periodoDias, periodoKwh, dap, cargos, rateKw, btPct, fpBonusPct,
     moduloWp, cobertura, horasUtiles, costos, escalamientoPct,
     escalones, dapDomestica,
-    leido, inmueble,
+    leido, inmueble, aplicaIsr, tasaIsrPct,
   } = input;
 
   let invoice, meta, pagoRecurrentePeriodo, piso, ahorroMax, pctMax, cargosFinal;
@@ -60,6 +60,18 @@ export function construirResultado(input) {
     ? `historial real de ${leido.historial_meses_cubiertos} meses impreso en el recibo`
     : `extrapolación de un solo período (${periodoDias} días)`;
 
+  // Deduccion fiscal ISR (Art. 34 fraccion XIII LISR) -- opcional, solo clientes
+  // privados/comerciales que pagan ISR (gobierno NO). No afecta el ahorro de factura,
+  // solo la inversion neta efectiva y el flujo/payback a 25 anios.
+  let ahorroFiscalIsr = 0, inversionNetaIsr = pres.inversion, vanNetoIsr = null, tirNetoIsr = null, paybackNetoIsr = null;
+  if (aplicaIsr) {
+    ahorroFiscalIsr = R(pres.ventaSinIva * (tasaIsrPct / 100));
+    inversionNetaIsr = R(pres.inversion - ahorroFiscalIsr);
+    const flujo25Isr = flujo25Anios(inversionNetaIsr, ahorroAnual, 0.10, 25, (escalamientoPct || 0) / 100, 0.01, 0.03, 0.005, costoInv);
+    vanNetoIsr = flujo25Isr.van; tirNetoIsr = flujo25Isr.tir;
+    paybackNetoIsr = ahorroAnual > 0 ? inversionNetaIsr / ahorroAnual : null;
+  }
+
   const r = {
     titular: titular || 'Cliente', tituloRecibo: leido ? leido.titular : null, domicilio,
     noServicio, tarifa, fechaEstudio: fechaEstudioEs(),
@@ -74,7 +86,18 @@ export function construirResultado(input) {
     materiales: pres.materiales, rows,
     historial: leido ? leido.historial : null, basisConsumo,
     inmueble: inmueble || null,
+    aplicaIsr: !!aplicaIsr, tasaIsrPct: tasaIsrPct || 0, ahorroFiscalIsr, inversionNetaIsr,
+    vanNetoIsr, tirNetoIsr, paybackNetoIsr,
   };
   r.notas = generarNotas(leido || null, r, esDomestica);
+  if (aplicaIsr) {
+    const paybackTxt = paybackNetoIsr ? `${paybackNetoIsr.toFixed(2)} años` : 'no calculable';
+    r.notas.push(
+      `Se estimó una deducción fiscal 100% inmediata (Art. 34 fracción XIII LISR) de $${ahorroFiscalIsr.toLocaleString('en-US', { minimumFractionDigits: 2 })} ` +
+      `(${tasaIsrPct.toFixed(0)}% de ISR sobre el costo antes de IVA, $${pres.ventaSinIva.toLocaleString('en-US', { minimumFractionDigits: 2 })}). ` +
+      `Esto reduciría la inversión neta efectiva a $${inversionNetaIsr.toLocaleString('en-US', { minimumFractionDigits: 2 })} y el payback simple a ${paybackTxt}. ` +
+      'Es una estimación general, no asesoría fiscal -- confirmar con el contador o fiscalista del cliente antes de prometerlo en una oferta firme.'
+    );
+  }
   return r;
 }

@@ -12,7 +12,7 @@ import { generarPdf } from './propuesta.js';
 import { generarResumenEjecutivo, generarGuiaPresentacion } from './resumen.js';
 import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida } from './imagenes.js';
-import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL } from './motor.js';
+import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion } from './bloques.js';
 import { M, PCT } from './util.js';
 import {
@@ -406,6 +406,8 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('contenedorSecciones').innerHTML = '';
   $('ayudaEdicion').hidden = true;
   $('tabPdf').hidden = true;
+  $('tabEditorPrecios').hidden = true;
+  $('tabFinanciamiento').hidden = true;
   $('visorPdf').innerHTML = '';
   $('estadoRecibo').textContent = '';
   $('avisoReconciliacion').hidden = true;
@@ -450,6 +452,7 @@ function leerFormulario() {
     ...leerFormularioRecibo(),
     moduloWp: $('moduloWp').value, cobertura: $('cobertura').value, horasUtiles: $('horasUtiles').value,
     escalaCostos: $('escalaCostos').value, escalamiento: $('escalamiento').value,
+    aplicaIsr: $('aplicaIsr').checked, tasaIsr: $('tasaIsr').value,
   };
 }
 
@@ -460,7 +463,10 @@ function aplicarFormulario(f) {
   aplicarFormularioRecibo(f);
   $('moduloWp').value = f?.moduloWp ?? 605; $('cobertura').value = f?.cobertura ?? 1.0; $('horasUtiles').value = f?.horasUtiles ?? 4.5;
   $('escalaCostos').value = f?.escalaCostos || 'residencial'; $('escalamiento').value = f?.escalamiento ?? 4.0;
+  $('aplicaIsr').checked = f?.aplicaIsr || false; $('tasaIsr').value = f?.tasaIsr ?? 30;
+  $('tasaIsr').disabled = !$('aplicaIsr').checked;
 }
+$('aplicaIsr').addEventListener('change', () => { $('tasaIsr').disabled = !$('aplicaIsr').checked; });
 
 function leerInmueble() {
   return {
@@ -694,6 +700,8 @@ function calcularYRenderizar() {
   const domicilio = $('domicilio').value;
   const noServicio = $('noServicio').value;
   const inmueble = leerInmueble();
+  const aplicaIsr = $('aplicaIsr').checked;
+  const tasaIsrPct = Number($('tasaIsr').value);
 
   let input;
   if (!esDom) {
@@ -715,7 +723,8 @@ function calcularYRenderizar() {
     const btPct = traeBt ? btMonto / baseAprox : 0.0;
     const fpBonusPct = traeBonus ? bonusMonto / (baseAprox + btMonto) : 0.0;
     input = { titular, domicilio, noServicio, tarifa, esDomestica: false, periodoDias, periodoKwh, dap, cargos,
-      rateKw, btPct, fpBonusPct, moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble };
+      rateKw, btPct, fpBonusPct, moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
+      aplicaIsr, tasaIsrPct };
   } else {
     const periodoDias = Number($('d_periodoDias').value);
     const periodoKwh = Number($('d_periodoKwh').value);
@@ -725,7 +734,8 @@ function calcularYRenderizar() {
       [null, Number($('d_excedRate').value)],
     ];
     input = { titular, domicilio, noServicio, tarifa, esDomestica: true, periodoDias, periodoKwh, escalones,
-      dapDomestica: Number($('d_dap').value), moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble };
+      dapDomestica: Number($('d_dap').value), moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
+      aplicaIsr, tasaIsrPct };
   }
 
   const r = construirResultado(input);
@@ -748,9 +758,76 @@ function calcularYRenderizar() {
   guardarProyecto(clienteActual, proyectoActual);
 
   renderSecciones(r);
+  renderEditorPrecios(r);
+  renderFinanciamiento(r);
   $('tabPdf').hidden = false;
   return r;
 }
+
+// ---------------- Editor de precios de materiales (puerto de la seccion "Ajustar
+// precios de materiales" de Streamlit) ----------------
+function renderEditorPrecios(r) {
+  $('tabEditorPrecios').hidden = false;
+  $('estadoEditorPrecios').textContent = '';
+  const tbody = $('filasEditorPrecios');
+  tbody.innerHTML = '';
+  r.materiales.forEach((m, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${m.partida}</td><td>${m.cantidad.toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>` +
+      `<td>${m.unidad}</td><td><input type="number" step="0.01" class="input-precio-material" data-idx="${i}" value="${m.importeMxn.toFixed(2)}" /></td>`;
+    tbody.append(tr);
+  });
+}
+$('btnRecalcularPrecios').addEventListener('click', () => {
+  if (!ultimoResultado) return;
+  const nuevosMateriales = ultimoResultado.materiales.map((m, i) => {
+    const input = document.querySelector(`.input-precio-material[data-idx="${i}"]`);
+    return { ...m, importeMxn: Number(input.value) };
+  });
+  const aplicaIsr = $('aplicaIsr').checked;
+  const tasaIsrPct = Number($('tasaIsr').value);
+  const recalculo = recalcularDesdeMateriales(nuevosMateriales, ultimoResultado.ahorroAnual,
+    ultimoResultado.escalamientoTarifaPct, aplicaIsr, tasaIsrPct);
+  ultimoResultado.materiales = nuevosMateriales;
+  Object.assign(ultimoResultado, recalculo);
+  if (!aplicaIsr) {
+    Object.assign(ultimoResultado, { ahorroFiscalIsr: 0, inversionNetaIsr: recalculo.investment,
+      vanNetoIsr: null, tirNetoIsr: null, paybackNetoIsr: null });
+  }
+  renderSecciones(ultimoResultado);
+  renderEditorPrecios(ultimoResultado);
+  renderFinanciamiento(ultimoResultado);
+  $('estadoEditorPrecios').className = 'nota ok';
+  $('estadoEditorPrecios').textContent = 'Recalculado con los precios editados. Genera el PDF de nuevo para que lo incluya.';
+});
+
+// ---------------- Simulador de financiamiento (puerto de Streamlit) ----------------
+function renderFinanciamiento(r) {
+  $('tabFinanciamiento').hidden = false;
+  const enganchePct = Number($('finEnganche').value);
+  const tasaPct = Number($('finTasa').value);
+  const plazoAnios = Number($('finPlazo').value);
+  const montoFinanciado = r.investment * (1 - enganchePct / 100);
+  const pagoMensual = pagoMensualCredito(montoFinanciado, tasaPct / 100, plazoAnios);
+  const ahorroMensual = r.ahorroAnual / 12;
+  $('resultadoFinanciamiento').innerHTML = `
+    <div class="metrica"><div class="valor">${M(r.investment * enganchePct / 100)}</div><div class="etiqueta">Enganche</div></div>
+    <div class="metrica"><div class="valor">${M(pagoMensual)}</div><div class="etiqueta">Pago mensual del crédito</div></div>
+    <div class="metrica"><div class="valor">${M(ahorroMensual)}</div><div class="etiqueta">Ahorro mensual estimado</div></div>`;
+  const veredicto = $('veredictoFinanciamiento');
+  if (pagoMensual <= ahorroMensual) {
+    veredicto.className = 'nota ok';
+    veredicto.textContent = `El ahorro mensual estimado (${M(ahorroMensual)}) cubre el pago mensual del crédito ` +
+      `(${M(pagoMensual)}) desde el primer mes, con ${M(ahorroMensual - pagoMensual)} de margen -- el sistema se pagaría prácticamente solo.`;
+  } else {
+    veredicto.className = 'nota aviso';
+    veredicto.textContent = `El pago mensual del crédito (${M(pagoMensual)}) sería mayor que el ahorro mensual ` +
+      `estimado (${M(ahorroMensual)}) por ${M(pagoMensual - ahorroMensual)} -- con estos supuestos, el cliente pondría dinero extra cada mes mientras dure el crédito.`;
+  }
+}
+['finEnganche', 'finTasa', 'finPlazo'].forEach(id => {
+  $(id).addEventListener('input', () => { if (ultimoResultado) renderFinanciamiento(ultimoResultado); });
+});
 
 // ---------------- 21 secciones: render + navegacion ----------------
 function onToggleBloque(bloque, activo) {

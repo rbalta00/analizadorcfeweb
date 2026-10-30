@@ -397,6 +397,48 @@ se reinventa una formula aqui, solo se traduce.
           con el mensaje y los nombres correctos -> llenar los campos + click en
           el grupo "$/kW" -> Calcular procede y calcula normal. Tambien verificado
           que la captura 100% manual (sin marcas) calcula sin bloquear.
+      - **3 funciones que solo existian en la app de Streamlit ahora tambien estan
+        aqui** -- pedido explicito del usuario tras aclarar que tenia dos apps
+        distintas confundidas ("quiero pasar las secciones que le faltan a la web").
+        Son herramientas del panel interno (`index.html`), NO del formulario publico
+        (`cliente.html`) -- igual que en Streamlit, donde tampoco aparecen ahi.
+        - **Editor de precios de materiales** (panel nuevo, debajo de las 21
+          secciones): tabla con el "Importe" de cada partida editable + boton
+          "Recalcular con estos precios". Puerto 1:1 de
+          `dimensionamiento.recalcular_desde_materiales()` ->
+          `recalcularDesdeMateriales()` en `js/motor.js`. El ahorro de factura NO
+          cambia (depende del consumo/tarifa, no del costo del sistema); solo se
+          vuelve a calcular venta/IVA/inversion/flujo a 25 anios/payback (y ISR si
+          aplica). Verificado: cambiar el precio del panel y recalcular actualiza
+          en vivo la seccion 11-13 Y el panel de financiamiento (la inversion nueva
+          se refleja en el enganche).
+        - **Deduccion fiscal ISR** (Art. 34 fraccion XIII LISR, checkbox en la
+          seccion 4 "Sistema propuesto"): solo clientes privados/comerciales que
+          pagan ISR, nunca gobierno. Puerto 1:1 del calculo de `cotizador_app.py` --
+          vive en `construirResultado()` (`js/resultado.js`), agrega
+          `ahorroFiscalIsr`/`inversionNetaIsr`/`vanNetoIsr`/`tirNetoIsr`/
+          `paybackNetoIsr` a `r` y una nota aclaratoria automatica (misma redaccion
+          que Python). Se muestra como bloque extra dentro de la seccion 13
+          ("En cuanto se recuperaria la inversion") solo si `r.aplicaIsr` es true --
+          no es una seccion nueva de las 21, es contenido condicional de una ya
+          existente (mismo criterio que se uso para el inmueble en la seccion 6).
+        - **Simulador de financiamiento** (panel nuevo, debajo del editor de
+          precios): enganche/tasa/plazo -> pago mensual de credito (amortizacion
+          francesa) comparado contra el ahorro mensual estimado. Puerto 1:1 de
+          `pago_mensual_credito()` -> `pagoMensualCredito()` en `js/motor.js`.
+          Explicitamente NO entra al PDF (tampoco en Streamlit) -- es solo para la
+          conversacion con el cliente en pantalla. Recalcula en vivo con cada
+          cambio en los 3 campos (sin boton "Calcular" aparte).
+        - **NO se porto** "fotos de condiciones del inmueble" (el 4o punto que se
+          penso que faltaba): se investigo y en realidad NUNCA se construyo en
+          Streamlit tampoco -- solo existe como nota pendiente en el propio
+          `cotizador_app.py`. No hay nada que portar; si el usuario lo quiere,
+          seria una funcionalidad nueva en las dos apps, no un port.
+        - Verificado en Chrome real: tarifa GDMTO + ISR activado -> Calcular ->
+          aparecen los 3 paneles -> el bloque de ISR aparece en la seccion 13 con
+          la tasa correcta -> editar el precio del panel y Recalcular actualiza
+          inversion/enganche/ISR consistentemente. `node js/test_motor.mjs` sigue
+          reproduciendo exacto los 8 numeros de Abue (no se rompio nada existente).
 
 ## Como probarlo en el navegador
 ```

@@ -493,6 +493,19 @@ function s13(r, _leido, onToggle) {
   art.append(avisoCream('Se consideran degradación de 0.5% anual, mantenimiento inicial de 1% de la venta sin ' +
     'IVA que crece 3% anual' + (reposicionAnio ? `, y reposición del inversor en el año ${reposicionAnio}. ` : '. No se incluyó reposición de inversor en este cálculo. ') +
     escTxt + ' No se presentan rendimientos ni recuperación como garantías.'));
+  if (r.aplicaIsr) {
+    art.append(el('h4', null, 'Deducción fiscal (ISR) -- solo clientes privados/comerciales'));
+    art.append(tabla(['Indicador con deducción ISR', 'Resultado'], [
+      ['Deducción fiscal estimada', `${M(r.ahorroFiscalIsr)} (${r.tasaIsrPct.toFixed(0)}% de ISR sobre el costo antes de IVA)`],
+      ['Inversión neta efectiva', M(r.inversionNetaIsr)],
+      ['Recuperación simple con ISR', r.paybackNetoIsr ? `${r.paybackNetoIsr.toFixed(1)} años` : 'no calculable'],
+      ['VAN neto con ISR', r.vanNetoIsr != null ? M(r.vanNetoIsr) : 'no calculable'],
+      ['TIR neta con ISR', r.tirNetoIsr != null ? PCT(r.tirNetoIsr) : 'no calculable'],
+    ], { small: true }));
+    art.append(avisoCream('Deducción 100% inmediata de equipo renovable (Art. 34 fracción XIII LISR). Es una ' +
+      'estimación general, no asesoría fiscal -- confirmar con el contador o fiscalista del cliente antes de ' +
+      'prometerlo en una oferta firme. No aplica a gobierno/instituciones públicas.'));
+  }
   return art;
 }
 function beneficioCosto(r) {
