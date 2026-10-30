@@ -12,8 +12,8 @@
 // hoja A4 sin paginacion automatica. Las 21 SECCIONES en pantalla (secciones.js) no
 // cambian -- esa division es solo del lado del PDF.
 import {
-  CONTENT_W, CONTENT_TOP, headX, subX, bodyX, spacer, cardsRow, notice, table, curve,
-  groupedBarChart, horizontalBarChart, gauge, buildPdf,
+  CONTENT_W, CONTENT_TOP, CONTENT_BOTTOM, MARGIN_L, headX, subX, bodyX, spacer, cardsRow,
+  notice, table, curve, groupedBarChart, horizontalBarChart, gauge, buildPdf,
 } from './pdfComponents.js';
 import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA } from './util.js';
 import { BLOQUES_COTIZACION } from './bloques.js';
@@ -214,6 +214,25 @@ function pagina06(doc, r, numero) {
   notice(doc, y, 'No incluye baterías ni respaldo durante apagones. La potencia y las cantidades presupuestadas ' +
     'no sustituyen el plano y los cálculos de ingeniería. Es una distribución conceptual, sin levantamiento ' +
     'validado: no es prueba de cabida, escala exacta ni seguridad estructural.');
+}
+
+// ---------- Pagina 6b: foto del sembrado de paneles (SOLO si r.fotoSembrado existe) ----------
+// Pagina condicional, pedida por el usuario: la foto del sembrado (distribucion de
+// paneles sobre el techo, aportada por fuera) se agrega a la cotizacion. Aparte de la
+// pagina 6 porque entre la tabla de equipo + el aviso + (a veces) las condiciones del
+// inmueble, la pagina 6 ya usa casi todo el espacio de una hoja A4 -- no hay donde
+// meter ademas una imagen sin arriesgar que se encime con el pie de pagina.
+function pagina06b(doc, r, numero) {
+  let y = encabezado(doc, numero, 'Distribución de paneles sobre el techo/azotea (sembrado)', r.titular);
+  y = bodyX(doc, y, 'Fotografía o esquema aportado para este proyecto. Es una referencia declarada, no un ' +
+    'levantamiento topográfico ni una prueba de que ese arreglo exacto cabe o es estructuralmente viable.');
+  y = spacer(y, 6);
+  const { dataUrl, ancho, alto } = r.fotoSembrado;
+  const maxAltoDisponible = CONTENT_BOTTOM - y - 20;
+  const escala = Math.min(CONTENT_W / ancho, maxAltoDisponible / alto, 1);
+  const wDibujo = ancho * escala, hDibujo = alto * escala;
+  const xDibujo = MARGIN_L + (CONTENT_W - wDibujo) / 2;
+  doc.addImage(dataUrl, 'JPEG', xDibujo, y, wDibujo, hDibujo);
 }
 
 // ---------- Pagina 7: produccion ----------
@@ -507,9 +526,14 @@ function pagina21(doc, r, numero) {
     'no acredita un contrato de generación firmado ni un ahorro futuro medido.');
 }
 
+// Tercer elemento opcional: condicion(r) -- si se da y regresa false, la pagina no se
+// incluye aunque su bloque este activo. Hoy solo la usa pagina06b (la foto del
+// sembrado), que solo existe si el proyecto tiene una foto cargada.
 const PAGINAS = [
   ['resumen', pagina01], ['recibo_cargos', pagina02], ['recibo_cargos', pagina03], ['recibo_cargos', pagina04],
-  ['consumo_sistema', pagina05], ['consumo_sistema', pagina06], ['produccion', pagina07], ['ambiental', pagina08],
+  ['consumo_sistema', pagina05], ['consumo_sistema', pagina06],
+  ['consumo_sistema', pagina06b, (r) => !!r.fotoSembrado],
+  ['produccion', pagina07], ['ambiental', pagina08],
   ['ahorro_pagos', pagina09], ['ahorro_pagos', pagina10], ['presupuesto', pagina11], ['presupuesto', pagina12],
   ['recuperacion', pagina13], ['recuperacion', pagina14], ['pagos_100', pagina15], ['pagos_100', pagina16],
   ['pendientes', pagina17], ['pendientes', pagina17b], ['alcance', pagina18], ['alcance', pagina19],
@@ -523,7 +547,7 @@ const PAGINAS = [
 export function generarPdf(r, { secciones = null } = {}) {
   const activas = new Set(secciones != null ? secciones : BLOQUES_COTIZACION.map(([c]) => c));
   activas.add('resumen');
-  const paginasFiltradas = PAGINAS.filter(([clave]) => activas.has(clave));
+  const paginasFiltradas = PAGINAS.filter(([clave, , condicion]) => activas.has(clave) && (!condicion || condicion(r)));
 
   const titulo = `ESTUDIO DEL SISTEMA SOLAR · ${r.titular}`;
   const subtitulo = `${r.tarifa} · servicio ${r.noServicio || ''} · ${r.fechaEstudio} · ${r.n} paneles de ${r.moduloWp} W`;

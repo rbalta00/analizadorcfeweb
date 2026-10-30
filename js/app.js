@@ -10,7 +10,8 @@ import { renderSeccion, TITULOS_SECCIONES } from './secciones.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf } from './propuesta.js';
 import { generarResumenEjecutivo, generarGuiaPresentacion } from './resumen.js';
-import { leerRecibo } from './leerRecibo.js';
+import { leerReciboMultiple } from './leerRecibo.js';
+import { archivoAImagenComprimida } from './imagenes.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion } from './bloques.js';
 import { M, PCT } from './util.js';
@@ -162,14 +163,16 @@ $('btnNuevoProyectoBlanco').addEventListener('click', () => {
 // recibo DENTRO de una cotización ya abierta (sección 1 más abajo), eso actualiza esa
 // MISMA cotización -- no crea una nueva cada vez que se corrige un dato.
 $('archivoReciboNuevoProyecto').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
   const estadoEl = $('estadoReciboNuevoProyecto');
   estadoEl.className = 'nota';
-  estadoEl.textContent = 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)...';
+  estadoEl.textContent = files.length > 1
+    ? `Leyendo ${files.length} archivos del recibo (puede tardar hasta 1 minuto por foto si usa OCR)...`
+    : 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)...';
   $('archivoReciboNuevoProyecto').disabled = true;
   try {
-    const campos = await leerRecibo(file);
+    const campos = await leerReciboMultiple(files);
     const proyecto = crearProyecto(clienteActual, { nombre: campos.titular || undefined });
     abrirProyecto(clienteActual.id, proyecto.id, { camposIniciales: campos });
   } catch (err) {
@@ -229,10 +232,12 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('estadoRecibo').textContent = '';
   $('avisoReconciliacion').hidden = true;
   $('estadoCalculo').textContent = '';
+  document.querySelectorAll('#tabCaptura .campo-no-detectado').forEach(el2 => el2.classList.remove('campo-no-detectado'));
   $('estadoGuardadoCotizacion').textContent = '';
   poblarSelectClienteGuardar();
   aplicarFormulario(proyectoActual.formulario);
   aplicarInmueble(proyectoActual.inmueble);
+  mostrarPreviaSembrado(proyectoActual.fotoSembrado);
   renderIndice(null);
   if (camposIniciales) {
     ultimoLeido = camposIniciales;
@@ -330,7 +335,69 @@ function aplicarInmueble(inm) {
   $('inmNotas').value = inm?.notas || '';
 }
 
+// ---------------- Foto del sembrado de paneles (se agrega a la seccion 6 y al PDF) ----------------
+// Se guarda como {dataUrl, ancho, alto} -- no solo el data URL -- porque el PDF
+// (propuesta.js) necesita las dimensiones reales para calcular el tamano de la imagen
+// en la pagina sin deformarla, y jsPDF no las puede leer solo de un data URL.
+function mostrarPreviaSembrado(foto) {
+  $('imgPreviaSembrado').src = foto ? foto.dataUrl : '';
+  $('previsualizacionSembrado').hidden = !foto;
+}
+
+$('archivoSembrado').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  $('archivoSembrado').disabled = true;
+  try {
+    const foto = await archivoAImagenComprimida(file);
+    proyectoActual.fotoSembrado = foto;
+    guardarProyecto(clienteActual, proyectoActual);
+    mostrarPreviaSembrado(foto);
+    if (ultimoResultado) { ultimoResultado.fotoSembrado = foto; renderSecciones(ultimoResultado); }
+  } catch (err) {
+    alert('No se pudo procesar la imagen: ' + err.message);
+    console.error(err);
+  } finally {
+    $('archivoSembrado').disabled = false;
+    e.target.value = '';
+  }
+});
+
+$('btnQuitarSembrado').addEventListener('click', () => {
+  proyectoActual.fotoSembrado = null;
+  guardarProyecto(clienteActual, proyectoActual);
+  mostrarPreviaSembrado(null);
+  if (ultimoResultado) { ultimoResultado.fotoSembrado = null; renderSecciones(ultimoResultado); }
+});
+
 // ---------------- Recibo: leer + autollenar + auto-calcular ----------------
+// Campos que el lector de recibo puede marcar como "no detectado" y que SI tienen un
+// input propio en el formulario manual (no_medidor/multiplicador/demanda_contratada_kw
+// no tienen campo propio todavia, se quedan fuera del resaltado).
+const CAMPO_A_INPUT = {
+  tarifa: 'tarifa', no_servicio: 'noServicio', periodo_dias: 'periodoDias', periodo_kwh: 'periodoKwh',
+  dap: 'dap', suministro: 'c_suministro', distribucion: 'c_distribucion', transmision: 'c_transmision',
+  cenace: 'c_cenace', energia: 'c_energia', capacidad: 'c_capacidad', scnmem: 'c_scnmem',
+};
+
+// Marca en naranja los campos del formulario que el recibo NO trajo solos -- pedido
+// explicito del usuario: "me marcas los datos que no se leyeron" en vez de solo un
+// texto plano. Se limpia la marca de un campo en cuanto el usuario escribe algo ahi
+// (ver el listener de 'input' delegado mas abajo).
+function marcarCamposNoDetectados(campos) {
+  document.querySelectorAll('#tabCaptura .campo-no-detectado').forEach(el2 => el2.classList.remove('campo-no-detectado'));
+  for (const campo of campos.campos_no_encontrados || []) {
+    const inputId = CAMPO_A_INPUT[campo];
+    const el2 = inputId && $(inputId);
+    if (el2) el2.classList.add('campo-no-detectado');
+  }
+}
+$('tabCaptura').addEventListener('input', (e) => {
+  if (e.target.classList && e.target.classList.contains('campo-no-detectado')) {
+    e.target.classList.remove('campo-no-detectado');
+  }
+});
+
 function mostrarEstadoLecturaRecibo(campos) {
   const estadoEl = $('estadoRecibo');
   const avisoEl = $('avisoReconciliacion');
@@ -339,9 +406,10 @@ function mostrarEstadoLecturaRecibo(campos) {
   estadoEl.textContent = (campos.uso_ocr
     ? 'Se usó OCR (el PDF no traía texto aprovechable, o era una foto/escaneo). Revisa con más cuidado los datos.'
     : 'Se leyó el texto del recibo directamente.')
-    + (faltantes.length ? ` No se encontraron solos (complétalos abajo): ${faltantes.join(', ')}.` : '');
+    + (faltantes.length ? ` No se encontraron solos (quedaron marcados en naranja abajo): ${faltantes.join(', ')}.` : '');
   avisoEl.hidden = !campos.reconciliacion_advertencia;
   if (campos.reconciliacion_advertencia) avisoEl.textContent = '🛑 ' + campos.reconciliacion_advertencia;
+  marcarCamposNoDetectados(campos);
 }
 
 function intentarAutoCalcular(campos) {
@@ -370,15 +438,17 @@ function intentarAutoCalcular(campos) {
 }
 
 $('archivoRecibo').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
   const estadoEl = $('estadoRecibo');
   $('avisoReconciliacion').hidden = true;
   estadoEl.className = 'nota';
-  estadoEl.textContent = 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)...';
+  estadoEl.textContent = files.length > 1
+    ? `Leyendo ${files.length} archivos del recibo (puede tardar hasta 1 minuto por foto si usa OCR)...`
+    : 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)...';
   $('archivoRecibo').disabled = true;
   try {
-    const campos = await leerRecibo(file);
+    const campos = await leerReciboMultiple(files);
     ultimoLeido = campos;
     llenarFormularioDesdeRecibo(campos);
     mostrarEstadoLecturaRecibo(campos);
@@ -484,6 +554,7 @@ function calcularYRenderizar() {
   const r = construirResultado(input);
   r.seccionesActivas = proyectoActual.seccionesActivas || todosLosBloques();
   r.textosEditados = proyectoActual.textosEditados || {};
+  r.fotoSembrado = proyectoActual.fotoSembrado || null;
   ultimoResultado = r;
 
   // Si el proyecto todavia tiene su nombre generico de creacion ("Cotización N"), se

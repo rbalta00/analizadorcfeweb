@@ -306,6 +306,16 @@ function s06(r, _leido, onToggle) {
     'escala exacta ni seguridad estructural. La potencia y las cantidades presupuestadas no sustituyen el plano ' +
     'y los cálculos de ingeniería.'));
 
+  if (r.fotoSembrado) {
+    art.append(el('h3', null, 'Distribución de paneles sobre el techo/azotea (sembrado)'));
+    const img = document.createElement('img');
+    img.src = r.fotoSembrado.dataUrl;
+    img.alt = 'Distribución de paneles sobre el techo/azotea';
+    img.className = 'seccion-img-sembrado';
+    art.append(img);
+    art.append(badgeEstado('declarado'));
+  }
+
   // --- Condiciones actuales del inmueble (dato nuevo que no tenia un lugar en las 21
   // paginas de Python; se integra aqui -- ver propuesta al usuario de no crear una
   // seccion 22 automatica, sino usar el espacio natural de "sistema propuesto"). ---

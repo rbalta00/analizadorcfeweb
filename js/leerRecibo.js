@@ -31,3 +31,20 @@ export async function leerRecibo(file) {
   const { texto, usoOcr } = await extraerTexto(file);
   return extraerCampos(texto, usoOcr);
 }
+
+// Lee VARIOS archivos de un mismo recibo (pedido explicito del usuario: a veces el
+// recibo llega partido en 2 fotos, ej. anverso/reverso o mitad de arriba/abajo). Se
+// extrae el texto de cada archivo por separado y se concatena ANTES de buscar los
+// campos una sola vez -- asi un dato que solo aparece en la segunda foto (ej. la
+// tabla de desglose) se detecta igual que si viniera en un solo documento. El orden
+// de los archivos es el orden en que se seleccionaron/arrastraron.
+export async function leerReciboMultiple(files) {
+  const partes = [];
+  let usoOcr = false;
+  for (const file of files) {
+    const extraido = await extraerTexto(file);
+    partes.push(extraido.texto);
+    if (extraido.usoOcr) usoOcr = true;
+  }
+  return extraerCampos(partes.join('\n'), usoOcr);
+}

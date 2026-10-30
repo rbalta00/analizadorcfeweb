@@ -138,6 +138,7 @@ export function crearProyecto(cliente, { nombre } = {}) {
     inmueble: null,
     seccionesActivas: todosLosBloques(),
     textosEditados: {},
+    fotoSembrado: null, // data URL JPEG comprimido (ver imagenes.js) de la distribucion de paneles sobre el techo
   };
   cliente.proyectos = cliente.proyectos || [];
   cliente.proyectos.push(proyecto);

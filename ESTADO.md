@@ -240,8 +240,42 @@ se reinventa una formula aqui, solo se traduce.
       limite de alto, ambos bloques de contenido caben en la seccion 17 de
       siempre). Verificado visualmente en Chrome: paginas 17 y 18 del PDF completo,
       ninguna se desborda.
-- [ ] Fotografias del inmueble (condiciones del inmueble) -- declarado como
-      pendiente real, no se construyo esta sesion.
+- [x] **Recibo en varias fotos** (pedido explicito: "a veces me mandan dos fotos
+      del recibo"). Los dos inputs de recibo (`archivoRecibo` y
+      `archivoReciboNuevoProyecto`) ahora aceptan multiples archivos a la vez.
+      `leerReciboMultiple()` (`js/leerRecibo.js`) extrae el texto de cada archivo
+      por separado y los CONCATENA antes de buscar los campos una sola vez -- asi un
+      dato que solo aparece en una de las fotos (ej. la tabla de desglose en el
+      reverso) se detecta igual que si viniera en un solo documento. Verificado en
+      Chrome subiendo el mismo PDF dos veces: mismos campos exactos que subiendolo
+      una sola vez, sin duplicar ni corromper nada.
+- [x] **Campos no detectados marcados en el formulario** (pedido explicito: "te
+      pongo que tarifa, te adjunto el recibo y me marcas los datos que no se
+      leyeron" -- antes solo salian en una lista de texto). `marcarCamposNoDetectados()`
+      en `js/app.js` resalta en naranja/dorado (`.campo-no-detectado`, CSS nuevo)
+      los inputs del formulario que corresponden a campos que el lector no encontro
+      solo; la marca se quita sola en cuanto el usuario escribe algo en ese campo
+      (listener delegado en `#tabCaptura`). Verificado en Chrome: campos marcados
+      correctamente y la marca desaparece al escribir.
+- [x] **Foto del "sembrado" de paneles en la cotización** (pedido explicito, nuevo
+      boton en la seccion 4 del formulario). `js/imagenes.js` comprime cualquier
+      imagen o PDF de una pagina a un JPEG chico (max 1400px de ancho, calidad
+      ~72%) ANTES de guardarlo -- importante porque `localStorage` tiene una cuota
+      total de ~5-10MB para TODA la app, no por imagen, y una foto de celular sin
+      comprimir facilmente pesa varios MB. La foto se guarda por proyecto
+      (`proyecto.fotoSembrado = {dataUrl, ancho, alto}`), aparece en la seccion 6 en
+      pantalla, y se agrega como una PAGINA CONDICIONAL nueva del PDF
+      (`pagina06b` en `js/propuesta.js`, solo existe si hay foto cargada, dentro
+      del bloque `consumo_sistema`) -- separada de la pagina 6 normal porque esa ya
+      usa casi todo el espacio de una hoja A4 sin paginacion automatica. Verificado
+      en Chrome de punta a punta (incluido renderizar la pagina del PDF resultante
+      con pdf.js para confirmarla visualmente, porque el visor de PDF embebido no
+      renderizaba en el entorno de prueba de Edge): imagen de prueba subida,
+      comprimida, mostrada en pantalla, e incrustada correctamente en una pagina
+      nueva "07 | Distribución de paneles..." con renumeracion dinamica correcta.
+- [ ] Fotografias de condiciones generales del inmueble (sombras, cubierta, etc.,
+      mas alla de la foto del sembrado) -- sigue sin construirse, declarado como
+      pendiente en la propia seccion 6 ("No se capturan fotografías en esta versión").
 - [ ] Historial/seguimiento agregado entre TODOS los clientes (hoy cada
       cliente vive aislado en `localStorage`; compartir entre dispositivos
       seguiria requiriendo Supabase -- pendiente de decidir con el usuario).

@@ -77,6 +77,20 @@ main { max-width: 980px; margin: 0 auto; padding: 16px; }
 .fila { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
 .fila-guardar { align-items: flex-end; }
 .fila-guardar select { min-width: 220px; }
+
+/* Campos que el lector de recibo NO pudo detectar solo -- revisar y llenar a mano. */
+input.campo-no-detectado, select.campo-no-detectado {
+  border-color: #c99a2e; background: #fff8e8; box-shadow: 0 0 0 1px #c99a2e inset;
+}
+@media (prefers-color-scheme: dark) {
+  input.campo-no-detectado, select.campo-no-detectado { background: #3a2f10; }
+}
+
+.previsualizacion-sembrado { margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.previsualizacion-sembrado img {
+  max-width: 220px; max-height: 160px; border-radius: 8px; border: 1px solid var(--border); object-fit: contain;
+}
+.seccion-img-sembrado { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); margin: 10px 0; display: block; }
 .fila.cargos label { min-width: 130px; }
 label {
   display: flex;

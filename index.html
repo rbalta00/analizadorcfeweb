@@ -64,8 +64,9 @@
       <h2>Cotizaciones de este cliente</h2>
       <p class="nota">Un mismo cliente puede tener varias cotizaciones (distintos tamaños de sistema,
         actualizaciones, o predios distintos del mismo cliente). Sube un recibo para crear una cotización
-        nueva con los datos ya detectados, o arranca una en blanco.</p>
-      <input type="file" id="archivoReciboNuevoProyecto" accept=".pdf,.jpg,.jpeg,.png,.webp" />
+        nueva con los datos ya detectados, o arranca una en blanco. Si el recibo llega en varias fotos
+        (ej. anverso y reverso), selecciónalas todas juntas.</p>
+      <input type="file" id="archivoReciboNuevoProyecto" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
       <p class="nota" id="estadoReciboNuevoProyecto"></p>
       <div class="acciones"><button id="btnNuevoProyectoBlanco" class="btn-secundario">+ Cotización en blanco</button></div>
     </section>
@@ -95,9 +96,11 @@
 
       <h3>1. Recibo CFE</h3>
       <p class="nota">Sube el PDF o una foto del recibo: se detecta la tarifa sola y, si hay suficientes datos, se
-        calcula automáticamente. Si el texto no se puede leer directo del PDF se usa OCR en el propio navegador
-        -- puede tardar hasta 1 minuto. Revisa siempre los datos llenados antes de confiar en el resultado.</p>
-      <input type="file" id="archivoRecibo" accept=".pdf,.jpg,.jpeg,.png,.webp" />
+        calcula automáticamente. Si viene en varias fotos (ej. anverso y reverso), selecciónalas todas juntas.
+        Si el texto no se puede leer directo del PDF se usa OCR en el propio navegador -- puede tardar hasta 1
+        minuto. Los campos que no se detectaron solos quedan marcados en naranja abajo: revísalos y
+        complétalos a mano antes de confiar en el resultado.</p>
+      <input type="file" id="archivoRecibo" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
       <p class="nota" id="estadoRecibo"></p>
       <p class="nota aviso" id="avisoReconciliacion" hidden></p>
 
@@ -190,6 +193,13 @@
           <select id="escalaCostos"><option value="residencial">Residencial (chico)</option><option value="comercial">Comercial (grande)</option></select>
         </label>
         <label>Incremento anual estimado de la tarifa CFE (%)<input id="escalamiento" type="number" value="4.0" step="0.5" /></label>
+      </div>
+      <p class="nota">Foto del sembrado de paneles (distribución sobre el techo/azotea), si ya la tienes --
+        se agrega a la sección 6 en pantalla y al PDF. Imagen o PDF de una sola página.</p>
+      <input type="file" id="archivoSembrado" accept=".jpg,.jpeg,.png,.webp,.pdf" />
+      <div id="previsualizacionSembrado" class="previsualizacion-sembrado" hidden>
+        <img id="imgPreviaSembrado" alt="Foto del sembrado de paneles" />
+        <button id="btnQuitarSembrado" class="btn-link">🗑 Quitar foto</button>
       </div>
 
       <h3>5. Condiciones actuales del inmueble <span class="nota">(declarado por el cliente o visto en sitio; se integra en la sección 6)</span></h3>
