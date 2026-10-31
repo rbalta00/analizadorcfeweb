@@ -112,6 +112,28 @@
       <span class="chip-proyecto">· <span id="proyectoNombreBarra"></span></span>
     </div>
 
+    <section class="tarjeta" id="tabSeguimiento">
+      <h2>📋 Seguimiento de esta cotización</h2>
+      <div class="fila">
+        <label>Etapa
+          <select id="etapaProyecto">
+            <option value="cotizado">Cotizado</option>
+            <option value="negociando">Negociando</option>
+            <option value="ganado">Ganado</option>
+            <option value="perdido">Perdido</option>
+            <option value="instalado">Instalado</option>
+          </select>
+        </label>
+      </div>
+      <div class="fila">
+        <label style="flex:1">Agregar nota de seguimiento
+          <input id="nuevaNotaSeguimiento" type="text" placeholder="Ej. Llamé, va a confirmar la próxima semana" />
+        </label>
+        <button id="btnAgregarNotaSeguimiento" class="btn-secundario" style="align-self:flex-end">+ Agregar</button>
+      </div>
+      <div id="listaNotasSeguimiento" class="lista-notas-seguimiento"></div>
+    </section>
+
     <nav id="indiceSecciones" class="indice-secciones">
       <button id="btnToggleIndice" class="btn-toggle-indice">☰ Índice de secciones</button>
       <div id="indiceLista" class="indice-lista"></div>

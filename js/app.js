@@ -324,13 +324,19 @@ async function descartarEnvio(envio) {
 // =====================================================================
 // Pantalla: Cotizaciones/proyectos de un cliente
 // =====================================================================
+const ETAPAS_PROYECTO = {
+  cotizado: 'Cotizado', negociando: 'Negociando', ganado: 'Ganado', perdido: 'Perdido', instalado: 'Instalado',
+};
+
 function tarjetaProyecto(p) {
   const div = document.createElement('div');
   div.className = 'tarjeta-cliente';
   const estado = p.cotizacionGuardadaEn
     ? `✓ cotización guardada el ${new Date(p.cotizacionGuardadaEn).toLocaleDateString('es-MX')}`
     : (p.formulario ? 'con datos capturados, cotización sin guardar todavía' : 'sin datos capturados todavía');
+  const etapa = p.etapa || 'cotizado';
   div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(p.nombre)}</strong>` +
+    `<span class="chip-etapa chip-etapa-${etapa}">${ETAPAS_PROYECTO[etapa]}</span>` +
     `<span class="nota">${estado} · actualizado ${new Date(p.actualizadoEn).toLocaleDateString('es-MX')}</span></div>`;
   div.addEventListener('click', () => abrirProyecto(clienteActual.id, p.id));
   const btnBorrar = document.createElement('button');
@@ -466,6 +472,8 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   mostrarPreviaSembrado(proyectoActual.fotoSembrado);
   renderIndice(null);
   renderComparacion();
+  $('etapaProyecto').value = proyectoActual.etapa || 'cotizado';
+  renderNotasSeguimiento();
   if (camposIniciales) {
     ultimoLeido = camposIniciales;
     llenarFormularioDesdeRecibo(camposIniciales);
@@ -946,6 +954,28 @@ $('btnLimpiarComparacion').addEventListener('click', () => {
   guardarCliente(clienteActual);
   renderComparacion();
   $('estadoComparacion').textContent = '';
+});
+
+// ---------------- Seguimiento tipo CRM (etapa + notas por cotizacion) ----------------
+function renderNotasSeguimiento() {
+  const notas = (proyectoActual && proyectoActual.notasSeguimiento) || [];
+  $('listaNotasSeguimiento').innerHTML = notas.slice().reverse().map(n => `
+    <div class="nota-seguimiento"><span class="nota-fecha">${new Date(n.fecha).toLocaleString('es-MX')}</span>${escapeHtml(n.texto)}</div>
+  `).join('') || '<p class="nota">Sin notas de seguimiento todavía.</p>';
+}
+$('etapaProyecto').addEventListener('change', () => {
+  if (!proyectoActual) return;
+  proyectoActual.etapa = $('etapaProyecto').value;
+  guardarProyecto(clienteActual, proyectoActual);
+});
+$('btnAgregarNotaSeguimiento').addEventListener('click', () => {
+  const texto = $('nuevaNotaSeguimiento').value.trim();
+  if (!texto || !proyectoActual) return;
+  proyectoActual.notasSeguimiento = proyectoActual.notasSeguimiento || [];
+  proyectoActual.notasSeguimiento.push({ fecha: new Date().toISOString(), texto });
+  guardarProyecto(clienteActual, proyectoActual);
+  $('nuevaNotaSeguimiento').value = '';
+  renderNotasSeguimiento();
 });
 
 // ---------------- 21 secciones: render + navegacion ----------------

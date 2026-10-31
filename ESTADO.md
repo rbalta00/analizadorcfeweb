@@ -635,9 +635,15 @@ se reinventa una formula aqui, solo se traduce.
   web lo mejora guardándolo persistente -- no se tocó Streamlit (regla vigente).
   Verificado: calcular 2 tamaños distintos del mismo cliente (cambiando cobertura)
   y agregar ambos a la comparación muestra las 2 filas con sus números correctos.
+- **Seguimiento tipo CRM** (etapa + notas, por cotización): select de etapa
+  (Cotizado/Negociando/Ganado/Perdido/Instalado) y lista de notas con fecha, en una
+  tarjeta nueva siempre visible al abrir una cotización (`#tabSeguimiento`, no es una
+  de las 21 secciones). La etapa se ve como chip de color en la tarjeta de cada
+  cotización en la lista del cliente, para ver el estatus sin tener que abrir cada
+  una. Verificado en Chrome real: cambiar etapa a "Negociando" + agregar una nota se
+  guarda y se ve el chip correcto en la lista.
 - Pendiente de este mismo encargo, todavía sin construir: **documentación de
-  trámite de interconexión CFE** (diagrama unifilar + croquis de ubicación) y
-  **seguimiento tipo CRM** (etapa del cliente + notas).
+  trámite de interconexión CFE** (diagrama unifilar + croquis de ubicación).
 
 ## Como probarlo en el navegador
 ```
