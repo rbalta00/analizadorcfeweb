@@ -667,6 +667,38 @@ se reinventa una formula aqui, solo se traduce.
     5 cajas y las flechas salen limpias y legibles, el checklist y el link de Maps
     se ven bien.
 
+### Dos bugs reales encontrados y corregidos el mismo día (2026-10-30, noche)
+- **Subir una 2a foto del mismo recibo por separado borraba la 1a** -- el usuario
+  preguntó "¿no puedes leer fotos?" porque en la práctica solo lograba subir un
+  archivo a la vez. La causa real: un `<input type="file">` normal REEMPLAZA la
+  selección anterior cada vez que se usa de nuevo (comportamiento estándar del
+  navegador, no un bug de HTML) -- si el cliente toma la foto 1, la app la procesa, y
+  luego toma la foto 2 aparte, la 2a reemplazaba a la 1a en vez de sumarse, perdiendo
+  los datos que solo traía la primera. Para el input `archivoReciboNuevoProyecto`
+  (crear cotización nueva) el problema era peor: cada foto adicional creaba una
+  cotización NUEVA en vez de agregarse a la ya creada.
+  - Arreglado con un acumulador compartido `archivosReciboAcumulados` (modulo-level en
+    `app.js`): cada `change` del input SUMA los archivos nuevos a los ya
+    seleccionados (en vez de reemplazar) y vuelve a correr `leerReciboMultiple()`
+    sobre el conjunto COMPLETO -- así una foto nueva completa/corrige los datos en
+    vez de perder lo que ya se había leído. `e.target.value = ''` después de cada
+    lectura para poder reusar el mismo input. El handler de "nuevo proyecto" ya NO
+    crea un proyecto por cada foto -- solo en la primera; las siguientes actualizan
+    el mismo proyecto recién creado.
+  - El acumulador se reinicia solo al abrir un proyecto SIN `camposIniciales`
+    (proyecto ya guardado, o uno en blanco) y al entrar a la lista de proyectos de
+    un cliente -- para no arrastrar fotos de un cliente/cotización distinta.
+  - Verificado en Chrome real con 2 fotos reales (no simuladas): subir la 1a, luego
+    la 2a por separado -- con un log temporal se confirmó que la 2a lectura usó los
+    2 archivos acumulados, no solo el nuevo (se quitó el log antes de pushear).
+- **Los paneles nuevos (editor de precios, financiamiento, comparación,
+  seguimiento) no se podían apagar** -- a diferencia de las 21 secciones, no tenían
+  el mismo interruptor. Se agregó el mismo patrón `.toggle-seccion` a cada uno
+  (checkbox "Mostrar este panel" en su propio header), guardado por PROYECTO en
+  `proyectoActual.panelesActivos` (igual que `seccionesActivas`) -- persiste al
+  cambiar de cotización y volver. Verificado en Chrome real: apagar financiamiento,
+  salir del proyecto, volver a entrar -- sigue apagado.
+
 ## Como probarlo en el navegador
 ```
 cd web

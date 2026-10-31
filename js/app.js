@@ -34,6 +34,13 @@ let proyectoActual = null;
 let ultimoResultado = null;
 let ultimoLeido = null;
 let seccionObserver = null;
+// Fotos del recibo acumuladas entre varias selecciones -- un <input type="file"> normal
+// REEMPLAZA la seleccion anterior cada vez que se usa de nuevo (no la suma), lo cual
+// rompia el caso real "el cliente saca la foto 1, luego decide que falta la foto 2 y la
+// agrega aparte": la 2a foto se procesaba sola y perdia los datos que solo traia la 1a.
+// Pedido explicito del usuario tras encontrar esto probando la app. Se resetea al abrir
+// un proyecto distinto (abrirProyecto) o uno en blanco -- ver mas abajo.
+let archivosReciboAcumulados = [];
 
 function escapeHtml(s) {
   const d = document.createElement('div');
@@ -368,6 +375,7 @@ function mostrarPantallaProyectos(clienteId) {
   clienteActual = obtenerCliente(clienteId);
   if (!clienteActual) { mostrarPantallaClientes(); return; }
   proyectoActual = null; ultimoResultado = null; ultimoLeido = null;
+  archivosReciboAcumulados = []; // empieza limpio -- no arrastrar fotos de otro cliente/proyecto
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
   $('pantallaProyectos').hidden = false;
@@ -392,25 +400,36 @@ $('btnNuevoProyectoBlanco').addEventListener('click', () => {
 // recibo DENTRO de una cotización ya abierta (sección 1 más abajo), eso actualiza esa
 // MISMA cotización -- no crea una nueva cada vez que se corrige un dato.
 $('archivoReciboNuevoProyecto').addEventListener('change', async (e) => {
-  const files = Array.from(e.target.files || []);
-  if (!files.length) return;
+  const nuevos = Array.from(e.target.files || []);
+  if (!nuevos.length) return;
+  e.target.value = ''; // permite volver a usar el mismo input para agregar otra foto despues
+  archivosReciboAcumulados = archivosReciboAcumulados.concat(nuevos);
+  const files = archivosReciboAcumulados;
   const estadoEl = $('estadoReciboNuevoProyecto');
   estadoEl.className = 'nota';
   estadoEl.textContent = files.length > 1
-    ? `Leyendo ${files.length} archivos del recibo (puede tardar hasta 1 minuto por foto si usa OCR)...`
-    : 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)...';
+    ? `Leyendo ${files.length} archivos del recibo (puede tardar hasta 1 minuto por foto si usa OCR)... Si te falta otra foto del mismo recibo, puedes seguir agregándolas con este mismo botón.`
+    : 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)... Si el recibo viene en más fotos, agrégalas con este mismo botón antes de seguir.';
   $('archivoReciboNuevoProyecto').disabled = true;
   try {
     const campos = await leerReciboMultiple(files);
-    const proyecto = crearProyecto(clienteActual, { nombre: campos.titular || undefined });
-    abrirProyecto(clienteActual.id, proyecto.id, { camposIniciales: campos });
+    if (!proyectoActual) {
+      const proyecto = crearProyecto(clienteActual, { nombre: campos.titular || undefined });
+      abrirProyecto(clienteActual.id, proyecto.id, { camposIniciales: campos });
+    } else {
+      // Ya se habia creado el proyecto con una foto anterior -- esta foto nueva se suma,
+      // no se crea un proyecto aparte. Actualiza el mismo proyecto ya abierto.
+      ultimoLeido = campos;
+      llenarFormularioDesdeRecibo(campos);
+      mostrarEstadoLecturaRecibo(campos);
+      intentarAutoCalcular(campos);
+    }
   } catch (err) {
     estadoEl.className = 'nota';
     estadoEl.textContent = 'Error al leer el recibo: ' + err.message;
     console.error(err);
   } finally {
     $('archivoReciboNuevoProyecto').disabled = false;
-    e.target.value = '';
   }
 });
 
@@ -453,6 +472,11 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('clienteTipoBarra').textContent = clienteActual.tipo === 'gobierno' ? 'Gobierno' : 'Particular';
   $('clienteTipoBarra').className = `chip-tipo chip-tipo-${clienteActual.tipo}`;
   $('proyectoNombreBarra').textContent = proyectoActual.nombre;
+  // Si se abre con camposIniciales, viene de subir una foto nueva (nuevo proyecto o
+  // "nuevo proyecto en blanco" sin fotos) -- se conserva lo acumulado para poder seguir
+  // agregando fotos del mismo recibo aqui dentro. Si se abre SIN camposIniciales (un
+  // proyecto ya guardado, o uno en blanco recien creado), se empieza limpio.
+  if (!camposIniciales) archivosReciboAcumulados = [];
   ultimoLeido = proyectoActual.campos || null;
   ultimoResultado = null;
   $('contenedorSecciones').innerHTML = '';
@@ -472,6 +496,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   mostrarPreviaSembrado(proyectoActual.fotoSembrado);
   renderIndice(null);
   renderComparacion();
+  aplicarEstadoPanel('chkPanelSeguimiento', 'contenidoSeguimiento', 'seguimiento');
   $('etapaProyecto').value = proyectoActual.etapa || 'cotizado';
   renderNotasSeguimiento();
   if (camposIniciales) {
@@ -708,14 +733,17 @@ function intentarAutoCalcular(campos) {
 }
 
 $('archivoRecibo').addEventListener('change', async (e) => {
-  const files = Array.from(e.target.files || []);
-  if (!files.length) return;
+  const nuevos = Array.from(e.target.files || []);
+  if (!nuevos.length) return;
+  e.target.value = ''; // permite volver a usar el mismo input para agregar otra foto despues
+  archivosReciboAcumulados = archivosReciboAcumulados.concat(nuevos);
+  const files = archivosReciboAcumulados;
   const estadoEl = $('estadoRecibo');
   $('avisoReconciliacion').hidden = true;
   estadoEl.className = 'nota';
   estadoEl.textContent = files.length > 1
-    ? `Leyendo ${files.length} archivos del recibo (puede tardar hasta 1 minuto por foto si usa OCR)...`
-    : 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)...';
+    ? `Leyendo ${files.length} archivos del recibo (puede tardar hasta 1 minuto por foto si usa OCR)... Si te falta otra foto del mismo recibo, puedes seguir agregándolas con este mismo botón.`
+    : 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)... Si el recibo viene en más fotos, agrégalas con este mismo botón antes de seguir.';
   $('archivoRecibo').disabled = true;
   try {
     const campos = await leerReciboMultiple(files);
@@ -855,7 +883,40 @@ function calcularYRenderizar() {
 
 // ---------------- Editor de precios de materiales (puerto de la seccion "Ajustar
 // precios de materiales" de Streamlit) ----------------
+// ---------------- Mostrar/ocultar los paneles que NO son una de las 21 secciones
+// (editor de precios, financiamiento, comparacion, seguimiento) -- pedido explicito
+// del usuario: "las secciones creadas despues del numero 21 no se pueden apagar". No
+// son parte del PDF (son herramientas de pantalla), asi que "apagar" aqui es solo
+// ocultarlas de la vista si no se necesitan -- se guarda por PROYECTO, igual que
+// seccionesActivas.
+function panelActivo(nombre) {
+  if (!proyectoActual) return true;
+  proyectoActual.panelesActivos = proyectoActual.panelesActivos || {};
+  return proyectoActual.panelesActivos[nombre] !== false;
+}
+function conectarTogglePanel(chkId, contenidoId, nombre) {
+  $(chkId).addEventListener('change', () => {
+    const activo = $(chkId).checked;
+    $(contenidoId).hidden = !activo;
+    if (proyectoActual) {
+      proyectoActual.panelesActivos = proyectoActual.panelesActivos || {};
+      proyectoActual.panelesActivos[nombre] = activo;
+      guardarProyecto(clienteActual, proyectoActual);
+    }
+  });
+}
+function aplicarEstadoPanel(chkId, contenidoId, nombre) {
+  const activo = panelActivo(nombre);
+  $(chkId).checked = activo;
+  $(contenidoId).hidden = !activo;
+}
+conectarTogglePanel('chkPanelEditorPrecios', 'contenidoEditorPrecios', 'editorPrecios');
+conectarTogglePanel('chkPanelFinanciamiento', 'contenidoFinanciamiento', 'financiamiento');
+conectarTogglePanel('chkPanelComparacion', 'contenidoComparacion', 'comparacion');
+conectarTogglePanel('chkPanelSeguimiento', 'contenidoSeguimiento', 'seguimiento');
+
 function renderEditorPrecios(r) {
+  aplicarEstadoPanel('chkPanelEditorPrecios', 'contenidoEditorPrecios', 'editorPrecios');
   $('tabEditorPrecios').hidden = false;
   $('estadoEditorPrecios').textContent = '';
   const tbody = $('filasEditorPrecios');
@@ -892,6 +953,7 @@ $('btnRecalcularPrecios').addEventListener('click', () => {
 
 // ---------------- Simulador de financiamiento (puerto de Streamlit) ----------------
 function renderFinanciamiento(r) {
+  aplicarEstadoPanel('chkPanelFinanciamiento', 'contenidoFinanciamiento', 'financiamiento');
   $('tabFinanciamiento').hidden = false;
   const enganchePct = Number($('finEnganche').value);
   const tasaPct = Number($('finTasa').value);
@@ -922,6 +984,7 @@ function renderFinanciamiento(r) {
 // pedido del usuario: "si el cliente duda entre varios tamanos... poder compararlos
 // uno junto al otro") ----------------
 function renderComparacion() {
+  aplicarEstadoPanel('chkPanelComparacion', 'contenidoComparacion', 'comparacion');
   const lista = (clienteActual && clienteActual.escenariosComparacion) || [];
   const tabla = $('tablaComparacion');
   tabla.hidden = !lista.length;

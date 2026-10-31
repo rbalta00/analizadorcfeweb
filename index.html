@@ -113,25 +113,30 @@
     </div>
 
     <section class="tarjeta" id="tabSeguimiento">
-      <h2>📋 Seguimiento de esta cotización</h2>
-      <div class="fila">
-        <label>Etapa
-          <select id="etapaProyecto">
-            <option value="cotizado">Cotizado</option>
-            <option value="negociando">Negociando</option>
-            <option value="ganado">Ganado</option>
-            <option value="perdido">Perdido</option>
-            <option value="instalado">Instalado</option>
-          </select>
-        </label>
+      <div class="seccion-header">
+        <h2>📋 Seguimiento de esta cotización</h2>
+        <label class="toggle-seccion"><input type="checkbox" id="chkPanelSeguimiento" checked /> Mostrar este panel</label>
       </div>
-      <div class="fila">
-        <label style="flex:1">Agregar nota de seguimiento
-          <input id="nuevaNotaSeguimiento" type="text" placeholder="Ej. Llamé, va a confirmar la próxima semana" />
-        </label>
-        <button id="btnAgregarNotaSeguimiento" class="btn-secundario" style="align-self:flex-end">+ Agregar</button>
+      <div class="panel-contenido" id="contenidoSeguimiento">
+        <div class="fila">
+          <label>Etapa
+            <select id="etapaProyecto">
+              <option value="cotizado">Cotizado</option>
+              <option value="negociando">Negociando</option>
+              <option value="ganado">Ganado</option>
+              <option value="perdido">Perdido</option>
+              <option value="instalado">Instalado</option>
+            </select>
+          </label>
+        </div>
+        <div class="fila">
+          <label style="flex:1">Agregar nota de seguimiento
+            <input id="nuevaNotaSeguimiento" type="text" placeholder="Ej. Llamé, va a confirmar la próxima semana" />
+          </label>
+          <button id="btnAgregarNotaSeguimiento" class="btn-secundario" style="align-self:flex-end">+ Agregar</button>
+        </div>
+        <div id="listaNotasSeguimiento" class="lista-notas-seguimiento"></div>
       </div>
-      <div id="listaNotasSeguimiento" class="lista-notas-seguimiento"></div>
     </section>
 
     <nav id="indiceSecciones" class="indice-secciones">
@@ -325,46 +330,61 @@
     <div id="contenedorSecciones"></div>
 
     <section class="tarjeta" id="tabEditorPrecios" hidden>
-      <h2>✏️ Ajustar precios de materiales</h2>
-      <p class="nota">Si ya tienes una cotización real de un proveedor (ej. el inversor), sobreescribe el
-        "Importe" de ese renglón y pulsa Recalcular. Se vuelve a calcular Subtotal, IVA, inversión total, flujo
-        a 25 años y recuperación con los precios nuevos. El ahorro de factura (depende del consumo/tarifa, no
-        del costo del sistema) no cambia.</p>
-      <div class="tabla-wrap"><table class="tabla-seccion">
-        <thead><tr><th>Partida</th><th>Cantidad</th><th>Unidad</th><th>Importe (MXN)</th></tr></thead>
-        <tbody id="filasEditorPrecios"></tbody>
-      </table></div>
-      <div class="acciones"><button id="btnRecalcularPrecios" class="btn-secundario">🔄 Recalcular con estos precios</button></div>
-      <p class="nota" id="estadoEditorPrecios"></p>
+      <div class="seccion-header">
+        <h2>✏️ Ajustar precios de materiales</h2>
+        <label class="toggle-seccion"><input type="checkbox" id="chkPanelEditorPrecios" checked /> Mostrar este panel</label>
+      </div>
+      <div class="panel-contenido" id="contenidoEditorPrecios">
+        <p class="nota">Si ya tienes una cotización real de un proveedor (ej. el inversor), sobreescribe el
+          "Importe" de ese renglón y pulsa Recalcular. Se vuelve a calcular Subtotal, IVA, inversión total, flujo
+          a 25 años y recuperación con los precios nuevos. El ahorro de factura (depende del consumo/tarifa, no
+          del costo del sistema) no cambia.</p>
+        <div class="tabla-wrap"><table class="tabla-seccion">
+          <thead><tr><th>Partida</th><th>Cantidad</th><th>Unidad</th><th>Importe (MXN)</th></tr></thead>
+          <tbody id="filasEditorPrecios"></tbody>
+        </table></div>
+        <div class="acciones"><button id="btnRecalcularPrecios" class="btn-secundario">🔄 Recalcular con estos precios</button></div>
+        <p class="nota" id="estadoEditorPrecios"></p>
+      </div>
     </section>
 
     <section class="tarjeta" id="tabComparacion">
-      <h2>⚖️ Comparar escenarios de este cliente</h2>
-      <p class="nota">Si el cliente duda entre varios tamaños de sistema, calcula cada opción y agrégala aquí para
-        verlas una junto a otra. Se guarda por cliente, no por cotización -- sobrevive aunque cambies de
-        cotización o cierres la app.</p>
-      <div class="acciones"><button id="btnAgregarComparacion" class="btn-secundario">➕ Agregar escenario actual</button>
-        <button id="btnLimpiarComparacion" class="btn-link">🗑 Limpiar comparación</button></div>
-      <div class="tabla-wrap"><table class="tabla-seccion" id="tablaComparacion" hidden>
-        <thead><tr><th>Escenario</th><th>Paneles</th><th>kWp</th><th>Inversión</th><th>Ahorro año 1</th>
-          <th>% ahorro</th><th>Payback</th><th>VAN 25a</th><th>TIR</th></tr></thead>
-        <tbody id="filasComparacion"></tbody>
-      </table></div>
-      <p class="nota" id="estadoComparacion"></p>
+      <div class="seccion-header">
+        <h2>⚖️ Comparar escenarios de este cliente</h2>
+        <label class="toggle-seccion"><input type="checkbox" id="chkPanelComparacion" checked /> Mostrar este panel</label>
+      </div>
+      <div class="panel-contenido" id="contenidoComparacion">
+        <p class="nota">Si el cliente duda entre varios tamaños de sistema, calcula cada opción y agrégala aquí para
+          verlas una junto a otra. Se guarda por cliente, no por cotización -- sobrevive aunque cambies de
+          cotización o cierres la app.</p>
+        <div class="acciones"><button id="btnAgregarComparacion" class="btn-secundario">➕ Agregar escenario actual</button>
+          <button id="btnLimpiarComparacion" class="btn-link">🗑 Limpiar comparación</button></div>
+        <div class="tabla-wrap"><table class="tabla-seccion" id="tablaComparacion" hidden>
+          <thead><tr><th>Escenario</th><th>Paneles</th><th>kWp</th><th>Inversión</th><th>Ahorro año 1</th>
+            <th>% ahorro</th><th>Payback</th><th>VAN 25a</th><th>TIR</th></tr></thead>
+          <tbody id="filasComparacion"></tbody>
+        </table></div>
+        <p class="nota" id="estadoComparacion"></p>
+      </div>
     </section>
 
     <section class="tarjeta" id="tabFinanciamiento" hidden>
-      <h2>💰 Financiamiento (opcional)</h2>
-      <p class="nota">Simulación genérica de crédito a cuota fija -- NO es una oferta de financiamiento real, la
-        tasa y el plazo reales los pone el banco/financiera que el cliente elija. Sirve para la conversación de
-        "¿el ahorro paga el crédito?".</p>
-      <div class="fila">
-        <label>Enganche (%)<input id="finEnganche" type="number" value="20" min="0" max="100" step="5" /></label>
-        <label>Tasa de interés anual (%)<input id="finTasa" type="number" value="18" min="0" max="60" step="0.5" /></label>
-        <label>Plazo (años)<input id="finPlazo" type="number" value="5" min="1" max="15" step="1" /></label>
+      <div class="seccion-header">
+        <h2>💰 Financiamiento (opcional)</h2>
+        <label class="toggle-seccion"><input type="checkbox" id="chkPanelFinanciamiento" checked /> Mostrar este panel</label>
       </div>
-      <div id="resultadoFinanciamiento" class="tarjetas-metricas"></div>
-      <p class="nota" id="veredictoFinanciamiento"></p>
+      <div class="panel-contenido" id="contenidoFinanciamiento">
+        <p class="nota">Simulación genérica de crédito a cuota fija -- NO es una oferta de financiamiento real, la
+          tasa y el plazo reales los pone el banco/financiera que el cliente elija. Sirve para la conversación de
+          "¿el ahorro paga el crédito?".</p>
+        <div class="fila">
+          <label>Enganche (%)<input id="finEnganche" type="number" value="20" min="0" max="100" step="5" /></label>
+          <label>Tasa de interés anual (%)<input id="finTasa" type="number" value="18" min="0" max="60" step="0.5" /></label>
+          <label>Plazo (años)<input id="finPlazo" type="number" value="5" min="1" max="15" step="1" /></label>
+        </div>
+        <div id="resultadoFinanciamiento" class="tarjetas-metricas"></div>
+        <p class="nota" id="veredictoFinanciamiento"></p>
+      </div>
     </section>
 
     <section class="tarjeta" id="tabPdf" hidden>
