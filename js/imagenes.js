@@ -25,7 +25,7 @@ function redimensionarCanvas(canvasOrigen, maxAncho) {
   return canvas;
 }
 
-function cargarImagenDesdeArchivo(file) {
+export function cargarImagenDesdeArchivo(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);

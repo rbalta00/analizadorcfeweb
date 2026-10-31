@@ -94,6 +94,16 @@ div.campo-no-detectado {
 
 .input-precio-material { width: 110px; padding: 4px 6px; }
 
+.modal-sembrado {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-sembrado-contenido {
+  background: var(--bg); border-radius: 10px; padding: 18px; max-width: 960px; width: 100%;
+  max-height: 92vh; overflow-y: auto;
+}
+#canvasSembrado { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; display: block; margin: 10px 0; }
+
 .previsualizacion-sembrado { margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .previsualizacion-sembrado img {
   max-width: 220px; max-height: 160px; border-radius: 8px; border: 1px solid var(--border); object-fit: contain;

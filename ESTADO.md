@@ -699,6 +699,37 @@ se reinventa una formula aqui, solo se traduce.
   cambiar de cotización y volver. Verificado en Chrome real: apagar financiamiento,
   salir del proyecto, volver a entrar -- sigue apagado.
 
+### Herramienta interactiva de distribución de paneles sobre foto aérea (2026-10-30, noche)
+- El usuario preguntó si la web podía "insertar y distribuir los paneles sobre las
+  azoteas" al calcular, o si solo se podía subir una foto ya hecha. Se revisó: la web
+  solo tenía el upload simple; la app de Streamlit SÍ tenía una herramienta
+  interactiva (`sembrar_paneles.py` + `streamlit-image-coordinates`) para marcar
+  puntos en una foto aérea y dibujar los paneles a escala. El usuario pidió portarla
+  también a la web.
+- `js/sembrado.js` (nuevo): puerto a Canvas2D de `sembrar_paneles.py`. El usuario sube
+  una foto aérea/satelital (ej. captura de Google Earth), hace clic en 2 puntos cuya
+  distancia real conoce (para calibrar px/metro) y despues en las 2 esquinas opuestas
+  del área del techo -- la herramienta calcula solas las columnas/filas que caben con
+  el numero de paneles YA CALCULADO (`r.n`, no hay que volver a capturarlo) y los
+  dibuja numerados, con el mismo aviso de Streamlit: "DISTRIBUCIÓN CONCEPTUAL · NO ES
+  PLANO DE INGENIERÍA · VALIDAR EN SITIO". Tamaño del panel configurable (default
+  1.134 × 2.278 m, mismo default que Streamlit), con opción vertical/horizontal.
+- UI: modal nuevo (`#modalSembrado`) con el canvas y los controles, abierto por un
+  botón nuevo "🧩 Dibujar distribución sobre una foto aérea" junto al upload normal
+  de "Foto del sembrado" en la sección 4. Al guardar, el resultado se exporta como
+  imagen comprimida y se asigna a `proyectoActual.fotoSembrado` -- **reusa exactamente
+  el mismo flujo de guardado/visualización/PDF que ya existía** para la foto subida a
+  mano (sección 6 en pantalla + página del PDF), no se tocó esa parte.
+- Requiere haber calculado primero (usa `ultimoResultado.n`) -- si no, avisa y no deja
+  abrir la herramienta.
+- `imagenes.js`: se exportó `cargarImagenDesdeArchivo` (ya existía, antes privada) para
+  reusarla en el editor.
+- Verificado en Chrome real con una foto de prueba real: subir foto → marcar 2 puntos
+  + escribir 20 m → marcar 2 esquinas del techo → "Dibujar paneles" dibujó
+  correctamente 13 paneles (13 columnas × 1 fila, el mismo número ya calculado) con
+  el aviso de distribución conceptual → "Guardar" → aparece en la sección 6 en
+  pantalla y el PDF se generó sin errores.
+
 ## Como probarlo en el navegador
 ```
 cd web

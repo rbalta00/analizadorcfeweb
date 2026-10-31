@@ -12,6 +12,10 @@ import { generarPdf } from './propuesta.js';
 import { generarResumenEjecutivo, generarGuiaPresentacion, generarAnexoInterconexion } from './resumen.js';
 import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida } from './imagenes.js';
+import {
+  iniciarEditorSembrado, deshacerUltimoPuntoSembrado, dibujarPanelesSembrado,
+  exportarCanvasSembrado, cerrarEditorSembrado,
+} from './sembrado.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion } from './bloques.js';
 import { M, PCT } from './util.js';
@@ -613,6 +617,80 @@ $('btnQuitarSembrado').addEventListener('click', () => {
   guardarProyecto(clienteActual, proyectoActual);
   mostrarPreviaSembrado(null);
   if (ultimoResultado) { ultimoResultado.fotoSembrado = null; renderSecciones(ultimoResultado); }
+});
+
+// ---------------- Editor interactivo de distribucion de paneles (dibuja sobre una
+// foto aerea los N paneles YA CALCULADOS -- puerto de sembrar_paneles.py/Streamlit) ----------------
+let paneleroDibujado = null;
+function actualizarInstruccionSembrado(info) {
+  const txt = $('instruccionSembrado');
+  if (info.pasoCota) {
+    txt.textContent = 'Paso 1 de 2: haz clic en 2 puntos de la foto cuya distancia real conozcas -- luego escribe esa distancia en metros abajo.';
+  } else if (info.pasoTecho) {
+    txt.textContent = 'Paso 2 de 2: haz clic en las 2 esquinas opuestas del área del techo donde van los paneles.';
+  } else if (info.listoParaDibujar) {
+    txt.textContent = 'Listo -- revisa la distancia en metros y el tamaño del panel, y pulsa "Dibujar paneles".';
+  }
+  $('btnDibujarPanelesSembrado').disabled = !info.listoParaDibujar;
+}
+$('btnAbrirEditorSembrado').addEventListener('click', () => {
+  if (!ultimoResultado || !ultimoResultado.n) {
+    alert('Primero calcula la cotización -- esta herramienta dibuja el número de paneles que ya se calculó.');
+    return;
+  }
+  $('archivoFotoAereaSembrado').click();
+});
+$('archivoFotoAereaSembrado').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  paneleroDibujado = null;
+  $('btnGuardarSembrado').disabled = true;
+  $('estadoSembrado').textContent = '';
+  $('modalSembrado').hidden = false;
+  try {
+    await iniciarEditorSembrado({ canvas: $('canvasSembrado'), imgFile: file, onCambioEstado: actualizarInstruccionSembrado });
+  } catch (err) {
+    $('estadoSembrado').className = 'nota aviso';
+    $('estadoSembrado').textContent = 'No se pudo cargar la imagen: ' + err.message;
+  }
+});
+$('btnDeshacerPuntoSembrado').addEventListener('click', () => {
+  const info = deshacerUltimoPuntoSembrado();
+  if (info) actualizarInstruccionSembrado(info);
+  $('btnGuardarSembrado').disabled = true;
+});
+$('btnDibujarPanelesSembrado').addEventListener('click', () => {
+  const resultado = dibujarPanelesSembrado({
+    distanciaRealM: Number($('distanciaRealSembrado').value),
+    nPaneles: ultimoResultado.n,
+    anchoM: Number($('panelAnchoSembrado').value) || 1.134,
+    altoM: Number($('panelAltoSembrado').value) || 2.278,
+    vertical: $('panelVerticalSembrado').checked,
+  });
+  if (!resultado) {
+    $('estadoSembrado').className = 'nota aviso';
+    $('estadoSembrado').textContent = 'Falta marcar los 4 puntos y escribir la distancia real en metros (mayor que 0).';
+    return;
+  }
+  paneleroDibujado = resultado;
+  $('btnGuardarSembrado').disabled = false;
+  $('estadoSembrado').className = 'nota ok';
+  $('estadoSembrado').textContent = `Dibujados ${resultado.paneles} paneles (${resultado.columnas} columnas × ${resultado.filas} filas). Si se ve mal, deshaz un punto y vuelve a intentar, o ajusta el tamaño del panel.`;
+});
+$('btnGuardarSembrado').addEventListener('click', () => {
+  if (!paneleroDibujado) return;
+  const foto = exportarCanvasSembrado();
+  proyectoActual.fotoSembrado = foto;
+  guardarProyecto(clienteActual, proyectoActual);
+  mostrarPreviaSembrado(foto);
+  if (ultimoResultado) { ultimoResultado.fotoSembrado = foto; renderSecciones(ultimoResultado); }
+  cerrarEditorSembrado();
+  $('modalSembrado').hidden = true;
+});
+$('btnCerrarSembrado').addEventListener('click', () => {
+  cerrarEditorSembrado();
+  $('modalSembrado').hidden = true;
 });
 
 // ---------------- Recibo: leer + autollenar + auto-calcular ----------------
