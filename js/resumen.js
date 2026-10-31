@@ -5,7 +5,8 @@
 // - generarGuiaPresentacion: 1 pagina generica (no depende de ningun caso) de como
 //   presentar cualquier cotizacion de 21 paginas.
 import {
-  CONTENT_TOP, CONTENT_W, headX, subX, bodyX, spacer, cardsRow, notice, table, buildPdf,
+  CONTENT_TOP, CONTENT_W, MARGIN_L, headX, subX, bodyX, spacer, cardsRow, notice, table, buildPdf,
+  NAVY, TEAL, WHITE, LINE,
 } from './pdfComponents.js';
 import { M, PCT, listaConceptos } from './util.js';
 import { beneficioCosto } from './propuesta.js';
@@ -111,4 +112,94 @@ export function generarGuiaPresentacion() {
 
   return buildPdf('Guía de presentación · Cotizador FV CFE', 'GESTORIA Y PROYECTOS SOELRB',
     'Guía de apoyo para presentar cualquier cotización — no es específica de un predio.', [pagina]);
+}
+
+// ---------------------------------------------------------------------------
+// Anexo de apoyo para el tramite de interconexion con CFE -- pedido del usuario tras
+// investigar que le falta a la app (ver ESTADO.md): CFE pide, ademas de la cotizacion
+// de venta, un croquis de ubicacion y un diagrama unifilar para activar el contrato de
+// interconexion/facturacion neta. Esto es ORIENTACION, NO el diagrama certificado que
+// pide CFE -- ese lo tiene que firmar el instalador/perito responsable de la obra, no
+// se genera solo con los datos de una cotizacion preliminar. Se dice asi de claro en
+// el propio PDF para no hacer pasar esto por un documento oficial.
+const REQUISITOS_TRAMITE_CFE = [
+  ['Solicitud de interconexión', 'Formato que entrega CFE en su Centro de Atención a Clientes (CAC) o en línea -- no lo genera esta app.'],
+  ['Croquis de ubicación', 'Mapa de dónde está la instalación. Usa el link de Google Maps de abajo (domicilio del recibo) y toma una captura.'],
+  ['Diagrama unifilar', 'Vea la referencia de abajo -- es un punto de partida con los datos YA calculados. El instalador/perito responsable debe firmar la versión final.'],
+  ['Copia del recibo CFE pagado', 'O el Registro Móvil de Usuario (RMU) de tu contrato de suministro vigente.'],
+  ['Cumplimiento de Normas Oficiales Mexicanas', 'La instalación eléctrica debe cumplir las NOM aplicables -- lo certifica el instalador, no esta cotización.'],
+];
+
+function cajaDiagrama(doc, x, y, w, h, titulo, subtitulo) {
+  doc.setDrawColor(NAVY);
+  doc.setFillColor(WHITE);
+  doc.setLineWidth(1.2);
+  doc.roundedRect(x, y, w, h, 4, 4, 'FD');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(NAVY);
+  const lineasTitulo = doc.splitTextToSize(titulo, w - 10);
+  let ty = y + h / 2 - (lineasTitulo.length * 10 + (subtitulo ? 11 : 0)) / 2 + 9;
+  for (const linea of lineasTitulo) { doc.text(linea, x + w / 2, ty, { align: 'center' }); ty += 10; }
+  if (subtitulo) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(TEAL);
+    doc.text(subtitulo, x + w / 2, ty + 2, { align: 'center' });
+  }
+}
+
+function flechaDiagrama(doc, x1, x2, y) {
+  doc.setDrawColor(TEAL);
+  doc.setLineWidth(1.2);
+  doc.line(x1, y, x2, y);
+  doc.setFillColor(TEAL);
+  doc.triangle(x2, y - 3, x2, y + 3, x2 + 5, y, 'F');
+}
+
+function diagramaUnifilarReferencia(doc, y0, r) {
+  const cajas = [
+    [`${r.n} paneles FV`, `${r.moduloWp} W c/u · ${r.kwp.toFixed(2)} kWp`],
+    ['Inversor', r.acKw ? `~${r.acKw.toFixed(2)} kW AC` : 'por seleccionar'],
+    ['Protecciones\nDC / AC', 'interruptores + fusibles'],
+    ['Medidor\nbidireccional', 'lo instala CFE'],
+    ['Red CFE', 'punto de interconexión'],
+  ];
+  const w = 95, h = 44, gap = 14;
+  const totalW = cajas.length * w + (cajas.length - 1) * gap;
+  let x = MARGIN_L + (CONTENT_W - totalW) / 2;
+  const y = y0 + h / 2;
+  cajas.forEach(([titulo, sub], i) => {
+    cajaDiagrama(doc, x, y0, w, h, titulo, sub);
+    if (i < cajas.length - 1) flechaDiagrama(doc, x + w, x + w + gap, y);
+    x += w + gap;
+  });
+  return y0 + h;
+}
+
+export function generarAnexoInterconexion(r) {
+  function pagina(doc) {
+    let y = headX(doc, CONTENT_TOP, 'Documentación de apoyo para tu trámite de interconexión con CFE');
+    y = notice(doc, y, 'Este anexo es de ORIENTACIÓN para reunir lo que pide CFE -- NO es el diagrama unifilar ' +
+      'certificado que CFE exige: ese debe elaborarlo y firmarlo el instalador o perito responsable de la obra, ' +
+      'con los datos finales de la instalación (no los de esta cotización preliminar).');
+    y = spacer(y, 8);
+    y = subX(doc, y, 'Qué pide CFE para activar el contrato de interconexión');
+    y = table(doc, y, ['Documento', 'Qué es / de dónde sale'], REQUISITOS_TRAMITE_CFE,
+      { widths: [CONTENT_W * 0.28, CONTENT_W * 0.72], small: true });
+    y = spacer(y, 8);
+    y = subX(doc, y, 'Croquis de ubicación');
+    y = bodyX(doc, y, `Domicilio del recibo: ${r.domicilio || 'por confirmar'}.`);
+    if (r.domicilio || r.titular) {
+      const query = encodeURIComponent(r.domicilio || r.titular);
+      const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(TEAL);
+      doc.textWithLink('Abrir este domicilio en Google Maps (toca o haz clic aquí)', MARGIN_L, y + 10, { url });
+      y = spacer(y, 18);
+    }
+    y = spacer(y, 6);
+    y = subX(doc, y, 'Diagrama unifilar de referencia');
+    y = bodyX(doc, y, 'Topología típica de un sistema interconectado a red, con los datos ya calculados de este ' +
+      'caso. El instalador debe completarlo con calibres de cable, marca/modelo de equipos y protecciones exactas.');
+    y = spacer(y, 6);
+    diagramaUnifilarReferencia(doc, y, r);
+  }
+  return buildPdf('Anexo de interconexión CFE · Cotizador FV CFE', `${r.titular || 'Cliente'} — ${r.fechaEstudio}`,
+    'Material de orientación -- no sustituye el diagrama firmado por el instalador/perito responsable.', [pagina]);
 }

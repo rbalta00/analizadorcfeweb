@@ -642,8 +642,30 @@ se reinventa una formula aqui, solo se traduce.
   cotización en la lista del cliente, para ver el estatus sin tener que abrir cada
   una. Verificado en Chrome real: cambiar etapa a "Negociando" + agregar una nota se
   guarda y se ve el chip correcto en la lista.
-- Pendiente de este mismo encargo, todavía sin construir: **documentación de
-  trámite de interconexión CFE** (diagrama unifilar + croquis de ubicación).
+- **Documentación de apoyo para el trámite de interconexión CFE** (la última de las
+  4): nuevo PDF descargable aparte ("📐 Anexo trámite CFE", junto al resumen
+  ejecutivo), NO una de las 21 páginas de la cotización -- es un documento de apoyo
+  distinto. Contiene: checklist de lo que pide CFE para activar el contrato de
+  interconexión (solicitud, croquis, diagrama unifilar, copia de recibo, NOM), un
+  link clickeable a Google Maps con el domicilio del recibo (`doc.textWithLink`,
+  mismo patrón que el link de Maps de Streamlit), y un **diagrama unifilar de
+  referencia** (5 cajas con flechas: Paneles FV → Inversor → Protecciones DC/AC →
+  Medidor bidireccional → Red CFE) dibujado directo en el PDF con los datos YA
+  calculados del caso (paneles, kWp, kW AC estimado del inversor -- nuevo campo
+  `r.acKw` en `resultado.js`).
+  - **Deliberadamente NO se presenta como el diagrama certificado que exige CFE** --
+    el PDF dice explícito en dos lugares (aviso superior + pie de página) que es
+    orientación y que el instalador/perito responsable debe firmar la versión
+    final con los datos reales de la instalación. No se fabrica un documento
+    oficial, es honesto sobre su propio límite.
+  - `js/resumen.js`: nueva función `generarAnexoInterconexion(r)`, con helpers
+    locales `cajaDiagrama()`/`flechaDiagrama()`/`diagramaUnifilarReferencia()`
+    dibujando directo con primitivas de jsPDF (`roundedRect`/`line`/`triangle`),
+    mismo patrón de cursor-Y manual que el resto de `pdfComponents.js`.
+  - Verificado en Chrome real: generado el PDF, renderizado a un canvas con pdf.js
+    para inspeccionar visualmente (mismo truco que se uso para el sembrado) -- las
+    5 cajas y las flechas salen limpias y legibles, el checklist y el link de Maps
+    se ven bien.
 
 ## Como probarlo en el navegador
 ```

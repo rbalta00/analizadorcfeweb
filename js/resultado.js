@@ -105,7 +105,7 @@ export function construirResultado(input) {
     demandaContratadaKw: leido ? leido.demanda_contratada_kw : null,
     pagoRecurrentePeriodo, pisoPeriodo: piso, ahorroMaxPeriodo: ahorroMax, pctMaxPeriodo: pctMax,
     n, kwp, moduloWp, gen: genAnual, annualKwh, metodoGeneracion,
-    investment: pres.inversion, ventaSinIva: pres.ventaSinIva, iva: pres.iva,
+    investment: pres.inversion, ventaSinIva: pres.ventaSinIva, iva: pres.iva, acKw: pres.acKw,
     payback, ahorroAnual, pctAhorro, om1, annualbefore, annualafter,
     van: flujo25.van, tir: flujo25.tir, recuperacionAcumulada: flujo25.recuperacionAcumulada,
     flujo25Rows: flujo25.flujo, escalamientoTarifaPct: escalamientoPct,

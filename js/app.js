@@ -9,7 +9,7 @@ import {
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden } from './secciones.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf } from './propuesta.js';
-import { generarResumenEjecutivo, generarGuiaPresentacion } from './resumen.js';
+import { generarResumenEjecutivo, generarGuiaPresentacion, generarAnexoInterconexion } from './resumen.js';
 import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida } from './imagenes.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
@@ -1106,6 +1106,12 @@ $('btnResumenEjecutivo').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   const doc = generarResumenEjecutivo(ultimoResultado);
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Resumen_ejecutivo'));
+});
+
+$('btnAnexoInterconexion').addEventListener('click', () => {
+  if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  const doc = generarAnexoInterconexion(ultimoResultado);
+  mostrarPdfEnVisor(doc, nombreArchivoProyecto('Anexo_interconexion_CFE'));
 });
 
 // Marca esta cotizacion como guardada/confirmada para el cliente elegido en el
