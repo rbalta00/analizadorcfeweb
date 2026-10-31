@@ -101,12 +101,6 @@ div.campo-no-detectado {
 
 .input-precio-material { width: 110px; padding: 4px 6px; }
 
-.panel-sembrado {
-  background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 18px;
-  margin: 14px 0;
-}
-#canvasSembrado { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; display: block; margin: 10px 0; }
-
 .previsualizacion-sembrado { margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .previsualizacion-sembrado img {
   max-width: 220px; max-height: 160px; border-radius: 8px; border: 1px solid var(--border); object-fit: contain;
