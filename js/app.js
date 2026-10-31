@@ -6,7 +6,7 @@ import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto,
 } from './clientes.js';
-import { renderSeccion, TITULOS_SECCIONES } from './secciones.js';
+import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden } from './secciones.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf } from './propuesta.js';
 import { generarResumenEjecutivo, generarGuiaPresentacion } from './resumen.js';
@@ -465,6 +465,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   aplicarInmueble(proyectoActual.inmueble);
   mostrarPreviaSembrado(proyectoActual.fotoSembrado);
   renderIndice(null);
+  renderComparacion();
   if (camposIniciales) {
     ultimoLeido = camposIniciales;
     llenarFormularioDesdeRecibo(camposIniciales);
@@ -499,6 +500,7 @@ function leerFormulario() {
     moduloWp: $('moduloWp').value, cobertura: $('cobertura').value, horasUtiles: $('horasUtiles').value,
     escalaCostos: $('escalaCostos').value, escalamiento: $('escalamiento').value,
     aplicaIsr: $('aplicaIsr').checked, tasaIsr: $('tasaIsr').value,
+    vigenciaDias: $('vigenciaDias').value,
   };
 }
 
@@ -511,6 +513,7 @@ function aplicarFormulario(f) {
   $('escalaCostos').value = f?.escalaCostos || 'residencial'; $('escalamiento').value = f?.escalamiento ?? 4.0;
   $('aplicaIsr').checked = f?.aplicaIsr || false; $('tasaIsr').value = f?.tasaIsr ?? 30;
   $('tasaIsr').disabled = !$('aplicaIsr').checked;
+  $('vigenciaDias').value = f?.vigenciaDias ?? 15;
 }
 $('aplicaIsr').addEventListener('change', () => { $('tasaIsr').disabled = !$('aplicaIsr').checked; });
 
@@ -766,6 +769,7 @@ function calcularYRenderizar() {
   const inmueble = leerInmueble();
   const aplicaIsr = $('aplicaIsr').checked;
   const tasaIsrPct = Number($('tasaIsr').value);
+  const vigenciaDias = Number($('vigenciaDias').value) || 15;
   const historialCrudo = esDom ? leerFormularioRecibo().historialDom : leerFormularioRecibo().historialNoDom;
   const historialManual = historialCrudo.filter(v => v != null).map(Number);
 
@@ -800,7 +804,7 @@ function calcularYRenderizar() {
     const fpBonusPct = traeBonus ? bonusMonto / (baseAprox + btMonto) : 0.0;
     input = { titular, domicilio, noServicio, tarifa, esDomestica: false, periodoDias, periodoKwh, dap, cargos,
       rateKw, btPct, fpBonusPct, moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
-      aplicaIsr, tasaIsrPct, historialManual };
+      aplicaIsr, tasaIsrPct, historialManual, vigenciaDias };
   } else {
     const periodoDias = Number($('d_periodoDias').value);
     const periodoKwh = Number($('d_periodoKwh').value);
@@ -811,7 +815,7 @@ function calcularYRenderizar() {
     ];
     input = { titular, domicilio, noServicio, tarifa, esDomestica: true, periodoDias, periodoKwh, escalones,
       dapDomestica: Number($('d_dap').value), moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
-      aplicaIsr, tasaIsrPct, historialManual };
+      aplicaIsr, tasaIsrPct, historialManual, vigenciaDias };
   }
 
   const r = construirResultado(input);
@@ -836,6 +840,7 @@ function calcularYRenderizar() {
   renderSecciones(r);
   renderEditorPrecios(r);
   renderFinanciamiento(r);
+  renderComparacion();
   $('tabPdf').hidden = false;
   return r;
 }
@@ -905,6 +910,44 @@ function renderFinanciamiento(r) {
   $(id).addEventListener('input', () => { if (ultimoResultado) renderFinanciamiento(ultimoResultado); });
 });
 
+// ---------------- Comparar escenarios (guardado por cliente, no por cotizacion --
+// pedido del usuario: "si el cliente duda entre varios tamanos... poder compararlos
+// uno junto al otro") ----------------
+function renderComparacion() {
+  const lista = (clienteActual && clienteActual.escenariosComparacion) || [];
+  const tabla = $('tablaComparacion');
+  tabla.hidden = !lista.length;
+  const tbody = $('filasComparacion');
+  tbody.innerHTML = lista.map((e, i) => `<tr>
+    <td>${e.etiqueta}</td><td>${e.paneles}</td><td class="num">${e.kwp.toFixed(2)}</td>
+    <td class="num">${M(e.inversion)}</td><td class="num">${M(e.ahorroAnual)}</td>
+    <td class="num">${PCT(e.pctAhorro)}</td><td class="num">${e.payback ? e.payback.toFixed(1) + ' años' : 'N/D'}</td>
+    <td class="num">${e.van != null ? M(e.van) : 'N/D'}</td><td class="num">${e.tir != null ? PCT(e.tir) : 'N/D'}</td>
+  </tr>`).join('');
+}
+$('btnAgregarComparacion').addEventListener('click', () => {
+  if (!ultimoResultado || !clienteActual) return;
+  const r = ultimoResultado;
+  clienteActual.escenariosComparacion = clienteActual.escenariosComparacion || [];
+  clienteActual.escenariosComparacion.push({
+    etiqueta: `${proyectoActual.nombre} (${new Date().toLocaleDateString('es-MX')})`,
+    paneles: r.n, kwp: r.kwp, inversion: r.investment, ahorroAnual: r.ahorroAnual,
+    pctAhorro: r.pctAhorro, payback: r.payback, van: r.van, tir: r.tir,
+  });
+  guardarCliente(clienteActual);
+  renderComparacion();
+  $('estadoComparacion').className = 'nota ok';
+  $('estadoComparacion').textContent = `Agregado. Llevas ${clienteActual.escenariosComparacion.length} escenario(s) guardados para este cliente.`;
+});
+$('btnLimpiarComparacion').addEventListener('click', () => {
+  if (!clienteActual) return;
+  if (!confirm('¿Borrar todos los escenarios guardados en la comparación de este cliente? No se puede deshacer.')) return;
+  clienteActual.escenariosComparacion = [];
+  guardarCliente(clienteActual);
+  renderComparacion();
+  $('estadoComparacion').textContent = '';
+});
+
 // ---------------- 21 secciones: render + navegacion ----------------
 function onToggleBloque(bloque, activo) {
   const set = new Set(proyectoActual.seccionesActivas);
@@ -965,13 +1008,15 @@ function renderIndice(r) {
     cont.innerHTML = '<p class="nota">Calcula primero (sección "Datos y recibo") para ver el índice de las 21 secciones.</p>';
     return;
   }
+  const activos = seccionesActivasEnOrden(r);
   TITULOS_SECCIONES.forEach((titulo, i) => {
     const n = i + 1;
-    const activo = r.seccionesActivas.includes(bloqueDeSeccion(n));
+    const pos = activos.indexOf(n) + 1;
+    const activo = pos > 0;
     const a = document.createElement('a');
     a.href = `#seccion-${n}`;
     a.className = 'indice-item' + (activo ? '' : ' indice-item-apagado');
-    a.textContent = `${String(n).padStart(2, '0')}. ${titulo}`;
+    a.textContent = activo ? `${String(pos).padStart(2, '0')}. ${titulo}` : `—. ${titulo} (desactivada)`;
     a.addEventListener('click', (e) => {
       e.preventDefault();
       document.getElementById(`seccion-${n}`).scrollIntoView({ behavior: 'smooth', block: 'start' });

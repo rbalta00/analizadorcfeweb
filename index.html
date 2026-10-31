@@ -236,6 +236,7 @@
           <select id="escalaCostos"><option value="residencial">Residencial (chico)</option><option value="comercial">Comercial (grande)</option></select>
         </label>
         <label>Incremento anual estimado de la tarifa CFE (%)<input id="escalamiento" type="number" value="4.0" step="0.5" /></label>
+        <label>Vigencia de la cotización (días)<input id="vigenciaDias" type="number" value="15" min="1" step="1" /></label>
       </div>
       <div class="fila">
         <label><input type="checkbox" id="aplicaIsr" /> Este cliente puede aplicar la deducción 100% inmediata
@@ -313,6 +314,21 @@
       </table></div>
       <div class="acciones"><button id="btnRecalcularPrecios" class="btn-secundario">🔄 Recalcular con estos precios</button></div>
       <p class="nota" id="estadoEditorPrecios"></p>
+    </section>
+
+    <section class="tarjeta" id="tabComparacion">
+      <h2>⚖️ Comparar escenarios de este cliente</h2>
+      <p class="nota">Si el cliente duda entre varios tamaños de sistema, calcula cada opción y agrégala aquí para
+        verlas una junto a otra. Se guarda por cliente, no por cotización -- sobrevive aunque cambies de
+        cotización o cierres la app.</p>
+      <div class="acciones"><button id="btnAgregarComparacion" class="btn-secundario">➕ Agregar escenario actual</button>
+        <button id="btnLimpiarComparacion" class="btn-link">🗑 Limpiar comparación</button></div>
+      <div class="tabla-wrap"><table class="tabla-seccion" id="tablaComparacion" hidden>
+        <thead><tr><th>Escenario</th><th>Paneles</th><th>kWp</th><th>Inversión</th><th>Ahorro año 1</th>
+          <th>% ahorro</th><th>Payback</th><th>VAN 25a</th><th>TIR</th></tr></thead>
+        <tbody id="filasComparacion"></tbody>
+      </table></div>
+      <p class="nota" id="estadoComparacion"></p>
     </section>
 
     <section class="tarjeta" id="tabFinanciamiento" hidden>

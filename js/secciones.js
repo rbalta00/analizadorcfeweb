@@ -123,6 +123,18 @@ function badgeEstado(tipo) {
   return b;
 }
 
+// Posicion de cada seccion ENTRE LAS ACTIVAS, sin huecos -- pedido explicito del
+// usuario: "si solo deje 5, va del 1 al 5, no se brinca". El PDF (propuesta.js) ya
+// renumeraba asi; esto hace que la vista en pantalla (numero en el header de cada
+// seccion + el indice) haga exactamente lo mismo.
+export function seccionesActivasEnOrden(r) {
+  const activos = [];
+  for (let n = 1; n <= 21; n++) {
+    if (r.seccionesActivas.includes(bloqueDeSeccion(n))) activos.push(n);
+  }
+  return activos;
+}
+
 function toggleBloque(r, numero, onToggle) {
   const bloque = bloqueDeSeccion(numero);
   const activo = r.seccionesActivas.includes(bloque);
@@ -143,7 +155,10 @@ function crearSeccion(numero, titulo, pregunta, r, onToggle) {
   const art = el('article', 'seccion');
   art.id = `seccion-${numero}`;
   const header = el('div', 'seccion-header');
-  header.append(el('div', 'seccion-numero', `${String(numero).padStart(2, '0')} de 21`));
+  const activos = seccionesActivasEnOrden(r);
+  const pos = activos.indexOf(numero) + 1;
+  const etiquetaNumero = pos > 0 ? `${String(pos).padStart(2, '0')} de ${activos.length}` : 'Desactivada';
+  header.append(el('div', 'seccion-numero' + (pos > 0 ? '' : ' seccion-numero-apagada'), etiquetaNumero));
   header.append(el('h2', null, titulo));
   if (pregunta) header.append(el('p', 'seccion-pregunta', pregunta));
   header.append(toggleBloque(r, numero, onToggle));
@@ -156,6 +171,9 @@ function s01(r, _leido, onToggle) {
   const art = crearSeccion(1, 'Su proyecto, explicado en una página', 'Resultado principal: ¿cuánto cuesta y en cuánto se paga solo?', r, onToggle);
   art.append(p(`${r.titular} · ${r.domicilio || 'domicilio por confirmar'}`));
   art.append(p(`Servicio CFE ${r.noServicio || 'por confirmar'} · Estudio del ${r.fechaEstudio}.`));
+  art.append(avisoCream(`Esta cotización es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días). Los ` +
+    'precios de materiales son una provisión de mercado, no una cotización fija de proveedor -- después de esa ' +
+    'fecha hay que revisarlos antes de confirmar.'));
   art.append(tarjetas([
     [M(r.investment), 'Lo que cuesta el sistema, IVA incluido'],
     [r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se paga solo'],

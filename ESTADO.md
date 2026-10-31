@@ -605,6 +605,40 @@ se reinventa una formula aqui, solo se traduce.
   dispositivo vacio") -> Traer de la nube -> el cliente vuelve exacto. Limpiado
   despues (cliente de prueba + fila de prueba en `cfe_respaldo`).
 
+### Renumeración sin huecos, vigencia de la oferta, comparación de escenarios (2026-10-30, noche)
+- Investigación pedida por el usuario sobre que le podría faltar a la app (software
+  profesional de cotización solar + requisitos reales de interconexión CFE). De 4
+  hallazgos, pidió los 4, "al final cada sección la puedo apagar si no la necesito" --
+  y de paso pidió que al apagar una sección, las que queden se renumeren 1..N sin
+  brincos (como ya hacía el PDF, pero la vista en pantalla no).
+- **Renumeración en pantalla**: nueva función `seccionesActivasEnOrden(r)`
+  (`secciones.js`, exportada) -- antes el header de cada sección y el índice siempre
+  mostraban el número fijo 1-21 aunque estuviera apagada (solo se atenuaba). Ahora
+  las activas van 01..N sin huecos (N = total activas) y las apagadas dicen
+  "Desactivada" en vez de ocupar un número, igual en el índice lateral. El PDF
+  (`propuesta.js`) ya renumeraba así desde antes -- ahora pantalla y PDF coinciden.
+  Verificado en Chrome real: apagar 3 bloques (que en cascada apagaron 7 secciones)
+  deja activas exactamente 01 de 14 .. 14 de 14, sin saltos.
+- **Vigencia de la cotización**: campo nuevo "Vigencia (días)" (default 15) en la
+  captura. `util.js` nueva función `fechaVigenciaEs()`. Se muestra como aviso en la
+  sección 1 (pantalla) y como nota al final de la página 1 del PDF: "Esta cotización
+  es válida hasta el [fecha] ([N] días)". Los precios de materiales son una
+  provisión de mercado (no cotización fija de proveedor), así que ahora queda
+  explícito que no son válidos indefinidamente.
+- **Comparación de escenarios**: panel nuevo (`#tabComparacion`, siempre visible,
+  no es una de las 21 secciones) con botón "➕ Agregar escenario actual" -- guarda
+  paneles/kWp/inversión/ahorro/%/payback/VAN/TIR del cálculo actual en
+  `cliente.escenariosComparacion[]` (persistido por CLIENTE, no por cotización
+  individual, para poder comparar entre varias cotizaciones del mismo cliente;
+  sobrevive cerrar la app). "🗑 Limpiar comparación" borra todo (con confirmación).
+  Streamlit ya tenía esto pero solo en memoria de sesión (se perdía al cerrar); la
+  web lo mejora guardándolo persistente -- no se tocó Streamlit (regla vigente).
+  Verificado: calcular 2 tamaños distintos del mismo cliente (cambiando cobertura)
+  y agregar ambos a la comparación muestra las 2 filas con sus números correctos.
+- Pendiente de este mismo encargo, todavía sin construir: **documentación de
+  trámite de interconexión CFE** (diagrama unifilar + croquis de ubicación) y
+  **seguimiento tipo CRM** (etapa del cliente + notas).
+
 ## Como probarlo en el navegador
 ```
 cd web

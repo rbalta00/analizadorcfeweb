@@ -83,9 +83,12 @@ function pagina01(doc, r, numero) {
     `al año. El promedio mensual sería ${M(r.annualafter / 12)} en vez de ${M(r.annualbefore / 12)}. Son ` +
     'promedios de un modelo, no pagos mensuales fijos.');
   y = spacer(y, 4);
-  notice(doc, y, 'El recibo permite comprobar el gasto actual; el ahorro futuro es una estimación condicionada. ' +
+  y = notice(doc, y, 'El recibo permite comprobar el gasto actual; el ahorro futuro es una estimación condicionada. ' +
     `Se conserva el gasto observado de ${listaConceptos(r.meta.noReducibles)} sin anticipar ahorro adicional. ` +
     'Los precios deberán actualizarse antes de contratar.');
+  y = spacer(y, 4);
+  notice(doc, y, `Esta cotización es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días desde el estudio). ` +
+    'Los precios de materiales son una provisión de mercado, no una cotización fija de proveedor.');
 }
 
 // ---------- Pagina 2: recibo ----------

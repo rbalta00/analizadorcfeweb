@@ -9,7 +9,7 @@ import {
   consumoMensualDesdeHistorial, DIAS_MES_REF,
 } from './motor.js';
 import { generarNotas } from './notas.js';
-import { fechaEstudioEs } from './util.js';
+import { fechaEstudioEs, fechaVigenciaEs } from './util.js';
 
 export function construirResultado(input) {
   const {
@@ -17,7 +17,7 @@ export function construirResultado(input) {
     periodoDias, periodoKwh, dap, cargos, rateKw, btPct, fpBonusPct,
     moduloWp, cobertura, horasUtiles, costos, escalamientoPct,
     escalones, dapDomestica,
-    leido, inmueble, aplicaIsr, tasaIsrPct, historialManual,
+    leido, inmueble, aplicaIsr, tasaIsrPct, historialManual, vigenciaDias,
   } = input;
 
   let invoice, meta, pagoRecurrentePeriodo, piso, ahorroMax, pctMax, cargosFinal;
@@ -100,6 +100,7 @@ export function construirResultado(input) {
   const r = {
     titular: titular || 'Cliente', tituloRecibo: leido ? leido.titular : null, domicilio,
     noServicio, tarifa, fechaEstudio: fechaEstudioEs(),
+    vigenciaDias: vigenciaDias || 15, fechaVigencia: fechaVigenciaEs(vigenciaDias || 15),
     periodoDias, periodoKwh, dap, cargos: cargosFinal, meta,
     demandaContratadaKw: leido ? leido.demanda_contratada_kw : null,
     pagoRecurrentePeriodo, pisoPeriodo: piso, ahorroMaxPeriodo: ahorroMax, pctMaxPeriodo: pctMax,

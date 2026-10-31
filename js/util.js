@@ -11,6 +11,15 @@ export function fechaEstudioEs(d = new Date()) {
   return `${d.getDate()} de ${MESES_ES[d.getMonth()]} de ${d.getFullYear()}`;
 }
 
+// Fecha de vigencia de la cotizacion = hoy + diasVigencia -- los precios de materiales
+// (dimensionamiento.py/motor.js COSTOS_RESIDENCIAL/COMERCIAL) son una provision, no una
+// cotizacion de proveedor fija, asi que toda propuesta de ventas deberia traer una
+// fecha limite explicita en vez de dar a entender que el precio es fijo para siempre.
+export function fechaVigenciaEs(diasVigencia, base = new Date()) {
+  const d = new Date(base.getTime() + diasVigencia * 86400000);
+  return fechaEstudioEs(d);
+}
+
 export const NOMBRES_CONCEPTO = {
   energia: 'Energía', energia_base: 'Energía base', energia_intermedia: 'Energía intermedia',
   energia_punta: 'Energía punta', transmision: 'Transmisión', cenace: 'CENACE', scnmem: 'SCnMEM',
