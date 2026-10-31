@@ -8,6 +8,22 @@
 // ingenieria ni una validacion de cabida real.
 import { cargarImagenDesdeArchivo } from './imagenes.js';
 
+// `fuente` puede ser un File (foto recien seleccionada) o un data URL (string) --
+// la foto del sembrado ya guardada en el proyecto llega como {dataUrl,...}, no como
+// File, asi que el editor debe poder abrir cualquiera de los dos sin pedir el archivo
+// de nuevo.
+function cargarImagenDesdeFuente(fuente) {
+  if (typeof fuente === 'string') {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+      img.src = fuente;
+    });
+  }
+  return cargarImagenDesdeArchivo(fuente);
+}
+
 const NAVY = '#163b4c', TEAL = '#21798b', GOLD = '#c8a654';
 const MAX_ANCHO_CANVAS = 900;
 
@@ -72,7 +88,7 @@ function estadoActual() {
 // llama tras cada clic/deshacer, para que quien use este modulo actualice textos/
 // botones segun en que paso va.
 export async function iniciarEditorSembrado({ canvas, imgFile, onCambioEstado }) {
-  const img = await cargarImagenDesdeArchivo(imgFile);
+  const img = await cargarImagenDesdeFuente(imgFile);
   const escala = Math.min(1, MAX_ANCHO_CANVAS / img.naturalWidth);
   canvas.width = Math.round(img.naturalWidth * escala);
   canvas.height = Math.round(img.naturalHeight * escala);

@@ -591,6 +591,7 @@ function aplicarInmueble(inm) {
 function mostrarPreviaSembrado(foto) {
   $('imgPreviaSembrado').src = foto ? foto.dataUrl : '';
   $('previsualizacionSembrado').hidden = !foto;
+  $('btnAbrirEditorSembrado').disabled = !foto;
 }
 
 $('archivoSembrado').addEventListener('change', async (e) => {
@@ -633,23 +634,25 @@ function actualizarInstruccionSembrado(info) {
   }
   $('btnDibujarPanelesSembrado').disabled = !info.listoParaDibujar;
 }
-$('btnAbrirEditorSembrado').addEventListener('click', () => {
+$('btnAbrirEditorSembrado').addEventListener('click', async () => {
   if (!ultimoResultado || !ultimoResultado.n) {
     alert('Primero calcula la cotización -- esta herramienta dibuja el número de paneles que ya se calculó.');
     return;
   }
-  $('archivoFotoAereaSembrado').click();
-});
-$('archivoFotoAereaSembrado').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
+  if (!proyectoActual || !proyectoActual.fotoSembrado) {
+    alert('Primero sube una foto arriba.');
+    return;
+  }
   paneleroDibujado = null;
   $('btnGuardarSembrado').disabled = true;
   $('estadoSembrado').textContent = '';
   $('modalSembrado').hidden = false;
   try {
-    await iniciarEditorSembrado({ canvas: $('canvasSembrado'), imgFile: file, onCambioEstado: actualizarInstruccionSembrado });
+    await iniciarEditorSembrado({
+      canvas: $('canvasSembrado'),
+      imgFile: proyectoActual.fotoSembrado.dataUrl,
+      onCambioEstado: actualizarInstruccionSembrado,
+    });
   } catch (err) {
     $('estadoSembrado').className = 'nota aviso';
     $('estadoSembrado').textContent = 'No se pudo cargar la imagen: ' + err.message;

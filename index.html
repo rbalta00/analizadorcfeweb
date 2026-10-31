@@ -272,20 +272,38 @@
           empresarial que pagan ISR, NUNCA gobierno</label>
         <label>Tasa de ISR del cliente (%)<input id="tasaIsr" type="number" value="30" step="1" min="0" max="35" disabled /></label>
       </div>
-      <p class="nota">Foto del sembrado de paneles (distribución sobre el techo/azotea), si ya la tienes --
-        se agrega a la sección 6 en pantalla y al PDF. Imagen o PDF de una sola página. O si tienes una foto
-        aérea del inmueble (ej. captura de Google Earth), usa la herramienta de abajo para dibujar la
-        distribución tú mismo con el número de paneles ya calculado.</p>
+      <p class="nota">Foto para el sembrado de paneles (distribución sobre el techo/azotea) -- sube aquí tu foto
+        aérea del inmueble (ej. captura de Google Earth) o una ya hecha. Se agrega a la sección 6 en pantalla y
+        al PDF.</p>
       <div class="fila">
-        <label style="flex:0">Subir foto ya hecha<input type="file" id="archivoSembrado" accept=".jpg,.jpeg,.png,.webp,.pdf" /></label>
+        <label style="flex:0">Subir foto<input type="file" id="archivoSembrado" accept=".jpg,.jpeg,.png,.webp,.pdf" /></label>
       </div>
       <div class="acciones">
-        <input type="file" id="archivoFotoAereaSembrado" accept=".jpg,.jpeg,.png,.webp" hidden />
-        <button id="btnAbrirEditorSembrado" class="btn-secundario" type="button">🧩 Dibujar distribución sobre una foto aérea</button>
+        <button id="btnAbrirEditorSembrado" class="btn-secundario" type="button" disabled>🧩 Generar sembrado con esta foto</button>
       </div>
       <div id="previsualizacionSembrado" class="previsualizacion-sembrado" hidden>
         <img id="imgPreviaSembrado" alt="Foto del sembrado de paneles" />
         <button id="btnQuitarSembrado" class="btn-link">🗑 Quitar foto</button>
+      </div>
+
+      <div id="modalSembrado" class="panel-sembrado" hidden>
+        <h3>Dibujar distribución de paneles sobre la foto aérea</h3>
+        <p class="nota" id="instruccionSembrado">Paso 1 de 2: haz clic en 2 puntos de la foto cuya distancia real
+          conozcas (ej. un lado del inmueble que ya mediste) -- luego escribe esa distancia en metros abajo.</p>
+        <canvas id="canvasSembrado"></canvas>
+        <div class="fila">
+          <label>Distancia real entre los 2 primeros puntos (m)<input id="distanciaRealSembrado" type="number" step="0.01" min="0.01" /></label>
+          <label>Ancho del panel (m)<input id="panelAnchoSembrado" type="number" step="0.001" value="1.134" /></label>
+          <label>Alto del panel (m)<input id="panelAltoSembrado" type="number" step="0.001" value="2.278" /></label>
+          <label><input type="checkbox" id="panelVerticalSembrado" checked /> Panel en vertical</label>
+        </div>
+        <div class="acciones">
+          <button id="btnDeshacerPuntoSembrado" class="btn-link" type="button">↩ Deshacer último punto</button>
+          <button id="btnDibujarPanelesSembrado" class="btn-secundario" type="button" disabled>🧩 Dibujar paneles</button>
+          <button id="btnGuardarSembrado" class="btn-primario" type="button" disabled>💾 Guardar como foto del sembrado</button>
+          <button id="btnCerrarSembrado" class="btn-link" type="button">Cancelar</button>
+        </div>
+        <p class="nota" id="estadoSembrado"></p>
       </div>
 
       <h3>5. Condiciones actuales del inmueble <span class="nota">(declarado por el cliente o visto en sitio; se integra en la sección 6)</span></h3>
@@ -421,28 +439,6 @@
   <script src="lib/pdf.min.js"></script>
   <script src="lib/tesseract.min.js"></script>
   <script src="lib/jspdf.umd.min.js"></script>
-  <div id="modalSembrado" class="modal-sembrado" hidden>
-    <div class="modal-sembrado-contenido">
-      <h3>Dibujar distribución de paneles sobre la foto aérea</h3>
-      <p class="nota" id="instruccionSembrado">Paso 1 de 2: haz clic en 2 puntos de la foto cuya distancia real
-        conozcas (ej. un lado del inmueble que ya mediste) -- luego escribe esa distancia en metros abajo.</p>
-      <canvas id="canvasSembrado"></canvas>
-      <div class="fila">
-        <label>Distancia real entre los 2 primeros puntos (m)<input id="distanciaRealSembrado" type="number" step="0.01" min="0.01" /></label>
-        <label>Ancho del panel (m)<input id="panelAnchoSembrado" type="number" step="0.001" value="1.134" /></label>
-        <label>Alto del panel (m)<input id="panelAltoSembrado" type="number" step="0.001" value="2.278" /></label>
-        <label><input type="checkbox" id="panelVerticalSembrado" checked /> Panel en vertical</label>
-      </div>
-      <div class="acciones">
-        <button id="btnDeshacerPuntoSembrado" class="btn-link" type="button">↩ Deshacer último punto</button>
-        <button id="btnDibujarPanelesSembrado" class="btn-secundario" type="button" disabled>🧩 Dibujar paneles</button>
-        <button id="btnGuardarSembrado" class="btn-primario" type="button" disabled>💾 Guardar como foto del sembrado</button>
-        <button id="btnCerrarSembrado" class="btn-link" type="button">Cancelar</button>
-      </div>
-      <p class="nota" id="estadoSembrado"></p>
-    </div>
-  </div>
-
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

@@ -20,6 +20,13 @@
 }
 
 * { box-sizing: border-box; }
+/* Varias clases de abajo fijan su propio "display" (flex/grid/block) para su layout
+   normal -- sin esto, el atributo "hidden" que usa app.js para mostrar/ocultar esos
+   mismos elementos pierde contra esa clase (misma especificidad) y el elemento se ve
+   aunque este "oculto". Bug real encontrado probando el panel de sembrado: la
+   previsualizacion de la foto se veia (icono roto) con el recibo recien creado, sin
+   foto todavia. */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -94,13 +101,9 @@ div.campo-no-detectado {
 
 .input-precio-material { width: 110px; padding: 4px 6px; }
 
-.modal-sembrado {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000;
-  display: flex; align-items: center; justify-content: center; padding: 16px;
-}
-.modal-sembrado-contenido {
-  background: var(--bg); border-radius: 10px; padding: 18px; max-width: 960px; width: 100%;
-  max-height: 92vh; overflow-y: auto;
+.panel-sembrado {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 18px;
+  margin: 14px 0;
 }
 #canvasSembrado { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; cursor: crosshair; display: block; margin: 10px 0; }
 
