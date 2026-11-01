@@ -148,8 +148,19 @@ export function extraerCampos(texto, usoOcr = false) {
     const mes1 = MESES[m[2].toUpperCase()], mes2 = MESES[m[5].toUpperCase()];
     const d1 = Date.UTC(2000 + Number(m[3]), mes1 - 1, Number(m[1]));
     const d2 = Date.UTC(2000 + Number(m[6]), mes2 - 1, Number(m[4]));
-    campos.periodo_dias = Math.round((d2 - d1) / 86400000);
-    campos.periodo_label = `${m[1]} ${m[2].toUpperCase()} ${m[3]} al ${m[4]} ${m[5].toUpperCase()} ${m[6]}`;
+    const dias = Math.round((d2 - d1) / 86400000);
+    // Blindaje contra OCR mal leido (recibos escaneados/foto, sin texto nativo): si el
+    // regex hizo match pero con digitos equivocados (ej. año mal leido), la resta puede
+    // dar un numero negativo o absurdo que antes se aceptaba tal cual y se usaba en el
+    // calculo sin avisar -- caso real: "29 ENE 26-26 FEB 26" leido via OCR dio
+    // periodo_dias=-337 en vez de 28, sin marcarse en naranja (2026-11-01). Cualquier
+    // periodo facturado real de CFE cae entre 1 y 100 dias (mensual ~30, bimestral
+    // domestico ~61); fuera de ese rango se trata como no detectado, para que quede
+    // marcado y bloquee el calculo hasta que se corrija a mano.
+    if (dias >= 1 && dias <= 100) {
+      campos.periodo_dias = dias;
+      campos.periodo_label = `${m[1]} ${m[2].toUpperCase()} ${m[3]} al ${m[4]} ${m[5].toUpperCase()} ${m[6]}`;
+    }
   }
 
   const { cargos, columna } = leerTablaDesglose(norm);
