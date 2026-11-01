@@ -18,7 +18,9 @@ export const BLOQUES_COTIZACION = [
   ['pagos_100', 'Pagos mensuales y qué tan cerca del 100% de ahorro (págs. 15–16)', false],
   ['pendientes', 'Qué falta para cerrar el ahorro, requisitos y notas del recibo (págs. 17–18)', false],
   ['alcance', 'Alcance, condiciones, entrega y mantenimiento (págs. 19–20)', false],
-  ['glosario_fuentes', 'Glosario y fuentes (págs. 21–22)', false],
+  ['glosario_fuentes', 'Glosario y fuentes (pág. 21)', false],
+  ['documentos', 'Documentos adjuntos: recibo y verificación en sitio (págs. 22–23)', false],
+  ['comparativo_verificacion', 'Proyecto y comparativo según la verificación en sitio (págs. 24–25)', false],
 ];
 
 export function todosLosBloques() {
@@ -33,6 +35,7 @@ export function bloqueDeSeccion(numeroSeccion) {
     9: 'ahorro_pagos', 10: 'ahorro_pagos', 11: 'presupuesto', 12: 'presupuesto',
     13: 'recuperacion', 14: 'recuperacion', 15: 'pagos_100', 16: 'pagos_100',
     17: 'pendientes', 18: 'alcance', 19: 'alcance', 20: 'glosario_fuentes', 21: 'glosario_fuentes',
+    22: 'documentos', 23: 'documentos', 24: 'comparativo_verificacion', 25: 'comparativo_verificacion',
   };
   return mapa[numeroSeccion];
 }

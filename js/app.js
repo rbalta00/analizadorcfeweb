@@ -6,7 +6,7 @@ import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto,
 } from './clientes.js';
-import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden } from './secciones.js';
+import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos } from './secciones.js';
 import { guardarTextoGlobal, quitarTextoGlobal } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf } from './propuesta.js';
@@ -995,6 +995,20 @@ function calcularYRenderizar() {
   r.fotoSembrado = proyectoActual.fotoSembrado || null;
   r.archivosRecibo = proyectoActual.archivosRecibo || null;
   r.archivosVerificacion = proyectoActual.archivosVerificacion || null;
+  // Nota cliente-facing (no solo interna) cuando todavia no hay verificacion en sitio
+  // adjunta -- pedido explicito del usuario: decirle al cliente que esta propuesta se
+  // calculo SOLO con su recibo, y que falta la visita/verificacion en sitio como
+  // siguiente paso (de ahi sale, si se captura, el escenario y comparativo de las
+  // secciones 24/25 -- se le avisa que esa comparacion todavia no existe para este caso).
+  if (!r.archivosVerificacion || !r.archivosVerificacion.length) {
+    r.notas = [
+      ...(r.notas || []),
+      'Esta cotización se calculó únicamente con base en su consumo real de CFE (su recibo). Pendiente, como ' +
+      'siguiente paso: agendar la verificación en sitio (visita técnica) para confirmar el espacio disponible, la ' +
+      'instalación eléctrica y las condiciones del inmueble antes de contratar -- hasta que esa visita se realice ' +
+      'y se capture aquí, no existe todavía una sección de comparación contra una propuesta basada en la visita.',
+    ];
+  }
   ultimoResultado = r;
 
   // Si el proyecto todavia tiene su nombre generico de creacion ("Cotización N"), se
@@ -1228,19 +1242,23 @@ function onQuitarTextoGlobal(id) {
   if (ultimoResultado) renderSecciones(ultimoResultado);
 }
 
-function agregarNavegacionSeccion(art, n) {
+// anteriorN/siguienteN: numero de la seccion REALMENTE renderizada antes/despues de
+// esta (no simplemente n-1/n+1) -- secciones sin datos (23/24/25 sin verificacion en
+// sitio, ver seccionTieneDatos en secciones.js) ni siquiera se renderizan, así que
+// apuntar a n±1 a ciegas podria mandar a un id que no existe en el DOM.
+function agregarNavegacionSeccion(art, anteriorN, siguienteN) {
   const nav = document.createElement('div');
   nav.className = 'seccion-nav';
   const anterior = document.createElement('button');
   anterior.className = 'btn-link';
   anterior.textContent = '← Anterior';
-  anterior.hidden = n <= 1;
-  anterior.addEventListener('click', () => document.getElementById(`seccion-${n - 1}`).scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  anterior.hidden = anteriorN == null;
+  if (anteriorN != null) anterior.addEventListener('click', () => document.getElementById(`seccion-${anteriorN}`).scrollIntoView({ behavior: 'smooth', block: 'start' }));
   const siguiente = document.createElement('button');
   siguiente.className = 'btn-link';
   siguiente.textContent = 'Siguiente →';
-  siguiente.hidden = n >= 21;
-  siguiente.addEventListener('click', () => document.getElementById(`seccion-${n + 1}`).scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  siguiente.hidden = siguienteN == null;
+  if (siguienteN != null) siguiente.addEventListener('click', () => document.getElementById(`seccion-${siguienteN}`).scrollIntoView({ behavior: 'smooth', block: 'start' }));
   nav.append(anterior, siguiente);
   art.append(nav);
 }
@@ -1249,15 +1267,23 @@ function renderSecciones(r) {
   const cont = $('contenedorSecciones');
   cont.innerHTML = '';
   $('ayudaEdicion').hidden = false;
-  for (let n = 1; n <= 21; n++) {
+  const numeros = TITULOS_SECCIONES.map((_, i) => i + 1).filter(n => seccionTieneDatos(n, r));
+  numeros.forEach((n, i) => {
     const art = renderSeccion(n, r, ultimoLeido, onToggleBloque, onEditarTexto, onToggleCalculo, onGuardarTextoGlobal, onQuitarTextoGlobal);
-    agregarNavegacionSeccion(art, n);
+    agregarNavegacionSeccion(art, numeros[i - 1] ?? null, numeros[i + 1] ?? null);
     cont.append(art);
-  }
+  });
   renderIndice(r);
   observarSecciones();
 }
 
+// Indice de las 21 secciones con un checkbox de "incluir" por cada una (ademas del
+// link para saltar a esa seccion) -- pedido explicito del usuario: poder apagar las
+// secciones que no va a presentar desde un solo lugar, sin tener que bajar hasta cada
+// seccion a buscar su propio toggle. El checkbox controla el MISMO estado
+// (seccionesActivas / bloqueDeSeccion) que el toggle de cada seccion individual
+// (toggleBloque en secciones.js) -- son dos controles para el mismo interruptor, no
+// un estado aparte, así que siempre quedan sincronizados.
 function renderIndice(r) {
   const cont = $('indiceLista');
   cont.innerHTML = '';
@@ -1268,18 +1294,30 @@ function renderIndice(r) {
   const activos = seccionesActivasEnOrden(r);
   TITULOS_SECCIONES.forEach((titulo, i) => {
     const n = i + 1;
+    if (!seccionTieneDatos(n, r)) return; // no existe todavia (ver seccionTieneDatos) -- no listar un link muerto
+    const bloque = bloqueDeSeccion(n);
     const pos = activos.indexOf(n) + 1;
     const activo = pos > 0;
+    const fila = document.createElement('div');
+    fila.className = 'indice-fila' + (activo ? '' : ' indice-item-apagado');
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = r.seccionesActivas.includes(bloque);
+    check.disabled = bloque === 'resumen';
+    check.title = bloque === 'resumen' ? 'Siempre incluida' : 'Incluir en la cotización final (pantalla y PDF)';
+    check.addEventListener('change', () => onToggleBloque(bloque, check.checked));
+    fila.append(check);
     const a = document.createElement('a');
     a.href = `#seccion-${n}`;
-    a.className = 'indice-item' + (activo ? '' : ' indice-item-apagado');
+    a.className = 'indice-item';
     a.textContent = activo ? `${String(pos).padStart(2, '0')}. ${titulo}` : `—. ${titulo} (desactivada)`;
     a.addEventListener('click', (e) => {
       e.preventDefault();
       document.getElementById(`seccion-${n}`).scrollIntoView({ behavior: 'smooth', block: 'start' });
       $('indiceSecciones').classList.remove('indice-abierto');
     });
-    cont.append(a);
+    fila.append(a);
+    cont.append(fila);
   });
 }
 

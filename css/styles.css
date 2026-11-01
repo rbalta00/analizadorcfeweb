@@ -252,7 +252,9 @@ input[type="file"] { padding: 6px 0; }
 .indice-lista { display: none; flex-direction: column; gap: 2px; background: var(--card-bg); border: 1px solid var(--border);
   border-top: none; border-radius: 0 0 8px 8px; padding: 8px; max-height: 50vh; overflow-y: auto; }
 .indice-secciones.indice-abierto .indice-lista { display: flex; }
-.indice-item { font-size: 0.82rem; color: inherit; text-decoration: none; padding: 6px 8px; border-radius: 6px; }
+.indice-fila { display: flex; align-items: center; gap: 6px; border-radius: 6px; }
+.indice-fila input[type="checkbox"] { flex-shrink: 0; cursor: pointer; }
+.indice-item { flex: 1; font-size: 0.82rem; color: inherit; text-decoration: none; padding: 6px 8px; border-radius: 6px; }
 .indice-item:hover { background: var(--bg); }
 .indice-item-activo { background: var(--teal); color: #fff; font-weight: 600; }
 .indice-item-apagado { opacity: 0.45; font-style: italic; }
