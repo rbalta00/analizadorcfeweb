@@ -356,15 +356,23 @@ function s02(r, leido, onToggle) {
 
 function filaArchivo(a) {
   const esImagen = (a.tipo || '').startsWith('image/');
-  const fila = el('div', 'documento-adjunto');
+  const esPdf = (a.tipo || '').includes('pdf');
+  const fila = el('div', 'documento-adjunto' + (esPdf ? ' documento-adjunto-conpdf' : ''));
   if (esImagen) {
     const img = document.createElement('img');
     img.src = a.url; img.alt = a.nombre; img.className = 'documento-adjunto-img';
     fila.append(img);
+  } else if (esPdf) {
+    // Previsualizacion inline del PDF -- antes solo se veia un link, el usuario tenia
+    // que abrirlo en otra pestana para ver de que se trataba. El navegador renderiza
+    // el PDF solo dentro del iframe (visor nativo de Chrome), sin libreria extra.
+    const frame = document.createElement('iframe');
+    frame.src = a.url; frame.title = a.nombre; frame.className = 'documento-adjunto-pdf';
+    fila.append(frame);
   }
   const link = document.createElement('a');
   link.href = a.url; link.target = '_blank'; link.rel = 'noopener';
-  link.textContent = (esImagen ? '🖼 ' : '📄 ') + a.nombre;
+  link.textContent = (esImagen ? '🖼 ' : '📄 ') + a.nombre + (esPdf ? ' (abrir completo)' : '');
   fila.append(link);
   return fila;
 }

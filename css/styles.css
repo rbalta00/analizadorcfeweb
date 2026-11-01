@@ -356,6 +356,10 @@ input[type="file"] { padding: 6px 0; }
   background: #fff;
 }
 .documento-adjunto a { word-break: break-all; }
+.documento-adjunto-conpdf { max-width: 420px; min-width: 280px; flex: 1 1 360px; }
+.documento-adjunto-pdf {
+  width: 100%; height: 420px; border: 1px solid var(--border); border-radius: 6px; background: #fff;
+}
 
 .tabla-wrap { overflow-x: auto; margin: 10px 0; }
 .tabla-seccion { border-collapse: collapse; width: 100%; font-size: 0.85rem; min-width: 360px; }
