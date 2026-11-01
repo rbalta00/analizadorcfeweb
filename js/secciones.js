@@ -46,7 +46,19 @@ function siguienteTextoId() {
 // Isaac para todas las cotizaciones) > texto fijo en el codigo. Pedido explicito del
 // usuario: poder cambiar la redaccion de la app sin pedirmelo por codigo cada vez.
 function textoEditable(tag, cls, textoDefecto) {
-  const id = siguienteTextoId();
+  return campoEditableConId(tag, cls, textoDefecto, siguienteTextoId());
+}
+
+// Titulo de seccion editable -- id FIJO ("sNN-titulo"), a proposito NO usa
+// siguienteTextoId() para no correr el contador de los parrafos del cuerpo: si el
+// titulo consumiera un indice sNN-t0, todos los overrides de texto YA GUARDADOS por
+// clientes existentes (que asumen sNN-t0 es el primer parrafo del cuerpo, no el
+// titulo) se desfasarian y aplicarian al parrafo equivocado.
+function tituloEditable(numero, textoDefecto) {
+  return campoEditableConId('h2', 'titulo-seccion-grande', textoDefecto, `s${numero}-titulo`);
+}
+
+function campoEditableConId(tag, cls, textoDefecto, id) {
   const wrap = el('div', 'campo-editable');
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -222,7 +234,7 @@ function crearSeccion(numero, titulo, pregunta, r, onToggle) {
   const pos = activos.indexOf(numero) + 1;
   const etiquetaNumero = pos > 0 ? `${String(pos).padStart(2, '0')} de ${activos.length}` : 'Desactivada';
   header.append(el('div', 'seccion-numero' + (pos > 0 ? '' : ' seccion-numero-apagada'), etiquetaNumero));
-  header.append(el('h2', null, titulo));
+  header.append(tituloEditable(numero, titulo));
   if (pregunta) header.append(el('p', 'seccion-pregunta', pregunta));
   header.append(toggleBloque(r, numero, onToggle));
   art.append(header);
@@ -312,37 +324,69 @@ function filaArchivo(a) {
 // los paneles que verificaron en campo los del gobierno".
 function bloqueDocumentosYVerificacion(r) {
   const cont = el('div', 'documentos-verificacion');
+  cont.append(el('h3', null, '📎 Recibo y verificación en sitio'));
   const recibo = r.archivosRecibo || [];
   const verif = r.archivosVerificacion || [];
+
+  cont.append(el('h4', null, 'Recibo original'));
   if (recibo.length) {
-    cont.append(el('h3', null, 'Recibo original adjunto'));
     const grid = el('div', 'documentos-grid');
     recibo.forEach(a => grid.append(filaArchivo(a)));
     cont.append(grid);
+  } else {
+    cont.append(p('Aún no se adjuntó el recibo original a esta cotización. Para adjuntarlo: abre este proyecto, ' +
+      'sube el PDF o la foto del recibo con "Adjuntar archivo(s) del recibo" (arriba, en la captura de datos), y ' +
+      'aparecerá aquí.'));
   }
+
+  cont.append(el('h4', null, 'Verificación en sitio'));
   if (verif.length) {
-    cont.append(el('h3', null, 'Verificación en sitio adjunta'));
     cont.append(p('Documento de verificación en campo (del gobierno u otro emisor), adjuntado tal cual -- no se ' +
       'extrajo ningún dato de él automáticamente.'));
     const grid = el('div', 'documentos-grid');
     verif.forEach(a => grid.append(filaArchivo(a)));
     cont.append(grid);
+  } else {
+    cont.append(p('Aún no se adjuntó el documento de "Verificación en sitio" del gobierno a esta cotización. Para ' +
+      'adjuntarlo: abre este proyecto, sube el PDF o la foto en "1b. Verificación en sitio" (en la captura de ' +
+      'datos), y aparecerá aquí.'));
   }
-  const panelesCampo = r.inmueble?.panelesVerificacion;
-  if (panelesCampo) {
-    cont.append(el('h3', null, 'Proyecto calculado vs. propuesta de la verificación en campo'));
-    cont.append(tabla(['', 'Paneles', 'Potencia', 'Ahorro anual estimado'], [
-      ['Calculado por este sistema (consumo real del recibo)', `${r.n}`, `${r.kwp.toFixed(2)} kWp`, M(r.ahorroAnual)],
-      ['Sugerido en la verificación en campo', `${panelesCampo}`, panelesCampo && r.moduloWp ? `${(panelesCampo * r.moduloWp / 1000).toFixed(2)} kWp` : 'por confirmar', 'no calculado -- ver nota'],
-    ]));
-    const dif = panelesCampo - r.n;
-    cont.append(p(dif === 0
-      ? 'El número de paneles calculado por el consumo real coincide con lo que sugirió la verificación en campo.'
-      : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que calcula este sistema a partir del consumo real del recibo. La verificación en campo suele basarse en el espacio disponible observado en sitio, no necesariamente en el consumo exacto -- ambos criterios son válidos y conviene presentarle al cliente las dos referencias antes de decidir el tamaño final.`));
-    cont.append(avisoCream('El ahorro anual de la columna "Sugerido en la verificación en campo" no se calculó -- ' +
-      'requeriría correr el motor con ese número de paneles. Esta tabla es solo para comparar tamaños, no para ' +
-      'prometer un ahorro distinto al presentado en el resto del estudio.'));
+
+  cont.append(el('h4', null, 'Proyecto calculado vs. propuesta de la verificación en campo'));
+  const ev = r.escenarioVerificado;
+  if (!ev) {
+    cont.append(p('Aún no se capturó cuántos paneles sugiere la verificación en campo. Para comparar: abre este ' +
+      'proyecto y llena "Paneles que sugiere la verificación en campo" en Condiciones del inmueble -- esta sección ' +
+      'recalculará solo la inversión y el ahorro con ese número, usando el mismo recibo y los mismos costos que el ' +
+      'resto del estudio.'));
+    return cont;
   }
+  cont.append(p(`Lo que este sistema calculó a partir del consumo real del recibo (${r.n} paneles) comparado con lo ` +
+    `que propone el documento de verificación en campo (${ev.n} paneles) -- ambos escenarios usan el mismo recibo, ` +
+    'la misma tarifa y los mismos costos, solo cambia el número de paneles.'));
+  cont.append(el('h5', null, 'Calculado por este sistema'));
+  cont.append(tarjetas([
+    [M(r.investment), 'Inversión estimada, IVA incluido'],
+    [`${r.n} paneles`, `${r.moduloWp} W por módulo / ${r.kwp.toFixed(2)} kWp`],
+    [M(r.ahorroAnual), 'Ahorro estimado de factura, año 1'],
+    [r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', 'Recuperación simple estimada'],
+    [PCT(r.pctAhorro), 'Ahorro anual de factura estimado'],
+  ]));
+  cont.append(el('h5', null, 'Propuesta de la verificación en campo'));
+  cont.append(tarjetas([
+    [M(ev.investment), 'Inversión estimada, IVA incluido'],
+    [`${ev.n} paneles`, `${r.moduloWp} W por módulo / ${ev.kwp.toFixed(2)} kWp`],
+    [M(ev.ahorroAnual), 'Ahorro estimado de factura, año 1'],
+    [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'Recuperación simple estimada'],
+    [PCT(ev.pctAhorro), 'Ahorro anual de factura estimado'],
+  ]));
+  const dif = ev.diferenciaPaneles;
+  cont.append(p(dif === 0
+    ? 'El número de paneles calculado por el consumo real coincide con lo que sugirió la verificación en campo -- ambos escenarios salen iguales.'
+    : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que calcula este sistema a partir del consumo real del recibo, lo que cambia la inversión en ${M(Math.abs(ev.investment - r.investment))} y el ahorro anual en ${M(Math.abs(ev.diferenciaAhorro))}. La verificación en campo suele basarse en el espacio disponible observado en sitio, no necesariamente en el consumo exacto -- ambos criterios son válidos y conviene presentarle al cliente las dos referencias antes de decidir el tamaño final.`));
+  cont.append(avisoCream('Ambos escenarios se calcularon con el mismo motor (mismo recibo, misma tarifa, mismos ' +
+    'costos de materiales) -- solo cambia el número de paneles. No implica que ambos tamaños quepan físicamente en ' +
+    'el espacio disponible; eso depende de la medición real en sitio.'));
   return cont;
 }
 

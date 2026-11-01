@@ -85,6 +85,34 @@ export function construirResultado(input) {
   const om1 = pres.inversion * 0.01;
   const annualKwh = consumoMensual * 12;
 
+  // Escenario alterno: cuantos paneles sugiere la verificacion en sitio que hizo el
+  // gobierno (dato manual, inmueble.panelesVerificacion) -- se recalcula TODO con el
+  // mismo motor/recibo/costos que el escenario principal, solo cambiando n/kwp, para
+  // que la comparacion sea realmente apples-to-apples (misma metodologia, no un
+  // modelo aparte). Idea tomada de la carpeta "mario" (tarjetas Opcion A/B/C con
+  // inversion/paneles/ahorro/payback/% ahorro por escenario), pedido explicito del
+  // usuario -- antes esto no se calculaba, solo se mostraba el conteo de paneles.
+  let escenarioVerificado = null;
+  const nVerificado = inmueble && inmueble.panelesVerificacion ? Math.round(Number(inmueble.panelesVerificacion)) : 0;
+  if (nVerificado > 0) {
+    const kwpVerificado = R(nVerificado * moduloWp / 1000);
+    const presV = presupuestar(nVerificado, kwpVerificado, moduloWp, costos);
+    const rowsV = flujoMensualAnual(invoice, dailyKwh, monthlyE, kwpVerificado, 1);
+    const annualafterV = Math.round(rowsV.reduce((s, x) => s + x.pagoConSolarEstimadoMxn, 0) * 100) / 100;
+    const ahorroAnualV = Math.round((annualbefore - annualafterV) * 100) / 100;
+    const pctAhorroV = annualbefore ? ahorroAnualV / annualbefore : 0;
+    const costoInvV = costoInversor(presV.materiales);
+    const flujo25V = flujo25Anios(presV.inversion, ahorroAnualV, 0.10, 25, (escalamientoPct || 0) / 100, 0.01, 0.03, 0.005, costoInvV);
+    const paybackV = ahorroAnualV > 0 ? presV.inversion / ahorroAnualV : null;
+    escenarioVerificado = {
+      n: nVerificado, kwp: kwpVerificado, investment: presV.inversion,
+      ahorroAnual: ahorroAnualV, om1: presV.inversion * 0.01, pctAhorro: pctAhorroV,
+      payback: paybackV, van: flujo25V.van, tir: flujo25V.tir,
+      recuperacionAcumulada: flujo25V.recuperacionAcumulada,
+      diferenciaPaneles: nVerificado - n, diferenciaAhorro: Math.round((ahorroAnualV - ahorroAnual) * 100) / 100,
+    };
+  }
+
   // Deduccion fiscal ISR (Art. 34 fraccion XIII LISR) -- opcional, solo clientes
   // privados/comerciales que pagan ISR (gobierno NO). No afecta el ahorro de factura,
   // solo la inversion neta efectiva y el flujo/payback a 25 anios.
@@ -113,7 +141,7 @@ export function construirResultado(input) {
     flujo25Rows: flujo25.flujo, escalamientoTarifaPct: escalamientoPct,
     materiales: pres.materiales, rows,
     historial: leido ? leido.historial : null, basisConsumo,
-    inmueble: inmueble || null,
+    inmueble: inmueble || null, escenarioVerificado,
     aplicaIsr: !!aplicaIsr, tasaIsrPct: tasaIsrPct || 0, ahorroFiscalIsr, inversionNetaIsr,
     vanNetoIsr, tirNetoIsr, paybackNetoIsr,
   };

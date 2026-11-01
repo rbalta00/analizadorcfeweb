@@ -271,6 +271,11 @@ input[type="file"] { padding: 6px 0; }
 .seccion-numero-apagada { color: var(--grey); }
 .seccion-header h2 { margin: 2px 0 4px; color: var(--navy); font-size: 1.15rem; }
 @media (prefers-color-scheme: dark) { .seccion-header h2 { color: #8fd0e0; } }
+/* Titulo de seccion editable: mas grande y en mayusculas, pedido explicito del
+   usuario ("letras mas grandes o en mayusculas como se vera mejor") -- se aplican
+   las dos. */
+.seccion-header h2.titulo-seccion-grande { font-size: 1.6rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.01em; line-height: 1.25; }
 .seccion-pregunta { margin: 0 0 8px; font-style: italic; color: var(--grey); font-size: 0.88rem; }
 .toggle-seccion { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--grey); flex-direction: row; }
 .toggle-seccion input { width: auto; }
