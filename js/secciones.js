@@ -889,6 +889,26 @@ function s06(r, _leido, onToggle) {
 // ---------- 07: produccion ----------
 function s07(r, _leido, onToggle) {
   const art = crearSeccion(7, 'Cuánta electricidad podría producir', '¿Cuánta energía generarían los paneles al año?', r, onToggle);
+  // Comparativo promedio mensual, visible de entrada (no escondido en "Cómo se
+  // calculó") -- pedido explicito del usuario: "normalmente yo hago el calculo de
+  // generacion promedio mensual y lo cotejo con el calculo promedio mensual del
+  // recibo", preguntando donde queda indicado eso. Antes solo existia como total
+  // ANUAL (r.gen, r.annualKwh) o repartido dentro de graficas/bloques colapsados --
+  // aqui se muestra el mismo par de numeros ya promediados por mes, uno al lado del
+  // otro, con la diferencia explicita.
+  const genMensualProm = r.gen / 12;
+  const consumoMensualProm = r.annualKwh / 12;
+  const difMensual = genMensualProm - consumoMensualProm;
+  art.append(el('h4', null, 'Comparación de promedios mensuales'));
+  art.append(tarjetas([
+    [`${genMensualProm.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Generación promedio mensual estimada (con los paneles propuestos)'],
+    [`${consumoMensualProm.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Consumo promedio mensual (de su recibo)'],
+    [`${difMensual >= 0 ? '+' : ''}${difMensual.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, difMensual >= 0 ? 'Excedente promedio mensual estimado' : 'Déficit promedio mensual estimado'],
+  ]));
+  art.append(p(`El consumo promedio mensual sale de ${r.basisConsumo || 'el período facturado'} (ver sección 5). La ` +
+    'generación promedio mensual es la misma cifra fija en los 12 meses (criterio de horas-sol, no varía por mes -- ' +
+    'ver aviso abajo). Esta comparación es de PROMEDIOS; para ver mes por mes contra su historial real, baja a la ' +
+    'gráfica de abajo.'));
   art.append(tarjetas([
     [`${r.gen.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Producción anual regional estimada'],
     [(r.gen / r.kwp).toLocaleString('en-US', { maximumFractionDigits: 2 }), 'kWh por kWp al año de referencia'],
