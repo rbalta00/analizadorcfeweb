@@ -897,6 +897,28 @@ function s07(r, _leido, onToggle) {
   art.append(p('El segundo número (kWh por kWp al año) es un indicador de rendimiento. Con el criterio fijo de ' +
     'horas-sol que se explica abajo, ese número sale prácticamente igual sin importar el predio o el tamaño del ' +
     'sistema — no es un error de cálculo ni algo específico de este inmueble.'));
+  // Comparativo contra el historial REAL del recibo (no la extrapolacion plana de
+  // abajo) -- pedido explicito del usuario: "ver la capacidad generada mensualmente
+  // con los paneles propuestos... contra lo que se consume por mes en promedio del
+  // recibo... asi me quedaria mas claro y al cliente como se comporta". La generacion
+  // mensual sigue siendo el mismo criterio de horas-sol fijas (un solo numero
+  // repetido), pero el consumo aqui es el dato real facturado de cada periodo del
+  // historial, no un promedio plano -- asi se ve si algun mes real del cliente ya
+  // supera o se queda corto respecto a lo que generarian los paneles propuestos.
+  if (r.historial && r.historial.length >= 2) {
+    const genMensualEstimada = r.gen / 12;
+    art.append(el('h4', null, 'Generación mensual estimada vs. su consumo real facturado'));
+    art.append(barraAgrupada(
+      r.historial.map(h => `${h.mes} ${h.anio}`),
+      'Generación mensual estimada con los paneles propuestos', r.historial.map(() => genMensualEstimada),
+      'Su consumo real facturado ese período', r.historial.map(h => h.kwh),
+    ));
+    art.append(p(`Cada barra de "consumo real facturado" es el dato impreso en su propio recibo para ese período -- ` +
+      'no un promedio ni una extrapolación. La generación estimada es la misma para los ' +
+      `${r.historial.length} períodos porque el criterio de horas-sol fijas no varía mes a mes (ver aviso abajo); ` +
+      'compararla contra cada período real muestra en cuáles meses el sistema propuesto generaría más o menos de lo ' +
+      'que ese período concreto consumió.'));
+  }
   const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
   art.append(barraAgrupada(mesesAbrev, 'Generación estimada', r.rows.map(x => x.generacionKwh), 'Consumo extrapolado', r.rows.map(x => x.consumoExtrapoladoKwh)));
   art.append(detalle('Ver detalle', tabla(['Mes', 'Generación estimada', 'Consumo extrapolado'],
