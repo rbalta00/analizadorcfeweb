@@ -966,6 +966,19 @@ $('btnCalcular').addEventListener('click', () => {
   }
 });
 
+// Proyectos guardados ANTES de que existieran los bloques 'documentos' y
+// 'comparativo_verificacion' (secciones 17-20, agregadas 2026-10-31) se quedaron con un
+// seccionesActivas que nunca los incluyo -- se veian siempre "Desactivada" en el indice
+// sin que el usuario los hubiera apagado nunca (no existia ni el checkbox todavia).
+// Pedido explicito del usuario (2026-11-01): esas secciones deben contar numeradas por
+// default, igual que cualquier otra -- el apagarlas manualmente es justo para lo que
+// sirve el indice, no algo que el sistema deba decidir por un hueco de migracion.
+function migrarSeccionesActivasBloquesNuevos(seccionesActivas) {
+  if (!seccionesActivas) return todosLosBloques();
+  const faltantes = ['documentos', 'comparativo_verificacion'].filter((b) => !seccionesActivas.includes(b));
+  return faltantes.length ? [...seccionesActivas, ...faltantes] : seccionesActivas;
+}
+
 function calcularYRenderizar() {
   const tarifa = $('tarifa').value;
   const esDom = esDomestica(tarifa);
@@ -1030,7 +1043,7 @@ function calcularYRenderizar() {
   }
 
   const r = construirResultado(input);
-  r.seccionesActivas = proyectoActual.seccionesActivas || todosLosBloques();
+  r.seccionesActivas = migrarSeccionesActivasBloquesNuevos(proyectoActual.seccionesActivas);
   r.calculosActivos = proyectoActual.calculosActivos || todosLosBloques();
   r.ordenSecciones = proyectoActual.ordenSecciones || null;
   r.textosEditados = proyectoActual.textosEditados || {};
