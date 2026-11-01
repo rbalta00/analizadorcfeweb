@@ -6,7 +6,7 @@ import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto,
 } from './clientes.js';
-import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos } from './secciones.js';
+import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
 import { guardarTextoGlobal, quitarTextoGlobal } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf } from './propuesta.js';
@@ -1001,6 +1001,7 @@ function calcularYRenderizar() {
   const r = construirResultado(input);
   r.seccionesActivas = proyectoActual.seccionesActivas || todosLosBloques();
   r.calculosActivos = proyectoActual.calculosActivos || todosLosBloques();
+  r.ordenSecciones = proyectoActual.ordenSecciones || null;
   r.textosEditados = proyectoActual.textosEditados || {};
   r.fotoSembrado = proyectoActual.fotoSembrado || null;
   r.archivosRecibo = proyectoActual.archivosRecibo || null;
@@ -1211,6 +1212,25 @@ function onToggleBloque(bloque, activo) {
   if (ultimoResultado) { ultimoResultado.seccionesActivas = proyectoActual.seccionesActivas; renderSecciones(ultimoResultado); }
 }
 
+// Reordenar secciones a mano -- pedido explicito del usuario ("permite arrastrar las
+// secciones"). Se implementa con botones ↑/↓ en vez de arrastrar con el mouse: mas
+// confiable en touch/trackpad y no depende de soportar drag-and-drop real, con el
+// mismo resultado para quien lo usa. Mueve el numero `numero` un lugar en la direccion
+// indicada DENTRO del orden visible actual (ordenSeccionesEfectivo), y guarda el
+// resultado completo en el proyecto como `ordenSecciones` para que sobreviva recargas.
+function onMoverSeccion(numero, direccion) {
+  if (!ultimoResultado) return;
+  const orden = ordenSeccionesEfectivo(ultimoResultado);
+  const pos = orden.indexOf(numero);
+  const destino = pos + direccion;
+  if (pos < 0 || destino < 0 || destino >= orden.length) return;
+  [orden[pos], orden[destino]] = [orden[destino], orden[pos]];
+  proyectoActual.ordenSecciones = orden;
+  guardarProyecto(clienteActual, proyectoActual);
+  ultimoResultado.ordenSecciones = orden;
+  renderSecciones(ultimoResultado);
+}
+
 // "Cómo se calculó" -- bloque de formulas/cargos/tarifa dentro de cada seccion,
 // independiente del toggle de "incluir esta seccion" (onToggleBloque arriba). Pedido
 // explicito del usuario: deben poder apagarse aparte, para que al generar la
@@ -1277,7 +1297,7 @@ function renderSecciones(r) {
   const cont = $('contenedorSecciones');
   cont.innerHTML = '';
   $('ayudaEdicion').hidden = false;
-  const numeros = TITULOS_SECCIONES.map((_, i) => i + 1).filter(n => seccionTieneDatos(n, r));
+  const numeros = ordenSeccionesEfectivo(r).filter(n => seccionTieneDatos(n, r));
   numeros.forEach((n, i) => {
     const art = renderSeccion(n, r, ultimoLeido, onToggleBloque, onEditarTexto, onToggleCalculo, onGuardarTextoGlobal, onQuitarTextoGlobal);
     agregarNavegacionSeccion(art, numeros[i - 1] ?? null, numeros[i + 1] ?? null);
@@ -1302,9 +1322,9 @@ function renderIndice(r) {
     return;
   }
   const activos = seccionesActivasEnOrden(r);
-  TITULOS_SECCIONES.forEach((titulo, i) => {
-    const n = i + 1;
-    if (!seccionTieneDatos(n, r)) return; // no existe todavia (ver seccionTieneDatos) -- no listar un link muerto
+  const orden = ordenSeccionesEfectivo(r).filter(n => seccionTieneDatos(n, r));
+  orden.forEach((n, i) => {
+    const titulo = TITULOS_SECCIONES[n - 1];
     const bloque = bloqueDeSeccion(n);
     const pos = activos.indexOf(n) + 1;
     const activo = pos > 0;
@@ -1317,6 +1337,20 @@ function renderIndice(r) {
     check.title = bloque === 'resumen' ? 'Siempre incluida' : 'Incluir en la cotización final (pantalla y PDF)';
     check.addEventListener('change', () => onToggleBloque(bloque, check.checked));
     fila.append(check);
+    // Botones de mover arriba/abajo -- pedido explicito del usuario ("permite
+    // arrastrar las secciones"), implementado como flechas en vez de arrastre real
+    // del mouse: mismo resultado, mas confiable en cualquier dispositivo/navegador.
+    const subir = document.createElement('button');
+    subir.type = 'button'; subir.className = 'btn-mover-seccion'; subir.textContent = '↑';
+    subir.title = 'Mover esta sección hacia arriba';
+    subir.disabled = i === 0;
+    subir.addEventListener('click', () => onMoverSeccion(n, -1));
+    const bajar = document.createElement('button');
+    bajar.type = 'button'; bajar.className = 'btn-mover-seccion'; bajar.textContent = '↓';
+    bajar.title = 'Mover esta sección hacia abajo';
+    bajar.disabled = i === orden.length - 1;
+    bajar.addEventListener('click', () => onMoverSeccion(n, 1));
+    fila.append(subir, bajar);
     const a = document.createElement('a');
     a.href = `#seccion-${n}`;
     a.className = 'indice-item';

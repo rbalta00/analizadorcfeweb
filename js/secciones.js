@@ -200,13 +200,29 @@ export function seccionTieneDatos(numero, r) {
   return true;
 }
 
+// Orden PERSONALIZADO de secciones, si Isaac arrastro/movio alguna con las flechas del
+// indice (ver moverSeccion en app.js) -- r.ordenSecciones es un array de numeros de
+// seccion en el orden que se quiere mostrar. Si no esta definido, o si quedo
+// desactualizado (ej. una seccion nueva que no existia cuando se guardo el orden, o
+// una que ya no existe por seccionTieneDatos), se valida contra el orden natural
+// 1..N: lo que sigue siendo valido se respeta en su posicion relativa, lo que falta se
+// agrega al final -- nunca se pierde una seccion por un orden guardado viejo.
+export function ordenSeccionesEfectivo(r) {
+  const natural = [];
+  for (let n = 1; n <= TITULOS_SECCIONES.length; n++) natural.push(n);
+  const guardado = (r.ordenSecciones || []).filter(n => natural.includes(n));
+  const faltantes = natural.filter(n => !guardado.includes(n));
+  return [...guardado, ...faltantes];
+}
+
 // Posicion de cada seccion ENTRE LAS ACTIVAS, sin huecos -- pedido explicito del
 // usuario: "si solo deje 5, va del 1 al 5, no se brinca". El PDF (propuesta.js) ya
 // renumeraba asi; esto hace que la vista en pantalla (numero en el header de cada
-// seccion + el indice) haga exactamente lo mismo.
+// seccion + el indice) haga exactamente lo mismo. Tambien respeta el orden
+// personalizado de ordenSeccionesEfectivo, si existe.
 export function seccionesActivasEnOrden(r) {
   const activos = [];
-  for (let n = 1; n <= TITULOS_SECCIONES.length; n++) {
+  for (const n of ordenSeccionesEfectivo(r)) {
     if (seccionTieneDatos(n, r) && r.seccionesActivas.includes(bloqueDeSeccion(n))) activos.push(n);
   }
   return activos;
