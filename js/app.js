@@ -7,6 +7,7 @@ import {
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden } from './secciones.js';
+import { guardarTextoGlobal, quitarTextoGlobal } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf } from './propuesta.js';
 import { generarResumenEjecutivo, generarGuiaPresentacion, generarAnexoInterconexion } from './resumen.js';
@@ -19,7 +20,7 @@ import {
   TARIFAS_SOPORTADAS, esDomestica, conectarEventosFormularioRecibo,
   leerFormularioRecibo, aplicarFormularioRecibo, llenarFormularioDesdeReciboCampos,
 } from './formularioRecibo.js';
-import { supabaseListar, supabaseActualizar, supabaseEliminar } from './supabase.js';
+import { supabaseListar, supabaseActualizar, supabaseEliminar, supabaseSubirArchivo, supabaseEliminarArchivo } from './supabase.js';
 import { subirANube, bajarDeNube } from './nube.js';
 
 window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
@@ -219,6 +220,18 @@ function tarjetaEnvio(envio) {
     (envio.campos_leidos?.reconciliacion_advertencia ? '<span class="nota aviso-chico">🛑 Tenía una advertencia de reconciliación al leer el recibo -- revisar con cuidado.</span>' : '');
   div.append(info);
 
+  if (envio.archivos && envio.archivos.length) {
+    const archivos = document.createElement('div');
+    archivos.className = 'lista-archivos-recibo';
+    for (const a of envio.archivos) {
+      const link = document.createElement('a');
+      link.href = a.url; link.target = '_blank'; link.rel = 'noopener';
+      link.textContent = '📎 ' + a.nombre;
+      archivos.append(link);
+    }
+    div.append(archivos);
+  }
+
   const acciones = document.createElement('div');
   acciones.className = 'acciones-envio';
   const selectCliente = document.createElement('select');
@@ -302,6 +315,7 @@ async function asignarEnvio(envio, selectCliente, filaNuevo, btnAsignar) {
     const proyecto = crearProyecto(cliente, { nombre: envio.nombre_declarado || undefined });
     proyecto.formulario = formularioDesdeEnvio(envio);
     proyecto.campos = envio.campos_leidos || null;
+    proyecto.archivosRecibo = envio.archivos || null;
     guardarProyecto(cliente, proyecto);
 
     await supabaseActualizar('envios_cliente', envio.id, {
@@ -424,6 +438,7 @@ $('archivoReciboNuevoProyecto').addEventListener('change', async (e) => {
       mostrarEstadoLecturaRecibo(campos);
       intentarAutoCalcular(campos);
     }
+    agregarArchivosReciboAProyecto(nuevos);
   } catch (err) {
     estadoEl.className = 'nota';
     estadoEl.textContent = 'Error al leer el recibo: ' + err.message;
@@ -494,6 +509,8 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   aplicarFormulario(proyectoActual.formulario);
   aplicarInmueble(proyectoActual.inmueble);
   mostrarPreviaSembrado(proyectoActual.fotoSembrado);
+  renderArchivosRecibo();
+  renderArchivosVerificacion();
   renderIndice(null);
   renderComparacion();
   aplicarEstadoPanel('chkPanelSeguimiento', 'contenidoSeguimiento', 'seguimiento');
@@ -559,6 +576,7 @@ function leerInmueble() {
     areaFuente: document.querySelector('input[name="inmAreaFuente"]:checked').value,
     sombras: $('inmSombras').value, sistemasExistentes: $('inmSistemasExistentes').value,
     fechaVisita: $('inmFechaVisita').value, notas: $('inmNotas').value,
+    panelesVerificacion: $('inmPanelesVerificacion').value ? Number($('inmPanelesVerificacion').value) : null,
   };
 }
 
@@ -578,7 +596,122 @@ function aplicarInmueble(inm) {
   $('inmSistemasExistentes').value = inm?.sistemasExistentes || '';
   $('inmFechaVisita').value = inm?.fechaVisita || '';
   $('inmNotas').value = inm?.notas || '';
+  $('inmPanelesVerificacion').value = inm?.panelesVerificacion ?? '';
 }
+
+// ---------------- Archivos originales del recibo (PDF/fotos tal cual se subieron) ----------------
+// Antes solo se leian con OCR y se descartaban -- ahora se suben al bucket publico
+// "recibos" de Supabase Storage (ver supabase.js) y se guarda {nombre,tipo,url,ruta}
+// en proyectoActual.archivosRecibo, para poder verlos/descargarlos despues desde
+// cualquier dispositivo (igual que fotoSembrado, viaja con el respaldo en la nube
+// porque es parte del objeto proyecto). La subida nunca bloquea la lectura/calculo del
+// recibo: si falla (sin internet, etc.) solo se avisa en consola, no se interrumpe nada.
+function renderArchivosRecibo() {
+  const cont = $('listaArchivosRecibo');
+  const archivos = (proyectoActual && proyectoActual.archivosRecibo) || [];
+  cont.innerHTML = '';
+  cont.hidden = !archivos.length;
+  archivos.forEach((a, i) => {
+    const fila = document.createElement('div');
+    fila.className = 'fila-archivo-recibo';
+    const link = document.createElement('a');
+    link.href = a.url; link.target = '_blank'; link.rel = 'noopener';
+    link.textContent = '📎 ' + a.nombre;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn-link'; btn.textContent = '🗑';
+    btn.title = 'Quitar este archivo';
+    btn.addEventListener('click', () => quitarArchivoRecibo(i));
+    fila.append(link, btn);
+    cont.append(fila);
+  });
+}
+
+async function agregarArchivosReciboAProyecto(files) {
+  if (!proyectoActual || !files || !files.length) return;
+  const subidos = [];
+  for (const f of files) {
+    try {
+      subidos.push(await supabaseSubirArchivo('cotizaciones', f));
+    } catch (err) {
+      console.error('No se pudo subir el archivo del recibo:', err);
+    }
+  }
+  if (!subidos.length) return;
+  proyectoActual.archivosRecibo = (proyectoActual.archivosRecibo || []).concat(subidos);
+  guardarProyecto(clienteActual, proyectoActual);
+  renderArchivosRecibo();
+}
+
+async function quitarArchivoRecibo(indice) {
+  const archivos = proyectoActual.archivosRecibo || [];
+  const archivo = archivos[indice];
+  if (!archivo) return;
+  if (!confirm(`¿Quitar "${archivo.nombre}"? No se puede deshacer.`)) return;
+  proyectoActual.archivosRecibo = archivos.filter((_, i) => i !== indice);
+  guardarProyecto(clienteActual, proyectoActual);
+  renderArchivosRecibo();
+  try { await supabaseEliminarArchivo(archivo.ruta); } catch (err) { console.error(err); }
+}
+
+// ---------------- Archivos de verificacion en sitio (evidencia, no se lee/extrae nada) ----------------
+// Mismo patron que archivosRecibo arriba, pero para el formato de verificacion en
+// sitio del gobierno (u otro emisor) -- pedido explicito del usuario: mostrarlo junto
+// al recibo en la seccion 2 de la cotizacion, como evidencia adjunta, sin extraer
+// ningun dato de el.
+function renderArchivosVerificacion() {
+  const cont = $('listaArchivosVerificacion');
+  const archivos = (proyectoActual && proyectoActual.archivosVerificacion) || [];
+  cont.innerHTML = '';
+  cont.hidden = !archivos.length;
+  archivos.forEach((a, i) => {
+    const fila = document.createElement('div');
+    fila.className = 'fila-archivo-recibo';
+    const link = document.createElement('a');
+    link.href = a.url; link.target = '_blank'; link.rel = 'noopener';
+    link.textContent = '📎 ' + a.nombre;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn-link'; btn.textContent = '🗑';
+    btn.title = 'Quitar este archivo';
+    btn.addEventListener('click', () => quitarArchivoVerificacion(i));
+    fila.append(link, btn);
+    cont.append(fila);
+  });
+}
+
+async function agregarArchivosVerificacionAProyecto(files) {
+  if (!proyectoActual || !files || !files.length) return;
+  const subidos = [];
+  for (const f of files) {
+    try {
+      subidos.push(await supabaseSubirArchivo('verificaciones', f));
+    } catch (err) {
+      console.error('No se pudo subir el archivo de verificación:', err);
+    }
+  }
+  if (!subidos.length) return;
+  proyectoActual.archivosVerificacion = (proyectoActual.archivosVerificacion || []).concat(subidos);
+  guardarProyecto(clienteActual, proyectoActual);
+  renderArchivosVerificacion();
+}
+
+async function quitarArchivoVerificacion(indice) {
+  const archivos = proyectoActual.archivosVerificacion || [];
+  const archivo = archivos[indice];
+  if (!archivo) return;
+  if (!confirm(`¿Quitar "${archivo.nombre}"? No se puede deshacer.`)) return;
+  proyectoActual.archivosVerificacion = archivos.filter((_, i) => i !== indice);
+  guardarProyecto(clienteActual, proyectoActual);
+  renderArchivosVerificacion();
+  try { await supabaseEliminarArchivo(archivo.ruta); } catch (err) { console.error(err); }
+}
+
+$('archivoVerificacion').addEventListener('change', async (e) => {
+  const nuevos = Array.from(e.target.files || []);
+  if (!nuevos.length) return;
+  e.target.value = '';
+  await agregarArchivosVerificacionAProyecto(nuevos);
+  if (ultimoResultado) { ultimoResultado.archivosVerificacion = proyectoActual.archivosVerificacion; renderSecciones(ultimoResultado); }
+});
 
 // ---------------- Foto del sembrado de paneles (se agrega a la seccion 6 y al PDF) ----------------
 // Se guarda como {dataUrl, ancho, alto} -- no solo el data URL -- porque el PDF
@@ -751,6 +884,7 @@ $('archivoRecibo').addEventListener('change', async (e) => {
     llenarFormularioDesdeRecibo(campos);
     mostrarEstadoLecturaRecibo(campos);
     intentarAutoCalcular(campos);
+    agregarArchivosReciboAProyecto(nuevos);
   } catch (err) {
     estadoEl.className = 'nota';
     estadoEl.textContent = 'Error al leer el recibo: ' + err.message;
@@ -856,8 +990,11 @@ function calcularYRenderizar() {
 
   const r = construirResultado(input);
   r.seccionesActivas = proyectoActual.seccionesActivas || todosLosBloques();
+  r.calculosActivos = proyectoActual.calculosActivos || todosLosBloques();
   r.textosEditados = proyectoActual.textosEditados || {};
   r.fotoSembrado = proyectoActual.fotoSembrado || null;
+  r.archivosRecibo = proyectoActual.archivosRecibo || null;
+  r.archivosVerificacion = proyectoActual.archivosVerificacion || null;
   ultimoResultado = r;
 
   // Si el proyecto todavia tiene su nombre generico de creacion ("Cotización N"), se
@@ -1050,6 +1187,19 @@ function onToggleBloque(bloque, activo) {
   if (ultimoResultado) { ultimoResultado.seccionesActivas = proyectoActual.seccionesActivas; renderSecciones(ultimoResultado); }
 }
 
+// "Cómo se calculó" -- bloque de formulas/cargos/tarifa dentro de cada seccion,
+// independiente del toggle de "incluir esta seccion" (onToggleBloque arriba). Pedido
+// explicito del usuario: deben poder apagarse aparte, para que al generar la
+// cotizacion que se le manda al cliente solo entren las que el decida dejar
+// encendidas -- mismo patron que seccionesActivas, estado paralelo propio.
+function onToggleCalculo(bloque, activo) {
+  const set = new Set(proyectoActual.calculosActivos || todosLosBloques());
+  if (activo) set.add(bloque); else set.delete(bloque);
+  proyectoActual.calculosActivos = [...set];
+  guardarProyecto(clienteActual, proyectoActual);
+  if (ultimoResultado) { ultimoResultado.calculosActivos = proyectoActual.calculosActivos; renderSecciones(ultimoResultado); }
+}
+
 function onEditarTexto(id, valor, textoDefecto) {
   proyectoActual.textosEditados = proyectoActual.textosEditados || {};
   if (valor == null || !valor.trim() || valor.trim() === textoDefecto.trim()) {
@@ -1062,6 +1212,20 @@ function onEditarTexto(id, valor, textoDefecto) {
     ultimoResultado.textosEditados = proyectoActual.textosEditados;
     renderSecciones(ultimoResultado);
   }
+}
+
+// Predeterminado GLOBAL de un texto -- aplica a TODAS las cotizaciones, no solo a
+// este cliente (ver textosGlobales.js) -- pedido explicito del usuario: poder
+// cambiar la redaccion de la app el mismo, sin pedirmelo por codigo.
+function onGuardarTextoGlobal(id, texto, textoDefecto) {
+  const limpio = (texto || '').trim();
+  if (!limpio || limpio === (textoDefecto || '').trim()) { quitarTextoGlobal(id); } else { guardarTextoGlobal(id, texto); }
+  if (ultimoResultado) renderSecciones(ultimoResultado);
+}
+
+function onQuitarTextoGlobal(id) {
+  quitarTextoGlobal(id);
+  if (ultimoResultado) renderSecciones(ultimoResultado);
 }
 
 function agregarNavegacionSeccion(art, n) {
@@ -1086,7 +1250,7 @@ function renderSecciones(r) {
   cont.innerHTML = '';
   $('ayudaEdicion').hidden = false;
   for (let n = 1; n <= 21; n++) {
-    const art = renderSeccion(n, r, ultimoLeido, onToggleBloque, onEditarTexto);
+    const art = renderSeccion(n, r, ultimoLeido, onToggleBloque, onEditarTexto, onToggleCalculo, onGuardarTextoGlobal, onQuitarTextoGlobal);
     agregarNavegacionSeccion(art, n);
     cont.append(art);
   }

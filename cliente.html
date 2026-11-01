@@ -43,6 +43,7 @@
         <p class="nota">Puedes subir el PDF o una foto de tu recibo de CFE. Si son varias fotos (ej. anverso y
           reverso), selecciónalas todas juntas. Esto puede tardar hasta 1 minuto.</p>
         <input type="file" id="archivoRecibo" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
+        <div id="listaArchivosCliente" class="lista-archivos-recibo" hidden></div>
         <p class="nota" id="estadoRecibo"></p>
         <p class="nota aviso" id="avisoReconciliacion" hidden></p>
       </section>
@@ -50,88 +51,9 @@
       <section class="tarjeta">
         <h3>3. Datos de tu recibo</h3>
         <p class="nota">Si subiste tu recibo arriba, revisa que estos datos coincidan -- los campos que no se
-          detectaron solos quedan marcados en naranja. Si no lo subiste, llénalos a mano viendo tu recibo.</p>
-
-        <section id="bloqueNoDomestica">
-          <div class="fila">
-            <label>Días del período<input id="periodoDias" type="number" value="30" min="1" /></label>
-            <label>kWh del período<input id="periodoKwh" type="number" value="1000" min="0.01" step="0.01" /></label>
-            <label>DAP (alumbrado público), por período<input id="dap" type="number" value="197" min="0" step="0.01" /></label>
-          </div>
-          <h4>Historial de consumo (opcional, nos ayuda a calcular mejor)</h4>
-          <p class="nota">Si tu recibo trae una gráfica o tabla de "Historial de consumo" (normalmente los últimos
-            12 meses), copia el kWh de cada uno abajo -- así calculamos tu sistema con tu consumo real promedio
-            en vez de un solo mes. Si no la tienes o no quieres llenarla, déjala en blanco, no es obligatoria.</p>
-          <div class="fila historial" id="gridHistorialNoDom"></div>
-          <h4>Desglose de cargos del período (MXN)</h4>
-          <p class="nota">En la tabla de conceptos de tu recibo, copia el importe de cada renglón. Si alguno no
-            aparece en tu recibo, déjalo en 0.</p>
-          <div class="fila cargos">
-            <label>Suministro<input id="c_suministro" type="number" value="0" step="0.01" /></label>
-            <label>Distribución<input id="c_distribucion" type="number" value="0" step="0.01" /></label>
-            <label>Transmisión<input id="c_transmision" type="number" value="0" step="0.01" /></label>
-            <label>CENACE<input id="c_cenace" type="number" value="0" step="0.01" /></label>
-            <span id="grupoEnergiaUnica"><label>Energía<input id="c_energia" type="number" value="0" step="0.01" /></label></span>
-            <label>Capacidad<input id="c_capacidad" type="number" value="0" step="0.01" /></label>
-            <label>SCnMEM<input id="c_scnmem" type="number" value="0" step="0.01" /></label>
-          </div>
-          <div class="fila cargos" id="grupoEnergiaGDMTH" hidden>
-            <p class="nota" style="flex-basis:100%">Tu tarifa (GDMTH) trae la Energía partida en 3 renglones en tu
-              recibo: "Generación Base", "Generación Intermedia" y "Generación Punta". Copia el importe de cada uno.</p>
-            <label>Energía Base<input id="c_energia_base" type="number" value="0" step="0.01" /></label>
-            <label>Energía Intermedia<input id="c_energia_intermedia" type="number" value="0" step="0.01" /></label>
-            <label>Energía Punta<input id="c_energia_punta" type="number" value="0" step="0.01" /></label>
-          </div>
-          <h4>Columna "$/kW" del recibo</h4>
-          <p class="nota">En la tabla de tu recibo, busca la columna "$/kW" de Distribución y Capacidad. Si trae un
-            importe (no $0.00), marca "Sí hay demanda".</p>
-          <div class="fila">
-            <fieldset>
-              <legend>Distribución</legend>
-              <label><input type="radio" name="rkDist" value="demanda" checked /> Trae importe en $/kW (SÍ hay demanda)</label>
-              <label><input type="radio" name="rkDist" value="mercado" /> Aparece en $0.00 (NO hay demanda)</label>
-            </fieldset>
-            <fieldset>
-              <legend>Capacidad</legend>
-              <label><input type="radio" name="rkCap" value="demanda" checked /> Trae importe en $/kW (SÍ hay demanda)</label>
-              <label><input type="radio" name="rkCap" value="mercado" /> Aparece en $0.00 (NO hay demanda)</label>
-            </fieldset>
-          </div>
-          <h4>Cargos extra del recibo (si aplican)</h4>
-          <div class="fila">
-            <label><input type="checkbox" id="traeBt" /> Trae cargo de 2% en baja tensión</label>
-            <label>Monto del 2% (MXN)<input id="btMonto" type="number" value="0" min="0" step="0.01" disabled /></label>
-            <label><input type="checkbox" id="traeBonus" /> Trae bonificación por factor de potencia</label>
-            <label>Monto de la bonificación (MXN, positivo)<input id="bonusMonto" type="number" value="0" min="0" step="0.01" disabled /></label>
-          </div>
-        </section>
-
-        <section id="bloqueDomestica" hidden>
-          <div class="fila">
-            <label>Días del período<input id="d_periodoDias" type="number" value="60" /></label>
-            <label>kWh del período<input id="d_periodoKwh" type="number" value="400" step="0.01" /></label>
-            <label>DAP del período (MXN)<input id="d_dap" type="number" value="0" step="0.01" /></label>
-          </div>
-          <h4>Historial de consumo (opcional, nos ayuda a calcular mejor)</h4>
-          <p class="nota">Si tu recibo trae una gráfica o tabla de "Historial de consumo" (normalmente los últimos
-            6 bimestres), copia el kWh de cada uno abajo. Si no la tienes, déjala en blanco, no es obligatoria.</p>
-          <div class="fila historial" id="gridHistorialDom"></div>
-          <h4>Escalones de tu tarifa (si tu recibo los trae impresos)</h4>
-          <p class="nota">Busca en tu recibo la tabla con los renglones "Básico", "Intermedio" y "Excedente" (los
-            límites de kWh y el precio por kWh de cada uno). Si no la encuentras, déjalo como está -- usaremos
-            valores típicos y los confirmamos contigo antes de la cotización final.</p>
-          <div class="fila">
-            <label>Límite Básico (kWh)<input id="d_basicoKwh" type="number" value="150" /></label>
-            <label>Tarifa Básico ($/kWh)<input id="d_basicoRate" type="number" value="1.140" step="0.001" /></label>
-          </div>
-          <div class="fila">
-            <label>Límite Intermedio (kWh adicionales)<input id="d_interKwh" type="number" value="130" /></label>
-            <label>Tarifa Intermedio ($/kWh)<input id="d_interRate" type="number" value="1.385" step="0.001" /></label>
-          </div>
-          <div class="fila">
-            <label>Tarifa Excedente ($/kWh)<input id="d_excedRate" type="number" value="4.054" step="0.001" /></label>
-          </div>
-        </section>
+          detectaron solos quedan marcados en naranja. Si no lo subiste, llénalos a mano viendo tu recibo. Este
+          bloque cambia según la tarifa que elegiste arriba -- solo ves los campos que le corresponden a ella.</p>
+        <div id="contenedorFormulariosTarifa"></div>
       </section>
 
       <section class="tarjeta">
@@ -161,6 +83,7 @@
 
   <script src="lib/pdf.min.js"></script>
   <script src="lib/tesseract.min.js"></script>
+  <script src="lib/jspdf.umd.min.js"></script>
   <script type="module" src="js/clienteForm.js"></script>
 </body>
 </html>

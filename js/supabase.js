@@ -51,3 +51,42 @@ export async function supabaseEliminar(tabla, id) {
   });
   await manejarRespuesta(resp);
 }
+
+// Sube un archivo (PDF o foto de un recibo) al bucket publico "recibos" y regresa su
+// URL de descarga directa. `carpeta` agrupa los archivos (ej. "cotizaciones" o
+// "envios") para poder distinguirlos en el bucket; `nombreOriginal` se sanea porque
+// la ruta del archivo en Storage no acepta espacios ni acentos de forma confiable.
+function nombreSeguro(nombre) {
+  const base = (nombre || 'archivo').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return base.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80);
+}
+
+export async function supabaseSubirArchivo(carpeta, file) {
+  const ruta = `${carpeta}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${nombreSeguro(file.name)}`;
+  const resp = await fetch(`${SUPABASE_URL}/storage/v1/object/recibos/${ruta}`, {
+    method: 'POST',
+    headers: { ...HEADERS_BASE, 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+  if (!resp.ok) {
+    const texto = await resp.text().catch(() => '');
+    throw new Error(`No se pudo subir "${file.name}" (${resp.status}): ${texto || resp.statusText}`);
+  }
+  return {
+    nombre: file.name,
+    tipo: file.type || 'application/octet-stream',
+    ruta,
+    url: `${SUPABASE_URL}/storage/v1/object/public/recibos/${ruta}`,
+  };
+}
+
+export async function supabaseEliminarArchivo(ruta) {
+  const resp = await fetch(`${SUPABASE_URL}/storage/v1/object/recibos/${ruta}`, {
+    method: 'DELETE',
+    headers: HEADERS_BASE,
+  });
+  if (!resp.ok && resp.status !== 404) {
+    const texto = await resp.text().catch(() => '');
+    throw new Error(`No se pudo borrar el archivo (${resp.status}): ${texto || resp.statusText}`);
+  }
+}

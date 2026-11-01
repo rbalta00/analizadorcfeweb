@@ -8,6 +8,7 @@ import { barraHorizontal, barraAgrupada, gauge, curvaFlujo } from './charts.js';
 import { bloqueDeSeccion } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
+import { leerTextosGlobales } from './textosGlobales.js';
 
 function el(tag, cls, html) {
   const e = document.createElement(tag);
@@ -31,11 +32,19 @@ let _seccionActual = 0;
 let _contadorTexto = 0;
 let _overridesActuales = {};
 let _onEditarTextoActual = () => {};
+let _calculosActivosActual = [];
+let _onToggleCalculoActual = () => {};
+let _globalesActuales = {};
+let _onGuardarGlobalActual = () => {};
+let _onQuitarGlobalActual = () => {};
 
 function siguienteTextoId() {
   return `s${_seccionActual}-t${_contadorTexto++}`;
 }
 
+// Prioridad: override de este proyecto/cliente > predeterminado global (guardado por
+// Isaac para todas las cotizaciones) > texto fijo en el codigo. Pedido explicito del
+// usuario: poder cambiar la redaccion de la app sin pedirmelo por codigo cada vez.
 function textoEditable(tag, cls, textoDefecto) {
   const id = siguienteTextoId();
   const wrap = el('div', 'campo-editable');
@@ -45,23 +54,47 @@ function textoEditable(tag, cls, textoDefecto) {
   e.contentEditable = 'true';
   e.spellcheck = false;
   e.dataset.textoId = id;
-  const editado = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
-  e.textContent = editado ? _overridesActuales[id] : textoDefecto;
+  const tieneProyecto = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
+  const tieneGlobal = Object.prototype.hasOwnProperty.call(_globalesActuales, id);
+  const base = tieneGlobal ? _globalesActuales[id] : textoDefecto;
+  e.textContent = tieneProyecto ? _overridesActuales[id] : base;
   e.addEventListener('paste', (ev) => {
     ev.preventDefault();
     const texto = (ev.clipboardData || window.clipboardData).getData('text/plain');
     document.execCommand('insertText', false, texto);
   });
-  e.addEventListener('focusout', () => _onEditarTextoActual(id, e.textContent, textoDefecto));
+  e.addEventListener('focusout', () => _onEditarTextoActual(id, e.textContent, base));
   wrap.append(e);
-  if (editado) {
+  if (tieneGlobal) {
+    const nota = el('span', 'nota-texto-global', '🌐 Usa tu predeterminado global');
+    wrap.append(nota);
+  }
+  if (tieneProyecto) {
     wrap.classList.add('campo-editado');
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn-restaurar-texto';
-    btn.textContent = '↺ Restaurar texto original';
-    btn.addEventListener('click', () => _onEditarTextoActual(id, null, textoDefecto));
+    btn.textContent = '↺ Restaurar a predeterminado';
+    btn.addEventListener('click', () => _onEditarTextoActual(id, null, base));
     wrap.append(btn);
+  }
+  if (tieneProyecto || !tieneGlobal) {
+    // Solo tiene sentido "guardar como predeterminado" si lo que se ve ahora mismo
+    // es distinto del predeterminado global actual (o no hay uno todavia).
+    const btnGlobal = document.createElement('button');
+    btnGlobal.type = 'button';
+    btnGlobal.className = 'btn-guardar-global';
+    btnGlobal.textContent = '🌐 Usar este texto en todas las cotizaciones nuevas';
+    btnGlobal.addEventListener('click', () => _onGuardarGlobalActual(id, e.textContent, textoDefecto));
+    wrap.append(btnGlobal);
+  }
+  if (tieneGlobal) {
+    const btnQuitar = document.createElement('button');
+    btnQuitar.type = 'button';
+    btnQuitar.className = 'btn-guardar-global';
+    btnQuitar.textContent = '🌐✕ Quitar predeterminado global (usar el texto original de la app)';
+    btnQuitar.addEventListener('click', () => _onQuitarGlobalActual(id, textoDefecto));
+    wrap.append(btnQuitar);
   }
   return wrap;
 }
@@ -149,6 +182,36 @@ function toggleBloque(r, numero, onToggle) {
   return wrap;
 }
 
+// "Cómo se calculó esta sección" -- bloque de formulas/cargos/tarifa reales (no
+// generico), con su propio toggle INDEPENDIENTE del de la seccion (ver bloques.js /
+// onToggleCalculo en app.js). Pedido explicito del usuario: debe mostrar de donde
+// salen los numeros -- formula, cargos y tarifa reales del recibo que se esta
+// cotizando -- y poder apagarse aparte al generar la cotizacion que se envia al
+// cliente. Igual que con seccionesActivas, el bloque SIEMPRE se ve aqui en pantalla
+// (para que Isaac lo revise); el estado del checkbox es lo que decide si entra o no
+// a lo que se genera -- el PDF (propuesta.js) todavia no replica esta seccion, mismo
+// alcance ya documentado para la edicion de texto (ver ESTADO.md).
+function bloqueCalculo(numero, nodoOArray) {
+  const bloque = bloqueDeSeccion(numero);
+  const activo = _calculosActivosActual.includes(bloque);
+  const cont = el('div', 'calculo-detalle' + (activo ? '' : ' calculo-detalle-apagado'));
+  const header = el('div', 'calculo-detalle-header');
+  header.append(el('h3', null, '📐 Cómo se calculó'));
+  const wrap = el('label', 'toggle-seccion toggle-calculo');
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = activo;
+  input.addEventListener('change', () => _onToggleCalculoActual(bloque, input.checked));
+  wrap.append(input, document.createTextNode(' Incluir este detalle en la cotización final (pantalla)'));
+  header.append(wrap);
+  cont.append(header);
+  if (!activo) cont.append(el('p', 'nota', 'Apagado: no se incluirá al generar la cotización para este cliente.'));
+  const cuerpo = el('div', 'calculo-detalle-cuerpo');
+  for (const n of Array.isArray(nodoOArray) ? nodoOArray : [nodoOArray]) cuerpo.append(n);
+  cont.append(cuerpo);
+  return cont;
+}
+
 function crearSeccion(numero, titulo, pregunta, r, onToggle) {
   _seccionActual = numero;
   _contadorTexto = 0;
@@ -223,7 +286,64 @@ function s02(r, leido, onToggle) {
   ]));
   art.append(avisoCream('Los datos de este recibo se usan como base de cálculo del estudio completo; cualquier ' +
     'corrección debe confirmarse contra el documento original de CFE.'));
+  art.append(bloqueDocumentosYVerificacion(r));
   return art;
+}
+
+function filaArchivo(a) {
+  const esImagen = (a.tipo || '').startsWith('image/');
+  const fila = el('div', 'documento-adjunto');
+  if (esImagen) {
+    const img = document.createElement('img');
+    img.src = a.url; img.alt = a.nombre; img.className = 'documento-adjunto-img';
+    fila.append(img);
+  }
+  const link = document.createElement('a');
+  link.href = a.url; link.target = '_blank'; link.rel = 'noopener';
+  link.textContent = (esImagen ? '🖼 ' : '📄 ') + a.nombre;
+  fila.append(link);
+  return fila;
+}
+
+// Documentos originales adjuntos (recibo + verificacion en sitio del gobierno/emisor,
+// archivo "Verificaciones en Sitio") y, si Isaac capturo cuantos paneles sugiere esa
+// verificacion de campo, una comparacion contra lo que calculo el sistema -- pedido
+// explicito del usuario: "como queda el proyecto... y como seria con la propuesta de
+// los paneles que verificaron en campo los del gobierno".
+function bloqueDocumentosYVerificacion(r) {
+  const cont = el('div', 'documentos-verificacion');
+  const recibo = r.archivosRecibo || [];
+  const verif = r.archivosVerificacion || [];
+  if (recibo.length) {
+    cont.append(el('h3', null, 'Recibo original adjunto'));
+    const grid = el('div', 'documentos-grid');
+    recibo.forEach(a => grid.append(filaArchivo(a)));
+    cont.append(grid);
+  }
+  if (verif.length) {
+    cont.append(el('h3', null, 'Verificación en sitio adjunta'));
+    cont.append(p('Documento de verificación en campo (del gobierno u otro emisor), adjuntado tal cual -- no se ' +
+      'extrajo ningún dato de él automáticamente.'));
+    const grid = el('div', 'documentos-grid');
+    verif.forEach(a => grid.append(filaArchivo(a)));
+    cont.append(grid);
+  }
+  const panelesCampo = r.inmueble?.panelesVerificacion;
+  if (panelesCampo) {
+    cont.append(el('h3', null, 'Proyecto calculado vs. propuesta de la verificación en campo'));
+    cont.append(tabla(['', 'Paneles', 'Potencia', 'Ahorro anual estimado'], [
+      ['Calculado por este sistema (consumo real del recibo)', `${r.n}`, `${r.kwp.toFixed(2)} kWp`, M(r.ahorroAnual)],
+      ['Sugerido en la verificación en campo', `${panelesCampo}`, panelesCampo && r.moduloWp ? `${(panelesCampo * r.moduloWp / 1000).toFixed(2)} kWp` : 'por confirmar', 'no calculado -- ver nota'],
+    ]));
+    const dif = panelesCampo - r.n;
+    cont.append(p(dif === 0
+      ? 'El número de paneles calculado por el consumo real coincide con lo que sugirió la verificación en campo.'
+      : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que calcula este sistema a partir del consumo real del recibo. La verificación en campo suele basarse en el espacio disponible observado en sitio, no necesariamente en el consumo exacto -- ambos criterios son válidos y conviene presentarle al cliente las dos referencias antes de decidir el tamaño final.`));
+    cont.append(avisoCream('El ahorro anual de la columna "Sugerido en la verificación en campo" no se calculó -- ' +
+      'requeriría correr el motor con ese número de paneles. Esta tabla es solo para comparar tamaños, no para ' +
+      'prometer un ahorro distinto al presentado en el resto del estudio.'));
+  }
+  return cont;
 }
 
 // ---------- 03: como se forma el pago ----------
@@ -244,7 +364,65 @@ function s03(r, _leido, onToggle) {
     'disponible la electricidad que usa.'));
   art.append(p('Para valorar el ahorro no se multiplica toda la producción solar por el precio medio de la ' +
     'factura: cada uno de estos cargos tiene su propia regla, explicada en la sección siguiente.'));
+  art.append(bloqueCalculo(3, r.esDomestica ? calculoReciboDomestico(r) : calculoReciboConDemanda(r)));
   return art;
+}
+
+// Tarifas con demanda contratada o PDBT (GDMTO/GDMTH/GDBT/PDBT): cargo fijo por día +
+// tarifa por kWh, igual formula en motor.js/construirInvoice -- ver esa funcion para
+// el porque exacto de cada paso.
+function calculoReciboConDemanda(r) {
+  return [
+    p(`Fórmula de facturación de CFE para la tarifa ${r.tarifa} (Acuerdo de la Comisión Nacional de Energía ` +
+      'para tarifas finales de suministro básico, apartados 3.1.2, 5.1, 5.2 y 5.5): el pago de un período se arma ' +
+      'como "cargo fijo por los días del período" + "tarifa por kWh × energía neta consumida", más el 2% de baja ' +
+      'tensión y la bonificación por factor de potencia cuando el recibo los trae, más IVA (16%) y el Derecho de ' +
+      'Alumbrado Público (DAP).'),
+    tabla(['Variable', 'Cómo se obtuvo', 'Valor en este recibo'], [
+      ['Cargo fijo por día', `Suma de los conceptos que NO dependen del consumo (${listaConceptos(r.meta.noReducibles)}) ÷ días del período = ${M(r.meta.noReducible)} ÷ ${r.periodoDias} días`, `${M(r.meta.monthlyFixed)}/día`],
+      ['Tarifa por kWh', `Suma de los conceptos que SÍ dependen del consumo (${listaConceptos(r.meta.reducibles)}) ÷ kWh del período = ${M(r.meta.reducible)} ÷ ${r.periodoKwh.toLocaleString('en-US')} kWh`, `${r.meta.energyRate.toFixed(4)} $/kWh`],
+      ['2% de baja tensión', r.btPct ? `${PCT(r.btPct)} del cargo base del período, tal como lo trae impreso el recibo` : 'Este recibo no lo trae impreso este período', r.btPct ? PCT(r.btPct) : '—'],
+      ['Bonificación factor de potencia', r.fpBonusPct ? `${PCT(r.fpBonusPct)} del (cargo base + 2% BT), tal como lo trae impreso el recibo` : 'Este recibo no la trae impresa este período', r.fpBonusPct ? PCT(r.fpBonusPct) : '—'],
+      ['DAP', `Importe fijo que cobra el municipio, no CFE (p. ej. Ley de Ingresos del Municipio de Puebla 2026, arts. 60 y 92, que fija una cuota mensual con un estímulo contemplado)`, M(r.dap || 0) + '/período'],
+    ], { small: true }),
+    p(`Con estos 5 valores se reconstruye el total exacto de este recibo: ${M(r.meta.monthlyFixed)}/día × ${r.periodoDias} ` +
+      `días + ${r.meta.energyRate.toFixed(4)} $/kWh × ${r.periodoKwh.toLocaleString('en-US')} kWh = ${M(r.meta.monthlyFixed * r.periodoDias + r.meta.energyRate * r.periodoKwh)} de cargo base, y de ahí se aplican BT/bonificación, IVA y DAP hasta llegar a ${M(r.pagoRecurrentePeriodo)}.`),
+    avisoCream('Esta reconstrucción es aritmética pura sobre los importes ya impresos en el recibo del cliente -- ' +
+      'no depende de ningún precio de lista ni de ningún supuesto del sistema fotovoltaico.'),
+  ];
+}
+
+// Tarifas domesticas 01/DAC: volumetrica por escalones (01) o precio unico (DAC), SIN
+// cargo de demanda -- ver construirInvoiceDomestica() en motor.js. 01 tiene 3 tramos
+// (Basico/Intermedio/Excedente); DAC es un solo tramo con limite null (mismo motor,
+// un solo renglon).
+function calculoReciboDomestico(r) {
+  const esc = r.escalones || [];
+  const tieneTramos = esc.length > 1;
+  const rateProm = r.periodoKwh ? r.cargos.energia / r.periodoKwh : 0;
+  const filasEsc = esc.map(([limite, tarifa], i) => [
+    tieneTramos ? (i === 0 ? 'Básico' : i === 1 ? 'Intermedio' : 'Excedente') : 'Precio único',
+    limite == null ? 'Resto del consumo' : `Primeros ${limite} kWh de este tramo`,
+    `${Number(tarifa).toFixed(4)} $/kWh`,
+  ]);
+  return [
+    p(`Fórmula de facturación de CFE para la tarifa ${r.tarifa} (volumétrica por tramos, sin cargo de demanda): ` +
+      (tieneTramos
+        ? 'cada tramo de consumo (Básico, Intermedio, Excedente) tiene su propio precio por kWh, impresos en el ' +
+          'propio recibo -- se cobra el consumo que cae en cada tramo al precio de ese tramo, no todo el consumo ' +
+          'al precio del tramo más alto.'
+        : 'un único precio por kWh para todo el consumo del período, sin tramos ni cargo fijo de demanda.') +
+      ' Después se aplica IVA (16%) y el DAP del período.'),
+    tabla(['Tramo', 'Alcance', 'Precio'], filasEsc, { small: true }),
+    tabla(['Variable', 'Cómo se obtuvo', 'Valor en este recibo'], [
+      ['Consumo del período', 'Impreso en el recibo', `${r.periodoKwh.toLocaleString('en-US')} kWh en ${r.periodoDias} días`],
+      ['Cargo de energía', tieneTramos ? 'Suma de lo que corresponde a cada tramo' : `${r.periodoKwh.toLocaleString('en-US')} kWh × precio único`, M(r.cargos.energia)],
+      ['Precio efectivo promedio', 'Cargo de energía ÷ kWh del período -- solo como referencia, no es el precio real de ningún tramo', `${rateProm.toFixed(4)} $/kWh`],
+      ['DAP', 'Importe fijo del período', M(r.dap || 0)],
+    ], { small: true }),
+    avisoCream('A diferencia de GDMTO/GDMTH/GDBT, aquí NO hay cargo de demanda contratada: prácticamente todo el ' +
+      'consumo que se cubra con energía solar se refleja en el ahorro -- ver sección 4.'),
+  ];
 }
 
 // ---------- 04: que cargos pueden disminuir ----------
@@ -268,6 +446,34 @@ function s04(r, _leido, onToggle) {
     `por período — un ${PCT(r.pctMaxPeriodo)}.`));
   art.append(avisoCream('No se prometen ahorros de demanda sin conocer la energía importada y la demanda después ' +
     'de instalar. Conservar su importe en el presupuesto es un criterio prudente, no afirmar que esos cargos sean fijos.'));
+  art.append(bloqueCalculo(4, r.esDomestica ? [
+    p(`Esta tarifa (${r.tarifa}) es 100% volumétrica: no tiene cargo de demanda contratada ni ningún concepto ` +
+      'que se facture por kW. Todo el cargo de energía se factura por kWh consumido (por tramos en la tarifa 01, ' +
+      'a precio único en DAC), así que la energía solar sustituye kWh comprados a CFE prácticamente 1 a 1, sin el ' +
+      'piso de cargos fijos de demanda que sí tienen GDMTO/GDMTH/GDBT.'),
+    tabla(['Concepto', 'Clasificación', 'Por qué'], [
+      ['Energía (todos los tramos)', 'Sí baja', 'Se factura por kWh -- la energía solar sustituye kWh comprados a CFE.'],
+    ], { small: true }),
+    avisoCream('El único piso que queda es el IVA y el DAP, que no dependen del consumo -- por eso el % máximo de ' +
+      'ahorro de una tarifa doméstica suele ser más alto que el de una tarifa con demanda contratada.'),
+  ] : [
+    p('Criterio de clasificación usado (freno de clasificación del motor de cálculo): se revisa la columna ' +
+      '"$/kW" del propio recibo para Distribución y Capacidad -- si trae un importe mayor a $0.00, esos dos ' +
+      'conceptos se facturan por demanda contratada (kW), no por consumo (kWh), y se marcan como "no reducibles". ' +
+      `En este recibo: ${r.meta.tieneDemandaContratada ? 'SÍ' : 'NO'} hay importe en esa columna, por eso ` +
+      `${r.meta.tieneDemandaContratada ? 'Distribución y Capacidad quedan fuera del cálculo de ahorro' : 'prácticamente todo el recibo entra al cálculo de ahorro'}.`),
+    p('Por qué no se acredita ahorro en los cargos de demanda aunque se instalen paneles: la medición neta ' +
+      '(Metodología para la medición neta, Resolución RES/142/2017 de la CRE, Anexo I) compensa kWh de energía ' +
+      'contra kWh consumidos, pero no modifica por sí sola el cargo por demanda contratada -- ese cargo depende ' +
+      'de la potencia máxima que el inmueble le exige a la red, no de cuánta energía neta se le compra a CFE en ' +
+      'el mes. Sin una medición de la demanda real después de instalar, no hay base para prometer que ese cargo baje.'),
+    tabla(['Concepto', 'Clasificación', 'Por qué'], [
+      ...r.meta.reducibles.map(k => [listaConceptos([k]), 'Sí baja', 'Se factura por $/kWh -- la energía solar sustituye kWh comprados a CFE 1 a 1.']),
+      ...r.meta.noReducibles.map(k => [listaConceptos([k]), 'No baja', 'Se factura por $/kW de demanda o es un cargo fijo -- no depende de cuánta energía se compre ese mes.']),
+    ], { small: true }),
+    avisoCream('Esta clasificación es la misma para cualquier recibo con la misma tarifa y el mismo patrón en la ' +
+      'columna "$/kW" -- no es un supuesto por tarifa, se lee directo del recibo de cada cliente.'),
+  ]));
   return art;
 }
 
@@ -299,6 +505,17 @@ function s05(r, _leido, onToggle) {
     art.append(avisoCream('La extrapolación de un solo período sirve para presupuestar. El historial de consumo ' +
       'de 12 meses, cuando esté disponible, debe usarse para confirmar esta base antes de comprometer una cifra de ahorro definitiva.'));
   }
+  art.append(bloqueCalculo(5, [
+    historial && historial.length >= 3
+      ? p(`Fórmula: se promedian los ${historial.length} períodos del historial (${historial.map(x => `${x.mes} ${x.anio}: ${x.kwh.toLocaleString('en-US')} kWh`).join(', ')}) ` +
+          `y ese promedio se normaliza a un mes de 30.5 días -- así un período corto o largo no distorsiona el promedio mensual.`)
+      : p(`Fórmula: ${r.periodoKwh.toLocaleString('en-US')} kWh ÷ ${r.periodoDias} días × 30.5 días/mes = consumo mensual normalizado, extrapolado a 12 meses.`),
+    tabla(['Variable', 'Valor'], [
+      ['Consumo mensual normalizado', `${(r.annualKwh / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/mes`],
+      ['Consumo anual de referencia', `${r.annualKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año`],
+      ['Base usada', r.basisConsumo],
+    ], { small: true }),
+  ]));
   return art;
 }
 
@@ -447,6 +664,20 @@ function s10(r, _leido, onToggle) {
   art.append(p('El ahorro de factura es la diferencia entre pagos de electricidad. El ahorro neto descuenta el ' +
     'mantenimiento; no son cifras que deban sumarse.'));
   art.append(avisoCream('Son estimaciones con las bases descritas. El ahorro real se medirá después de operar, comparando recibos equivalentes y cambios de consumo.'));
+  art.append(bloqueCalculo(10, [
+    p('Análisis mes a mes del año de referencia: para cada mes se simula el pago real (sin paneles) y el pago con ' +
+      'el sistema propuesto, usando la MISMA fórmula de facturación de la sección 3 -- no es un promedio repartido, ' +
+      'es un cálculo independiente por mes con la generación solar y el consumo de ese mes.'),
+    tabla(['Mes', 'Consumo', 'Generación', 'Sin paneles', 'Con paneles', 'Ahorro', '% del mes'], r.rows.map(row => [
+      row.mes, `${Math.round(row.consumoExtrapoladoKwh).toLocaleString('en-US')} kWh`, `${Math.round(row.generacionKwh).toLocaleString('en-US')} kWh`,
+      M(row.pagoSinSolarMxn), M(row.pagoConSolarEstimadoMxn), M(row.ahorroEstimadoMxn),
+      row.pagoSinSolarMxn ? PCT(row.ahorroEstimadoMxn / row.pagoSinSolarMxn) : '—',
+    ]), { small: true }),
+    p('El % de ahorro no es igual todos los meses: en los meses donde el consumo real es bajo frente a la ' +
+      `generación de los paneles, el ahorro porcentual también es más bajo -- ${listaConceptos(r.meta.noReducibles)} ` +
+      'se siguen cobrando completos sin importar cuánta energía solar se produzca ese mes (ver sección 4). En los ' +
+      'meses de consumo más alto, el sistema cubre una porción mayor del total y el % de ahorro sube.'),
+  ]));
   return art;
 }
 
@@ -524,6 +755,17 @@ function s13(r, _leido, onToggle) {
       'estimación general, no asesoría fiscal -- confirmar con el contador o fiscalista del cliente antes de ' +
       'prometerlo en una oferta firme. No aplica a gobierno/instituciones públicas.'));
   }
+  art.append(bloqueCalculo(13, [
+    p('Fórmulas con los números reales de este estudio:'),
+    tabla(['Indicador', 'Fórmula', 'Sustitución'], [
+      ['Recuperación simple', 'Inversión ÷ ahorro neto del año 1', `${M(r.investment)} ÷ ${M(r.ahorroAnual - r.om1)} = ${r.payback ? r.payback.toFixed(2) : '—'} años`],
+      ['ROI anual simple', 'Ahorro neto del año 1 ÷ inversión', `${M(r.ahorroAnual - r.om1)} ÷ ${M(r.investment)} = ${PCT(roi)}`],
+      ['VAN al 10%', 'Σ (flujo neto del año / 1.10^año) − inversión inicial, a 25 años', `${M(r.van)} (ver la curva de flujo arriba)`],
+      ['TIR', 'Tasa de descuento que hace VAN = 0 del mismo flujo de 25 años', r.tir ? PCT(r.tir) : 'no calculable (el flujo no cambia de signo una sola vez)'],
+    ], { small: true }),
+    p('El ahorro de cada año no es el mismo que el del año 1: se degrada 0.5% anual (paneles producen un poco ' +
+      `menos con el tiempo)${escPct ? ` y la tarifa de CFE se supone que sube ${escPct.toFixed(1)}% anual` : ''}. El mantenimiento sí crece cada año (3% anual sobre 1% de la venta sin IVA del primer año).`),
+  ]));
   return art;
 }
 function beneficioCosto(r) {
@@ -694,12 +936,23 @@ export const TITULOS_SECCIONES = [
   'Fuentes y trazabilidad del cálculo',
 ];
 
-// renderSeccion(numero 1..21, r, leido, onToggle, onEditarTexto) -> HTMLElement
+// renderSeccion(numero 1..21, r, leido, onToggle, onEditarTexto, onToggleCalculo,
+// onGuardarGlobal, onQuitarGlobal) -> HTMLElement
 // onEditarTexto(id, valorONull, textoDefecto): se llama al salir de un parrafo editado
-// (valor = texto nuevo) o al pulsar "Restaurar" (valor = null).
-export function renderSeccion(numero, r, leido, onToggle, onEditarTexto) {
+// (valor = texto nuevo) o al pulsar "Restaurar" (valor = null) -- override de ESTE
+// proyecto/cliente nada mas.
+// onToggleCalculo(bloque, activo): se llama al marcar/desmarcar el bloque "Cómo se
+// calculó" de una seccion -- independiente de onToggle (que apaga la seccion entera).
+// onGuardarGlobal(id, texto)/onQuitarGlobal(id): predeterminado GLOBAL para todas las
+// cotizaciones (actuales y futuras) -- ver textosGlobales.js.
+export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggleCalculo, onGuardarGlobal, onQuitarGlobal) {
   _overridesActuales = r.textosEditados || {};
   _onEditarTextoActual = onEditarTexto || (() => {});
+  _calculosActivosActual = r.calculosActivos || [];
+  _onToggleCalculoActual = onToggleCalculo || (() => {});
+  _globalesActuales = leerTextosGlobales();
+  _onGuardarGlobalActual = onGuardarGlobal || (() => {});
+  _onQuitarGlobalActual = onQuitarGlobal || (() => {});
   const fn = RENDERERS[numero - 1];
   return fn(r, leido, onToggle);
 }

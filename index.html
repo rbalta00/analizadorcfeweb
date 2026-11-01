@@ -157,6 +157,14 @@
       <input type="file" id="archivoRecibo" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
       <p class="nota" id="estadoRecibo"></p>
       <p class="nota aviso" id="avisoReconciliacion" hidden></p>
+      <div id="listaArchivosRecibo" class="lista-archivos-recibo" hidden></div>
+
+      <h3>1b. Verificación en sitio (opcional)</h3>
+      <p class="nota">Si ya tienes el formato de verificación en sitio firmado (el de la Agencia de Energía u otro),
+        súbelo aquí -- aparecerá junto con el recibo en la sección "Su recibo: datos comprobados" de la cotización.
+        No se lee ni se extrae ningún dato de este archivo, solo se adjunta como evidencia.</p>
+      <input type="file" id="archivoVerificacion" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
+      <div id="listaArchivosVerificacion" class="lista-archivos-recibo" hidden></div>
 
       <h3>2. Datos del cliente y la tarifa</h3>
       <div class="fila">
@@ -314,6 +322,9 @@
       <div class="fila">
         <label>Sistemas solares/baterías/respaldo existentes<input id="inmSistemasExistentes" type="text" /></label>
         <label>Fecha de visita<input id="inmFechaVisita" type="date" /></label>
+      </div>
+      <div class="fila">
+        <label>Paneles que sugiere la verificación en campo (opcional, si el documento lo trae)<input id="inmPanelesVerificacion" type="number" min="0" step="1" /></label>
       </div>
       <div class="fila">
         <label>Notas de la visita<input id="inmNotas" type="text" /></label>

@@ -34,6 +34,7 @@ function migrarClienteSiHaceFalta(c) {
     campos: c.campos || null,
     inmueble: c.inmueble || null,
     seccionesActivas: c.seccionesActivas || todosLosBloques(),
+    calculosActivos: c.calculosActivos || todosLosBloques(),
     textosEditados: c.textosEditados || {},
   };
   c.proyectos = c.formulario ? [proyecto] : [];
@@ -145,8 +146,15 @@ export function crearProyecto(cliente, { nombre } = {}) {
     campos: null,
     inmueble: null,
     seccionesActivas: todosLosBloques(),
+    // calculosActivos: igual que seccionesActivas pero para el bloque "Cómo se
+    // calculó" de cada seccion (formulas/cargos/tarifa) -- independiente, pedido
+    // explicito del usuario: debe poder apagarse aparte de la seccion misma al
+    // generar la cotizacion para el cliente.
+    calculosActivos: todosLosBloques(),
     textosEditados: {},
     fotoSembrado: null, // data URL JPEG comprimido (ver imagenes.js) de la distribucion de paneles sobre el techo
+    archivosRecibo: null, // array de {nombre,tipo,url,ruta} -- archivos originales subidos a Supabase Storage (ver supabase.js)
+    archivosVerificacion: null, // igual forma que archivosRecibo, para el documento de verificacion en sitio (evidencia adjunta, no se lee)
   };
   cliente.proyectos = cliente.proyectos || [];
   cliente.proyectos.push(proyecto);
