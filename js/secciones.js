@@ -107,6 +107,20 @@ function tituloEditable(numero, textoDefecto) {
   return campoEditableConId('h2', 'titulo-seccion-grande', textoDefecto, `s${numero}-titulo`);
 }
 
+// Subtitulos (h3) dentro del cuerpo de una seccion -- pedido explicito del usuario,
+// 2026-11-01: "los titulos por ejemplo de 'que se propone' y 'cuanto cuesta y cuanto
+// se paga solo' dejame editarlos tambien". MISMO motivo que tituloEditable: id FIJO
+// (no siguienteTextoId()) para que insertar este subtitulo no corra el contador y
+// desfase los overrides YA guardados de los parrafos que vienen despues en la misma
+// seccion. `clave` es un sufijo corto y estable por cada llamada (no el texto en si,
+// que puede cambiar) para que el id no cambie si el texto por defecto se reescribe.
+function subtitulo(numero, clave, textoDefecto) {
+  return campoEditableConId('h3', null, textoDefecto, `s${numero}-sub-${clave}`);
+}
+function subtituloChico(numero, clave, textoDefecto) {
+  return campoEditableConId('h4', null, textoDefecto, `s${numero}-sub-${clave}`);
+}
+
 function campoEditableConId(tag, cls, textoDefecto, id) {
   const wrap = el('div', 'campo-editable');
   const e = document.createElement(tag);
@@ -336,11 +350,11 @@ function s01(r, _leido, onToggle) {
     [M(r.ahorroAnual - r.om1), 'Ahorro neto año 1, tras mantenimiento'],
     [PCT(r.pctAhorro), 'Porcentaje de la factura que ahorraría'],
   ]));
-  art.append(el('h3', null, 'Qué se propone'));
+  art.append(subtitulo(1, 'que-se-propone', 'Qué se propone'));
   art.append(p(`Instalar un sistema conectado a red de ${r.n} paneles de ${r.moduloWp} W. Su producción regional ` +
     `de referencia es de ${r.gen.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año. Se plantea ` +
     'medición neta, sujeta a contratación y autorización.'));
-  art.append(el('h3', null, 'Cuánto cuesta y en cuánto se paga solo'));
+  art.append(subtitulo(1, 'cuanto-cuesta', 'Cuánto cuesta y en cuánto se paga solo'));
   const flujoTxt = r.recuperacionAcumulada
     ? ` (o ${r.recuperacionAcumulada.toFixed(1)} años si se cuenta el mantenimiento y el cambio de inversor)` : '';
   art.append(p(`El sistema completo cuesta ${M(r.investment)} (ya con IVA). Con el ahorro que generaría cada mes, ` +
@@ -361,7 +375,7 @@ function s01(r, _leido, onToggle) {
   // documento adjunto) sigue viviendo en las secciones 23/24/25 para quien lo busque.
   const ev = r.escenarioVerificado;
   if (ev) {
-    art.append(el('h3', null, 'Su proyecto según la verificación en sitio (ver sección 19)'));
+    art.append(subtitulo(1, 'verificacion-sitio', 'Su proyecto según la verificación en sitio (ver sección 19)'));
     art.append(p(`Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la verificación en ` +
       `campo, en vez de los ${r.n} que calcula este sistema a partir del consumo real.`));
     art.append(tarjetas([
@@ -375,7 +389,7 @@ function s01(r, _leido, onToggle) {
       [PCT(ev.pctAhorro), 'Porcentaje de la factura que ahorraría'],
     ]));
     const dif = ev.diferenciaPaneles;
-    art.append(el('h3', null, 'Comparativo: calculado vs. verificación en sitio (ver sección 20)'));
+    art.append(subtitulo(1, 'comparativo-verificacion', 'Comparativo: calculado vs. verificación en sitio (ver sección 20)'));
     art.append(tabla(['Concepto comparable', 'Nuestro cálculo (sección 1)', 'Verificación en sitio (sección 19)', 'Diferencia'], [
       ['Paneles', `${r.n}`, `${ev.n}`, dif === 0 ? 'Igual' : `${dif > 0 ? '+' : ''}${dif}`],
       ['Potencia', `${r.kwp.toFixed(2)} kWp`, `${ev.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
@@ -828,7 +842,7 @@ function s06(r, _leido, onToggle) {
     'y los cálculos de ingeniería.'));
 
   if (r.fotoSembrado) {
-    art.append(el('h3', null, 'Distribución de paneles sobre el techo/azotea (sembrado)'));
+    art.append(subtitulo(6, 'sembrado', 'Distribución de paneles sobre el techo/azotea (sembrado)'));
     const img = document.createElement('img');
     img.src = r.fotoSembrado.dataUrl;
     img.alt = 'Distribución de paneles sobre el techo/azotea';
@@ -842,7 +856,7 @@ function s06(r, _leido, onToggle) {
   // seccion 22 automatica, sino usar el espacio natural de "sistema propuesto"). ---
   const inm = r.inmueble || {};
   const hayDatos = Object.values(inm).some(v => v);
-  art.append(el('h3', null, 'Condiciones actuales del inmueble'));
+  art.append(subtitulo(6, 'condiciones-inmueble', 'Condiciones actuales del inmueble'));
   if (!hayDatos) {
     art.append(badgeEstado('pendiente'));
     art.append(avisoCream('Sin datos capturados todavía del sitio. Completar en "Datos y recibo → Condiciones ' +
@@ -899,7 +913,7 @@ function s07(r, _leido, onToggle) {
   const genMensualProm = r.gen / 12;
   const consumoMensualProm = r.annualKwh / 12;
   const difMensual = genMensualProm - consumoMensualProm;
-  art.append(el('h4', null, 'Comparación de promedios mensuales'));
+  art.append(subtituloChico(7, 'promedios-mensuales', 'Comparación de promedios mensuales'));
   art.append(tarjetas([
     [`${genMensualProm.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Generación promedio mensual estimada (con los paneles propuestos)'],
     [`${consumoMensualProm.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Consumo promedio mensual (de su recibo)'],
@@ -927,7 +941,7 @@ function s07(r, _leido, onToggle) {
   // supera o se queda corto respecto a lo que generarian los paneles propuestos.
   if (r.historial && r.historial.length >= 2) {
     const genMensualEstimada = r.gen / 12;
-    art.append(el('h4', null, 'Generación mensual estimada vs. su consumo real facturado'));
+    art.append(subtituloChico(7, 'generacion-vs-historial', 'Generación mensual estimada vs. su consumo real facturado'));
     art.append(barraAgrupada(
       r.historial.map(h => `${h.mes} ${h.anio}`),
       'Generación mensual estimada con los paneles propuestos', r.historial.map(() => genMensualEstimada),
@@ -1114,7 +1128,7 @@ function s13(r, _leido, onToggle) {
     'IVA que crece 3% anual' + (reposicionAnio ? `, y reposición del inversor en el año ${reposicionAnio}. ` : '. No se incluyó reposición de inversor en este cálculo. ') +
     escTxt + ' No se presentan rendimientos ni recuperación como garantías.'));
   if (r.aplicaIsr) {
-    art.append(el('h4', null, 'Deducción fiscal (ISR) -- solo clientes privados/comerciales'));
+    art.append(subtituloChico(13, 'deduccion-isr', 'Deducción fiscal (ISR) -- solo clientes privados/comerciales'));
     art.append(tabla(['Indicador con deducción ISR', 'Resultado'], [
       ['Deducción fiscal estimada', `${M(r.ahorroFiscalIsr)} (${r.tasaIsrPct.toFixed(0)}% de ISR sobre el costo antes de IVA)`],
       ['Inversión neta efectiva', M(r.inversionNetaIsr)],
@@ -1209,10 +1223,10 @@ function s16(r, _leido, onToggle) {
   art.append(p(`Para ahorrar el 100% de un pago recurrente de ${M(r.pagoRecurrentePeriodo)} por ${r.periodoDias || '?'} ` +
     'días, el pago residual tendría que ser $0.00. La generación anual por sí sola no demuestra ese resultado.'));
   art.append(p('La estimación comercial aquí presentada no llega a ese 100%, por DOS razones distintas e independientes entre sí:'));
-  art.append(el('h3', null, '1. El piso estructural de su tarifa'));
+  art.append(subtitulo(16, 'piso-estructural', '1. El piso estructural de su tarifa'));
   art.append(p(`El piso estructural de este recibo es ${M(r.pisoPeriodo)} por período (${PCT(r.pctMaxPeriodo)} de ` +
     'ahorro máximo) — ver sección 4. Sin importar cuántos paneles se instalen, esta parte de la factura no baja a cero.'));
-  art.append(el('h3', null, '2. El alumbrado público (DAP), un cobro aparte'));
+  art.append(subtitulo(16, 'dap', '2. El alumbrado público (DAP), un cobro aparte'));
   art.append(p('La Ley de Ingresos de cada municipio de Puebla suele fijar una cuota mensual de alumbrado público ' +
     '(DAP), con un descuento (estímulo) cuando el consumo de energía baja lo suficiente (en el municipio de ' +
     'Puebla capital, el menor entre la cuota fija y el 6.5% del importe de energía del período). Este cobro no ' +
@@ -1241,7 +1255,7 @@ function s17(r, leido, onToggle) {
     'poder ofrecer un presupuesto real y firme de este servicio:'));
   art.append(tabla(['Pendiente para un presupuesto real'], REQUISITOS_PRESUPUESTO_REAL.map(x => [x]), { small: true }));
   const notas = r.notas || [];
-  art.append(el('h3', null, 'Notas específicas de este cálculo'));
+  art.append(subtitulo(21, 'notas-calculo', 'Notas específicas de este cálculo'));
   if (notas.length) {
     for (const n of notas) art.append(avisoCream(n));
   } else {
