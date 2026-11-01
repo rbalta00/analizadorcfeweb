@@ -30,6 +30,35 @@ function razonNoReducible(concepto) {
   return 'No se identificó como un concepto que la energía solar pueda sustituir en este período.';
 }
 
+// Simetrico a razonNoReducible, pero para el lado "SI baja" -- cada concepto reducible
+// se abate por un mecanismo distinto, no todos por la misma razon generica (pedido
+// explicito del usuario, 2026-11-01: resaltar que cargos si se pueden abatir en cada
+// tarifa y como se abaten con el SFV propuesto). r.meta.tieneDemandaContratada distingue
+// el caso PDBT sin demanda (donde Distribucion/Capacidad SI son reducibles).
+function razonSiReducible(concepto, r) {
+  if (concepto === 'energia' || concepto === 'energia_base') {
+    return 'Se factura por kWh consumidos de la red -- cada kWh que los paneles generan y se usa en el inmueble (o se ' +
+      'inyecta y se acredita por medición neta) sustituye un kWh que ya no se le compra a CFE a esta tarifa, 1 a 1.';
+  }
+  if (concepto === 'energia_intermedia') {
+    return 'Se factura por kWh consumidos en horario intermedio -- el sol sí genera en ese horario, así que la ' +
+      'energía solar sustituye esos kWh comprados a CFE 1 a 1, igual que la Energía Base.';
+  }
+  if (concepto === 'transmision' || concepto === 'cenace' || concepto === 'scnmem') {
+    return 'Cargo por $/kWh que viaja pegado a Energía (no es un monto fijo aparte) -- se cobra sobre los mismos ' +
+      'kWh comprados a CFE, así que baja automáticamente en la misma proporción que Energía cuando el SFV ' +
+      'sustituye esos kWh, sin ningún mecanismo adicional.';
+  }
+  if (concepto === 'distribucion' || concepto === 'capacidad') {
+    // Solo llega aqui cuando !tieneDemandaContratada (PDBT sin demanda, columna "$/kW" en $0.00) --
+    // si hubiera demanda contratada, estos dos conceptos estarian en noReducibles, no aqui.
+    return 'En este recibo específico NO hay demanda contratada en kW (columna "$/kW" en $0.00) -- Distribución y ' +
+      'Capacidad se facturan por kWh igual que Energía, así que sí bajan con el SFV propuesto. (En una tarifa con ' +
+      'demanda contratada, como GDMTO/GDMTH, estos mismos conceptos NO bajarían -- ver criterio de clasificación arriba.)';
+  }
+  return 'Se factura por kWh consumidos -- la energía solar sustituye kWh comprados a CFE a esta tarifa, 1 a 1.';
+}
+
 function el(tag, cls, html) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -724,8 +753,8 @@ function s04(r, _leido, onToggle) {
       'contra kWh consumidos, pero no modifica por sí sola el cargo por demanda contratada -- ese cargo depende ' +
       'de la potencia máxima que el inmueble le exige a la red, no de cuánta energía neta se le compra a CFE en ' +
       'el mes. Sin una medición de la demanda real después de instalar, no hay base para prometer que ese cargo baje.'),
-    tabla(['Concepto', 'Clasificación', 'Por qué'], [
-      ...r.meta.reducibles.map(k => [listaConceptos([k]), 'Sí baja', 'Se factura por $/kWh -- la energía solar sustituye kWh comprados a CFE 1 a 1.']),
+    tabla(['Concepto', 'Clasificación', 'Cómo se abate (o por qué no) con el SFV propuesto'], [
+      ...r.meta.reducibles.map(k => [listaConceptos([k]), 'Sí baja', razonSiReducible(k, r)]),
       ...r.meta.noReducibles.map(k => [listaConceptos([k]), 'No baja', razonNoReducible(k)]),
     ], { small: true }),
     avisoCream('Esta clasificación es la misma para cualquier recibo con la misma tarifa y el mismo patrón en la ' +
