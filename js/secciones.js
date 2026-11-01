@@ -453,6 +453,22 @@ function s24(r, _leido, onToggle) {
       ['Recuperación del flujo', ev.recuperacionAcumulada ? `${ev.recuperacionAcumulada.toFixed(1)} años` : 'No se recupera en 25 años'],
     ], { small: true }));
   }
+  art.append(bloqueCalculo(24, [
+    p(`Mismo recibo, mismo motor, solo cambia el número de paneles: este escenario usa el MISMO recibo de ` +
+      `${r.titular} (sección 2 -- ${r.periodoKwh.toLocaleString('en-US')} kWh en ${r.periodoDias} días, tarifa ${r.tarifa}) ` +
+      `y las mismas fórmulas de las secciones 6, 11 y 13 -- la única diferencia es que aquí "n" (número de paneles) es ` +
+      `el que propone la verificación en campo (${ev.n}), no el que calcula este sistema a partir del consumo (${r.n}, ver sección 1).`),
+    tabla(['Variable', 'Fórmula (igual que sección 6/11/13)', `Sustitución con los ${ev.n} paneles de la verificación`], [
+      ['Potencia nominal', 'n × W por módulo ÷ 1000', `${ev.n} × ${r.moduloWp} W ÷ 1000 = ${ev.kwp.toFixed(2)} kWp`],
+      ['Inversión total', 'Mismo presupuesto de materiales (sección 12) recalculado para este "n", con IVA', M(ev.investment)],
+      ['Ahorro anual', 'Mismo cálculo mes a mes de la sección 10 (mismo recibo), recalculado con la generación de este "n" de paneles', M(ev.ahorroAnual)],
+      ['Recuperación simple', 'Inversión ÷ ahorro neto del año 1 (ahorro − mantenimiento)', `${M(ev.investment)} ÷ ${M(ev.ahorroAnual - ev.om1)} = ${ev.payback ? ev.payback.toFixed(2) : '—'} años`],
+      ['VAN al 10% / TIR', 'Mismo flujo a 25 años de la sección 13/14, recalculado con esta inversión y este ahorro', `VAN ${M(ev.van)} / TIR ${ev.tir ? PCT(ev.tir) : 'no calculable'}`],
+    ], { small: true }),
+    avisoCream('El ahorro no necesariamente sube con más paneles: si el consumo real ya satura el piso de ahorro ' +
+      'estructural de la tarifa (ver sección 4), paneles de más no generan ahorro adicional, solo más inversión -- ' +
+      'eso se ve claro en la sección 25.'),
+  ]));
   return art;
 }
 
