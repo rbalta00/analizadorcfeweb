@@ -801,6 +801,16 @@ $('tabCaptura').addEventListener('input', (e) => {
     e.target.classList.remove('campo-no-detectado');
   }
 });
+// Si el campo marcado YA tiene un valor (ej. se llenó a mano en una sesión anterior,
+// o se trajo de la nube), no hay que borrarlo y volver a escribirlo para que cuente
+// como revisado -- un clic/tab hacia el campo (focusin, dispara con clic Y con Tab)
+// ya basta para confirmar que Isaac lo vio. Si está vacío, 'input' de arriba sigue
+// siendo lo que lo limpia cuando de verdad se captura un valor nuevo.
+$('tabCaptura').addEventListener('focusin', (e) => {
+  if (e.target.classList && e.target.classList.contains('campo-no-detectado') && e.target.value) {
+    e.target.classList.remove('campo-no-detectado');
+  }
+});
 // Las radios no disparan 'input' de forma confiable en todos los navegadores, y si el
 // usuario deja la opcion por defecto (ya marcada) un 'change' tampoco dispara -- por
 // eso se limpia con 'click', que siempre dispara aunque no cambie el valor: con eso
