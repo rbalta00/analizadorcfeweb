@@ -70,8 +70,18 @@ export function construirResultado(input) {
       `real facturado (${periodoKwh} kWh en ${periodoDias} días).`;
     basisConsumo = `extrapolación de un solo período (${periodoDias} días)`;
   }
-  const { n, kwp, genAnual } = dimensionarHorasSol(consumoMensual, moduloWp, cobertura, horasUtiles);
-  const monthlyE = Array(12).fill(genAnual / kwp);
+  // Bug real encontrado el 2026-11-01 (desde el commit que introdujo este archivo,
+  // 2026-10-29): dimensionarHorasSol() SI calcula genMensual (produccion mensual real
+  // del sistema), pero aqui nunca se usaba -- monthlyE se llenaba con genAnual/kwp
+  // (kWh por kWp AL AÑO), no genMensual/kwp (kWh por kWp AL MES). flujoMensualAnual()
+  // multiplica monthlyE[i] * kwp para obtener la "produccion" de CADA mes -- con el
+  // bug, cada uno de los 12 meses recibia la produccion ANUAL completa (12x inflada),
+  // garantizando que el sistema pareciera cubrir el 100% del consumo de CUALQUIER mes
+  // sin importar que tan grande fuera ese consumo. Esto afectaba generacionKwh (tabla/
+  // grafica de la seccion 7), y tambien ahorroAnual/pctAhorro/payback/VAN/TIR (todos
+  // derivados de sumar rows, que a su vez dependia de esa produccion mensual inflada).
+  const { n, kwp, genAnual, genMensual } = dimensionarHorasSol(consumoMensual, moduloWp, cobertura, horasUtiles);
+  const monthlyE = Array(12).fill(genMensual / kwp);
 
   const pres = presupuestar(n, kwp, moduloWp, costos);
   const rows = flujoMensualAnual(invoice, dailyKwh, monthlyE, kwp, 1);

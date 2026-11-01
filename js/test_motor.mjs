@@ -5,6 +5,14 @@
 // en 0.0/0.0 por error: eso daba un ahorro_anual de $48,286.64 en vez del $46,860.76
 // real ya entregado -- $1,425.88 de diferencia, nada despreciable. Correr con:
 //   node js/test_motor.mjs
+//
+// Actualizado 2026-11-01: se corrigio un bug real en monthlyE (ver resultado.js) --
+// la produccion mensual usada en el flujo estaba inflada 12x (annual en vez de
+// mensual), lo que forzaba neta=0 (piso) en TODOS los meses sin importar el consumo
+// real de ese mes. El impacto numerico en este caso (28 paneles, cobertura 1.0) fue
+// chico pero real: ahorro_anual baja de 46,860.76 a 46,568.16 (-$292.60, -0.6%), VAN
+// de 204,742.76 a 201,229.17 (-1.7%), TIR de 16.84% a 16.73%, recuperacion de 6.321 a
+// 6.359 años. Los valores esperados de abajo ya reflejan el calculo corregido.
 import {
   construirInvoice, pisoDeAhorro, flujoMensualAnual, dimensionarHorasSol,
   normalizarConsumoMensual, presupuestar, costoInversor, flujo25Anios, COSTOS_RESIDENCIAL,
@@ -44,7 +52,11 @@ cerca('kwp', kwp, 16.94);
 cerca('gen_mensual', genMensual, 2325.02);
 cerca('gen_anual', genAnual, 27900.24);
 
-const monthlyE = Array(12).fill(genAnual / kwp);
+// Bug real corregido el 2026-11-01: genAnual/kwp (produccion ANUAL por kWp) estaba
+// pasandose como si fuera la produccion MENSUAL por kWp -- inflaba 12x la produccion
+// de cada mes en flujoMensualAnual(), forzando neta=0 (piso) en todos los meses sin
+// importar el consumo real de ese mes. Ver resultado.js para el detalle completo.
+const monthlyE = Array(12).fill(genMensual / kwp);
 const pres = presupuestar(n, kwp, 605, COSTOS_RESIDENCIAL);
 cerca('directo', pres.directo, 182238.96);
 cerca('venta_sin_iva', pres.ventaSinIva, 262424.11);
@@ -63,38 +75,38 @@ cerca('pct_max', pct, 0.49058203433790043, 0.0001);
 
 const rows = flujoMensualAnual(invoice, dailyKwh, monthlyE, kwp, 1);
 cerca('enero pago_sin_solar', rows[0].pagoSinSolarMxn, 8118.87);
-cerca('enero pago_con_solar', rows[0].pagoConSolarEstimadoMxn, 4138.92);
+cerca('enero pago_con_solar', rows[0].pagoConSolarEstimadoMxn, 4180.72);
 cerca('febrero pago_sin_solar', rows[1].pagoSinSolarMxn, 7352.24);
 
 const annualbefore = Math.round(rows.reduce((s, x) => s + x.pagoSinSolarMxn, 0) * 100) / 100;
 const annualafter = Math.round(rows.reduce((s, x) => s + x.pagoConSolarEstimadoMxn, 0) * 100) / 100;
 const ahorroAnual = Math.round((annualbefore - annualafter) * 100) / 100;
 cerca('annualbefore', annualbefore, 95637.69);
-cerca('annualafter', annualafter, 48776.93);
-cerca('ahorro_anual', ahorroAnual, 46860.76);
+cerca('annualafter', annualafter, 49069.53);
+cerca('ahorro_anual', ahorroAnual, 46568.16);
 
 const costoInv = costoInversor(pres.materiales);
 cerca('costo_inversor', costoInv, 44732.16);
 
 const flujo25 = flujo25Anios(pres.inversion, ahorroAnual, 0.10, 25, 0.04, 0.01, 0.03, 0.005, costoInv);
-cerca('van', flujo25.van, 204742.76, 1.0);
-cerca('tir', flujo25.tir, 0.16840210285482404, 0.0005);
-cerca('recuperacion', flujo25.recuperacionAcumulada, 6.321167763319713, 0.01);
+cerca('van', flujo25.van, 201229.17, 1.0);
+cerca('tir', flujo25.tir, 0.1673112049436286, 0.0005);
+cerca('recuperacion', flujo25.recuperacionAcumulada, 6.359099821912751, 0.01);
 
 const fila13 = flujo25.flujo.find(x => x.anio === 13);
-cerca('flujo13.ahorro', fila13.ahorroMxn, 70645.8);
+cerca('flujo13.ahorro', fila13.ahorroMxn, 70204.69);
 cerca('flujo13.om', fila13.omMxn, 4340.19);
 cerca('flujo13.reposicion', fila13.reposicionMxn, 63777.36);
-cerca('flujo13.flujo_neto', fila13.flujoMxn, 2528.26);
-cerca('flujo13.acumulado', fila13.acumuladoMxn, 338392.31, 1.0);
+cerca('flujo13.flujo_neto', fila13.flujoMxn, 2087.14);
+cerca('flujo13.acumulado', fila13.acumuladoMxn, 333683.53, 1.0);
 
 const fila1 = flujo25.flujo.find(x => x.anio === 1);
-cerca('flujo1.flujo_neto', fila1.flujoMxn, 43816.64);
-cerca('flujo1.acumulado', fila1.acumuladoMxn, -260595.33);
+cerca('flujo1.flujo_neto', fila1.flujoMxn, 43524.04);
+cerca('flujo1.acumulado', fila1.acumuladoMxn, -260887.93);
 
 const fila25 = flujo25.flujo.find(x => x.anio === 25);
-cerca('flujo25.flujo_neto', fila25.flujoMxn, 100315.32, 0.5);
-cerca('flujo25.acumulado', fila25.acumuladoMxn, 1341196.21, 2.0);
+cerca('flujo25.flujo_neto', fila25.flujoMxn, 99650.31, 0.5);
+cerca('flujo25.acumulado', fila25.acumuladoMxn, 1329829.75, 2.0);
 
 console.log('\n' + (fallos === 0 ? 'TODO OK' : `${fallos} FALLOS`));
 process.exit(fallos === 0 ? 0 : 1);
