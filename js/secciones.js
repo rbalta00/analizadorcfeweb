@@ -307,6 +307,35 @@ function s01(r, _leido, onToggle) {
   art.append(avisoCream('El recibo permite comprobar el gasto actual; el ahorro futuro es una estimación ' +
     `condicionada. Se conserva el gasto observado de ${listaConceptos(r.meta.noReducibles)} sin anticipar ahorro ` +
     'adicional. Los precios deberán actualizarse antes de contratar.'));
+  // Pedido explicito del usuario: ver juntas, en la MISMA pagina, la pagina-resumen de
+  // nuestro calculo (arriba) y la de la verificacion en sitio -- antes estaban
+  // separadas por 20+ secciones (1 vs. 24). En vez de reordenar las 25 secciones
+  // (reenumerar rompería las decenas de referencias cruzadas "ver seccion N" ya
+  // escritas en todo el archivo), se repite aqui el resumen condensado de la
+  // seccion 24 justo debajo del de la seccion 1 -- el detalle completo (formulas,
+  // documento adjunto) sigue viviendo en las secciones 23/24/25 para quien lo busque.
+  const ev = r.escenarioVerificado;
+  if (ev) {
+    art.append(el('h3', null, 'Su proyecto según la verificación en sitio (ver sección 24)'));
+    art.append(p(`Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la verificación en ` +
+      `campo, en vez de los ${r.n} que calcula este sistema a partir del consumo real.`));
+    art.append(tarjetas([
+      [M(ev.investment), 'Lo que costaría el sistema, IVA incluido'],
+      [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se pagaría solo'],
+      [M(ev.ahorroAnual), 'Lo que ahorraría en el primer año'],
+    ]));
+    art.append(tarjetas([
+      [`${ev.n} paneles`, `${r.moduloWp} W por módulo / ${ev.kwp.toFixed(2)} kWp`],
+      [M(ev.ahorroAnual - ev.om1), 'Ahorro neto año 1, tras mantenimiento'],
+      [PCT(ev.pctAhorro), 'Porcentaje de la factura que ahorraría'],
+    ]));
+    const dif = ev.diferenciaPaneles;
+    art.append(avisoCream(dif === 0
+      ? 'El número de paneles coincide con el de la verificación en campo -- ambos escenarios salen iguales.'
+      : `Diferencia contra el cálculo de arriba: ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'}, ` +
+        `${M(Math.abs(ev.investment - r.investment))} de diferencia en inversión, ${M(Math.abs(ev.diferenciaAhorro))} de diferencia en ahorro anual ` +
+        '(ver sección 25 para el comparativo completo lado a lado).'));
+  }
   return art;
 }
 
