@@ -16,11 +16,11 @@ export const BLOQUES_COTIZACION = [
   ['presupuesto', 'Presupuesto resumen y detalle de materiales (págs. 11–12)', false],
   ['recuperacion', 'Recuperación de la inversión y flujo a 25 años (págs. 13–14)', false],
   ['pagos_100', 'Pagos mensuales y qué tan cerca del 100% de ahorro (págs. 15–16)', false],
-  ['pendientes', 'Qué falta para cerrar el ahorro, requisitos y notas del recibo (págs. 17–18)', false],
-  ['alcance', 'Alcance, condiciones, entrega y mantenimiento (págs. 19–20)', false],
-  ['glosario_fuentes', 'Glosario y fuentes (pág. 21)', false],
-  ['documentos', 'Documentos adjuntos: recibo y verificación en sitio (págs. 22–23)', false],
-  ['comparativo_verificacion', 'Proyecto y comparativo según la verificación en sitio (págs. 24–25)', false],
+  ['documentos', 'Documentos adjuntos: recibo y verificación en sitio (págs. 17–18)', false],
+  ['comparativo_verificacion', 'Proyecto y comparativo según la verificación en sitio (págs. 19–20)', false],
+  ['pendientes', 'Qué falta para cerrar el ahorro, requisitos y notas del recibo (pág. 21)', false],
+  ['alcance', 'Alcance, condiciones, entrega y mantenimiento (págs. 22–23)', false],
+  ['glosario_fuentes', 'Glosario y fuentes (págs. 24–25)', false],
 ];
 
 export function todosLosBloques() {
@@ -28,14 +28,16 @@ export function todosLosBloques() {
 }
 
 export function bloqueDeSeccion(numeroSeccion) {
-  // Mapea 1..21 a la clave de bloque a la que pertenece esa pagina/seccion.
+  // Mapea 1..25 a la clave de bloque a la que pertenece esa pagina/seccion. Orden
+  // narrativo (pedido explicito del usuario, 2026-11-01): resumen -> calculo ->
+  // documentos/verificacion en sitio/comparativo -> cierre administrativo.
   const mapa = {
     1: 'resumen', 2: 'recibo_cargos', 3: 'recibo_cargos', 4: 'recibo_cargos',
     5: 'consumo_sistema', 6: 'consumo_sistema', 7: 'produccion', 8: 'ambiental',
     9: 'ahorro_pagos', 10: 'ahorro_pagos', 11: 'presupuesto', 12: 'presupuesto',
     13: 'recuperacion', 14: 'recuperacion', 15: 'pagos_100', 16: 'pagos_100',
-    17: 'pendientes', 18: 'alcance', 19: 'alcance', 20: 'glosario_fuentes', 21: 'glosario_fuentes',
-    22: 'documentos', 23: 'documentos', 24: 'comparativo_verificacion', 25: 'comparativo_verificacion',
+    17: 'documentos', 18: 'documentos', 19: 'comparativo_verificacion', 20: 'comparativo_verificacion',
+    21: 'pendientes', 22: 'alcance', 23: 'alcance', 24: 'glosario_fuentes', 25: 'glosario_fuentes',
   };
   return mapa[numeroSeccion];
 }

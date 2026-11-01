@@ -195,8 +195,8 @@ function badgeEstado(tipo) {
 // (seccionesActivas, el usuario decide apagar/prender), esto es automatico: la seccion
 // simplemente no existe todavia, ni como placeholder "pendiente", hasta que haya datos.
 export function seccionTieneDatos(numero, r) {
-  if (numero === 23) return !!(r.archivosVerificacion && r.archivosVerificacion.length);
-  if (numero === 24 || numero === 25) return !!r.escenarioVerificado;
+  if (numero === 18) return !!(r.archivosVerificacion && r.archivosVerificacion.length); // documento verificacion en sitio
+  if (numero === 19 || numero === 20) return !!r.escenarioVerificado; // proyecto/comparativo segun la verificacion
   return true;
 }
 
@@ -316,7 +316,7 @@ function s01(r, _leido, onToggle) {
   // documento adjunto) sigue viviendo en las secciones 23/24/25 para quien lo busque.
   const ev = r.escenarioVerificado;
   if (ev) {
-    art.append(el('h3', null, 'Su proyecto según la verificación en sitio (ver sección 24)'));
+    art.append(el('h3', null, 'Su proyecto según la verificación en sitio (ver sección 19)'));
     art.append(p(`Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la verificación en ` +
       `campo, en vez de los ${r.n} que calcula este sistema a partir del consumo real.`));
     art.append(tarjetas([
@@ -330,11 +330,21 @@ function s01(r, _leido, onToggle) {
       [PCT(ev.pctAhorro), 'Porcentaje de la factura que ahorraría'],
     ]));
     const dif = ev.diferenciaPaneles;
+    art.append(el('h3', null, 'Comparativo: calculado vs. verificación en sitio (ver sección 20)'));
+    art.append(tabla(['Concepto comparable', 'Nuestro cálculo (sección 1)', 'Verificación en sitio (sección 19)', 'Diferencia'], [
+      ['Paneles', `${r.n}`, `${ev.n}`, dif === 0 ? 'Igual' : `${dif > 0 ? '+' : ''}${dif}`],
+      ['Potencia', `${r.kwp.toFixed(2)} kWp`, `${ev.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
+      ['Inversión, IVA incluido', M(r.investment), M(ev.investment), M(ev.investment - r.investment)],
+      ['Ahorro anual', M(r.ahorroAnual), M(ev.ahorroAnual), M(ev.diferenciaAhorro)],
+      ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', '—'],
+      ['% de ahorro de factura', PCT(r.pctAhorro), PCT(ev.pctAhorro), '—'],
+    ], { small: true }));
     art.append(avisoCream(dif === 0
       ? 'El número de paneles coincide con el de la verificación en campo -- ambos escenarios salen iguales.'
-      : `Diferencia contra el cálculo de arriba: ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'}, ` +
-        `${M(Math.abs(ev.investment - r.investment))} de diferencia en inversión, ${M(Math.abs(ev.diferenciaAhorro))} de diferencia en ahorro anual ` +
-        '(ver sección 25 para el comparativo completo lado a lado).'));
+      : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que ` +
+        'calcula este sistema a partir del consumo real del recibo -- ambos criterios son válidos y conviene presentarle al cliente las dos ' +
+        'referencias antes de decidir el tamaño final. Ambos escenarios se calcularon con el mismo motor (mismo recibo, misma tarifa, ' +
+        'mismos costos) -- no implica que ambos tamaños quepan físicamente en el espacio disponible.'));
   }
   return art;
 }
@@ -377,7 +387,7 @@ function s02(r, leido, onToggle) {
         ['Historial de consumo (si el recibo lo trae)', 'Se lee la tabla de histórico de consumo que algunos recibos de CFE traen impresa, mes por mes -- se usa para promediar el consumo base en vez de extrapolar un solo período (ver sección 5).'],
       ], { small: true }),
       avisoCream('Cualquier dato que la lectura automática no haya podido encontrar se deja marcado para captura ' +
-        'manual -- nunca se inventa un valor. Ver "Qué hace falta" (sección 17) si algo del recibo no se detectó solo.'),
+        'manual -- nunca se inventa un valor. Ver "Qué hace falta" (sección 21) si algo del recibo no se detectó solo.'),
     ]));
   }
   return art;
@@ -407,8 +417,12 @@ function filaArchivo(a) {
 }
 
 // ---------- 22: documento recibo original ----------
+// OJO: el nombre de esta funcion (s22) es historico -- por reordenamiento para que la
+// narrativa sea coherente (resumen -> calculo -> verificacion en sitio -> comparativo
+// -> administrativo), esta seccion ahora se RENDERIZA como la 17, no la 22. Ver
+// RENDERERS/TITULOS_SECCIONES al final del archivo para el mapeo real posicion->funcion.
 function s22(r, _leido, onToggle) {
-  const art = crearSeccion(22, 'Documento: recibo original de CFE', 'El recibo tal como se adjuntó, sin ningún dato extraído ni modificado.', r, onToggle);
+  const art = crearSeccion(17, 'Documento: recibo original de CFE', 'El recibo tal como se adjuntó, sin ningún dato extraído ni modificado.', r, onToggle);
   const recibo = r.archivosRecibo || [];
   if (recibo.length) {
     const grid = el('div', 'documentos-grid');
@@ -426,13 +440,14 @@ function s22(r, _leido, onToggle) {
 }
 
 // ---------- 23: documento verificacion en sitio ----------
+// Renumerada: se renderiza como 18 (ver nota en s22 arriba).
 function s23(r, _leido, onToggle) {
-  const art = crearSeccion(23, 'Documento: verificación en sitio', 'El documento de verificación en campo (gobierno u otro emisor), tal como se adjuntó.', r, onToggle);
+  const art = crearSeccion(18, 'Documento: verificación en sitio', 'El documento de verificación en campo (gobierno u otro emisor), tal como se adjuntó.', r, onToggle);
   const verif = r.archivosVerificacion || [];
   if (verif.length) {
     art.append(p('Documento de verificación en campo, adjuntado tal cual -- no se extrajo ningún dato de él ' +
       'automáticamente; lo que sí se usa para calcular es el número de paneles que se haya capturado a mano en ' +
-      '"Condiciones del inmueble" (ver sección 24).'));
+      '"Condiciones del inmueble" (ver sección 19).'));
     const grid = el('div', 'documentos-grid');
     verif.forEach(a => grid.append(filaArchivo(a)));
     art.append(grid);
@@ -451,8 +466,9 @@ function s23(r, _leido, onToggle) {
 // calculado por el consumo del recibo -- pedido explicito del usuario, para poder
 // presentarle al cliente una pagina-resumen de CADA escenario por separado, no solo
 // mezclados en una tabla comparativa.
+// Renumerada: se renderiza como 19 (ver nota en s22 arriba).
 function s24(r, _leido, onToggle) {
-  const art = crearSeccion(24, 'Su proyecto según la verificación en sitio', 'El mismo resumen de la sección 1, pero con los paneles que propone la verificación en campo.', r, onToggle);
+  const art = crearSeccion(19, 'Su proyecto según la verificación en sitio', 'El mismo resumen de la sección 1, pero con los paneles que propone la verificación en campo.', r, onToggle);
   const ev = r.escenarioVerificado;
   if (!ev) {
     art.append(badgeEstado('pendiente'));
@@ -464,7 +480,7 @@ function s24(r, _leido, onToggle) {
   }
   art.append(p(`${r.titular} · ${r.domicilio || 'domicilio por confirmar'}`));
   art.append(avisoCream('Este escenario usa el número de paneles de la verificación en campo, NO el calculado por ' +
-    'el consumo del recibo (ver sección 1 para ese otro escenario, y sección 25 para la comparación lado a lado).'));
+    'el consumo del recibo (ver sección 1 para ese otro escenario, y sección 20 para la comparación lado a lado).'));
   art.append(tarjetas([
     [M(ev.investment), 'Lo que cuesta el sistema, IVA incluido'],
     [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se paga solo'],
@@ -496,18 +512,19 @@ function s24(r, _leido, onToggle) {
     ], { small: true }),
     avisoCream('El ahorro no necesariamente sube con más paneles: si el consumo real ya satura el piso de ahorro ' +
       'estructural de la tarifa (ver sección 4), paneles de más no generan ahorro adicional, solo más inversión -- ' +
-      'eso se ve claro en la sección 25.'),
+      'eso se ve claro en la sección 20.'),
   ]));
   return art;
 }
 
 // ---------- 25: comparativo calculado vs. verificacion en sitio ----------
+// Renumerada: se renderiza como 20 (ver nota en s22 arriba).
 function s25(r, _leido, onToggle) {
-  const art = crearSeccion(25, 'Comparativo: calculado vs. verificación en sitio', '¿Qué tanto cambia el proyecto según cuál de los dos criterios se use?', r, onToggle);
+  const art = crearSeccion(20, 'Comparativo: calculado vs. verificación en sitio', '¿Qué tanto cambia el proyecto según cuál de los dos criterios se use?', r, onToggle);
   const ev = r.escenarioVerificado;
   if (!ev) {
     art.append(badgeEstado('pendiente'));
-    art.append(p('Aún no se capturó cuántos paneles sugiere la verificación en campo -- ver sección 24 para cómo ' +
+    art.append(p('Aún no se capturó cuántos paneles sugiere la verificación en campo -- ver sección 19 para cómo ' +
       'capturarlo.'));
     return art;
   }
@@ -522,7 +539,7 @@ function s25(r, _leido, onToggle) {
     [r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', 'Recuperación simple estimada'],
     [PCT(r.pctAhorro), 'Ahorro anual de factura estimado'],
   ]));
-  art.append(el('h5', null, 'Propuesta de la verificación en campo (sección 24)'));
+  art.append(el('h5', null, 'Propuesta de la verificación en campo (sección 19)'));
   art.append(tarjetas([
     [M(ev.investment), 'Inversión estimada, IVA incluido'],
     [`${ev.n} paneles`, `${r.moduloWp} W por módulo / ${ev.kwp.toFixed(2)} kWp`],
@@ -1128,8 +1145,9 @@ function s16(r, _leido, onToggle) {
 }
 
 // ---------- 17: que falta ----------
+// Renumerada: se renderiza como 21 (ver nota en s22, arriba, sobre el reordenamiento).
 function s17(r, leido, onToggle) {
-  const art = crearSeccion(17, 'Qué hace falta para cerrar el ahorro', '¿Qué pendientes hay antes de ofertar en firme?', r, onToggle);
+  const art = crearSeccion(21, 'Qué hace falta para cerrar el ahorro', '¿Qué pendientes hay antes de ofertar en firme?', r, onToggle);
   art.append(badgeEstado('pendiente'));
   art.append(p('Esta cotización se calculó únicamente con la información del recibo de CFE que se cargó o ' +
     'capturó — sin importar si ese recibo venía completo o no, esto SIEMPRE hace falta confirmar antes de ' +
@@ -1147,8 +1165,9 @@ function s17(r, leido, onToggle) {
 }
 
 // ---------- 18: alcance y condiciones ----------
+// Renumerada: se renderiza como 22 (ver nota en s22, arriba, sobre el reordenamiento).
 function s18(r, _leido, onToggle) {
-  const art = crearSeccion(18, 'Alcance, exclusiones y condiciones comerciales', '¿Qué incluye y qué NO incluye el presupuesto?', r, onToggle);
+  const art = crearSeccion(22, 'Alcance, exclusiones y condiciones comerciales', '¿Qué incluye y qué NO incluye el presupuesto?', r, onToggle);
   art.append(p('Incluye provisiones para suministro, montaje, conexión, protecciones, puesta a tierra, ' +
     'monitoreo, ingeniería, documentación, preparación y seguimiento de gestión, flete, pruebas y capacitación básica dentro del presupuesto.'));
   art.append(p('No incluye baterías, respaldo en apagones, refuerzo estructural, sustitución de cubierta, ' +
@@ -1164,8 +1183,9 @@ function s18(r, _leido, onToggle) {
 }
 
 // ---------- 19: entrega y mantenimiento ----------
+// Renumerada: se renderiza como 23 (ver nota en s22, arriba, sobre el reordenamiento).
 function s19(r, _leido, onToggle) {
-  const art = crearSeccion(19, 'Entrega, mantenimiento y comprobación del ahorro', '¿Qué se entrega, y cómo se comprueba el ahorro ya operando?', r, onToggle);
+  const art = crearSeccion(23, 'Entrega, mantenimiento y comprobación del ahorro', '¿Qué se entrega, y cómo se comprueba el ahorro ya operando?', r, onToggle);
   art.append(tabla(['Momento', 'Entrega o comprobación'], [
     ['Antes de obra', 'Plano, diagrama unifilar, memoria eléctrica, cálculo de estructura, modelos, protecciones, alcance y contrato.'],
     ['Al terminar', 'Inventario y números de serie, pruebas, documentación de conexión, manuales y garantías, plano final, acceso al monitoreo y capacitación.'],
@@ -1180,8 +1200,9 @@ function s19(r, _leido, onToggle) {
 }
 
 // ---------- 20: glosario ----------
+// Renumerada: se renderiza como 24 (ver nota en s22, arriba, sobre el reordenamiento).
 function s20(r, _leido, onToggle) {
-  const art = crearSeccion(20, 'Glosario: términos usados en este estudio', 'Consulta rápida del significado de los términos técnicos.', r, onToggle);
+  const art = crearSeccion(24, 'Glosario: términos usados en este estudio', 'Consulta rápida del significado de los términos técnicos.', r, onToggle);
   art.append(tabla(['Término', 'Qué significa'], [
     ['kWh (kilowatt-hora)', 'La unidad en la que CFE cobra la electricidad: cuánta energía se consumió. Es lo que aparece en su recibo.'],
     ['kW / kWp (kilowatt / kilowatt pico)', 'La potencia (velocidad a la que se consume o se genera electricidad en un instante). "Pico" es la potencia máxima que pueden dar los paneles en condiciones ideales de sol.'],
@@ -1202,8 +1223,9 @@ function s20(r, _leido, onToggle) {
 }
 
 // ---------- 21: fuentes ----------
+// Renumerada: se renderiza como 25 (ver nota en s22, arriba, sobre el reordenamiento).
 function s21(r, _leido, onToggle) {
-  const art = crearSeccion(21, 'Fuentes y trazabilidad del cálculo', '¿En qué se basa cada número de este estudio?', r, onToggle);
+  const art = crearSeccion(25, 'Fuentes y trazabilidad del cálculo', '¿En qué se basa cada número de este estudio?', r, onToggle);
   art.append(tabla(['Elemento', 'Fuente'], [
     ['Documento principal', `Recibo CFE del servicio ${r.noServicio || 'por confirmar'}${r.periodoDias ? ', período ' + r.periodoDias + ' días' : ''}.`],
     ['Producción', r.metodoGeneracion || 'Criterio preliminar de horas-sol fijas (4.5 h/día, 30.5 días/mes), no PVGIS ni irradiancia real del sitio.'],
@@ -1217,7 +1239,11 @@ function s21(r, _leido, onToggle) {
   return art;
 }
 
-const RENDERERS = [s01, s02, s03, s04, s05, s06, s07, s08, s09, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21, s22, s23, s24, s25];
+// Orden de renderizado NARRATIVO (pedido explicito del usuario, 2026-11-01): resumen ->
+// calculo detallado -> escenario/comparativo de la verificacion en sitio -> cierre
+// administrativo. Las funciones sNN conservan su nombre historico (no su posicion real
+// aqui) -- ver la nota en la definicion de cada una (s17..s25) para el mapeo.
+const RENDERERS = [s01, s02, s03, s04, s05, s06, s07, s08, s09, s10, s11, s12, s13, s14, s15, s16, s22, s23, s24, s25, s17, s18, s19, s20, s21];
 
 export const TITULOS_SECCIONES = [
   'Su proyecto, explicado en una página', 'Su recibo: datos comprobados', 'Cómo se forma lo que paga a CFE',
@@ -1226,10 +1252,11 @@ export const TITULOS_SECCIONES = [
   'Cuánto pagaría y cuánto ahorraría', 'Presupuesto y alcance económico', 'Detalle del presupuesto',
   'En cuánto se recuperaría la inversión', 'Flujo del proyecto durante 25 años',
   'Pagos estimados por mes del año de referencia', 'Qué tan cerca se puede llegar al 100% de ahorro',
+  'Documento: recibo original de CFE', 'Documento: verificación en sitio',
+  'Su proyecto según la verificación en sitio', 'Comparativo: calculado vs. verificación en sitio',
   'Qué hace falta para cerrar el ahorro', 'Alcance, exclusiones y condiciones comerciales',
   'Entrega, mantenimiento y comprobación del ahorro', 'Glosario: términos usados en este estudio',
-  'Fuentes y trazabilidad del cálculo', 'Documento: recibo original de CFE', 'Documento: verificación en sitio',
-  'Su proyecto según la verificación en sitio', 'Comparativo: calculado vs. verificación en sitio',
+  'Fuentes y trazabilidad del cálculo',
 ];
 
 // renderSeccion(numero 1..21, r, leido, onToggle, onEditarTexto, onToggleCalculo,
