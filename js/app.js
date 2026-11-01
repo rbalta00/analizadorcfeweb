@@ -796,6 +796,37 @@ function marcarCamposNoDetectados(campos) {
     }
   }
 }
+// Quita de campos_no_encontrados (y apaga rate_kw_detectado si aplica) cualquier campo
+// que YA NO este marcado en naranja en el DOM en este momento -- usado al calcular con
+// exito para que la confirmacion de Isaac quede guardada de forma permanente en el
+// proyecto, no solo en esta sesion (ver comentario en calcularYRenderizar).
+function sincronizarCamposConfirmados(leido) {
+  if (!leido) return leido;
+  const actualizado = { ...leido };
+  if (Array.isArray(actualizado.campos_no_encontrados)) {
+    actualizado.campos_no_encontrados = actualizado.campos_no_encontrados.filter((campo) => {
+      const inputId = CAMPO_A_INPUT[campo];
+      const el2 = inputId && $(inputId);
+      return el2 && el2.classList.contains('campo-no-detectado');
+    });
+  }
+  if (!$('grupoRateKw').classList.contains('campo-no-detectado')) {
+    actualizado.rate_kw_detectado = true;
+  }
+  // GDMTH: energia_base/intermedia/punta se re-marcan comparando campos[campo] == null
+  // directamente (no via campos_no_encontrados, ver marcarCamposNoDetectados) -- si ya
+  // se confirmaron (no estan en naranja), hay que dejar de verlos como null aqui tambien.
+  if ($('tarifa').value === 'GDMTH') {
+    for (const campo of ['energia_base', 'energia_intermedia', 'energia_punta']) {
+      const inputId = CAMPO_A_INPUT[campo];
+      const el2 = inputId && $(inputId);
+      if (el2 && !el2.classList.contains('campo-no-detectado') && actualizado[campo] == null) {
+        actualizado[campo] = Number(el2.value) || 0;
+      }
+    }
+  }
+  return actualizado;
+}
 $('tabCaptura').addEventListener('input', (e) => {
   if (e.target.classList && e.target.classList.contains('campo-no-detectado')) {
     e.target.classList.remove('campo-no-detectado');
@@ -860,7 +891,7 @@ function intentarAutoCalcular(campos) {
     try {
       calcularYRenderizar();
       $('estadoCalculo').className = 'nota ok';
-      $('estadoCalculo').textContent = 'Calculado automáticamente a partir del recibo. Revisa las 21 secciones abajo.';
+      $('estadoCalculo').textContent = 'Calculado automáticamente a partir del recibo. Revisa las secciones abajo.';
       return true;
     } catch (err) {
       $('estadoCalculo').className = 'nota aviso';
@@ -926,7 +957,7 @@ $('btnCalcular').addEventListener('click', () => {
   try {
     calcularYRenderizar();
     $('estadoCalculo').className = 'nota ok';
-    $('estadoCalculo').textContent = 'Calculado. Desplázate hacia abajo para ver las 21 secciones, o usa el índice.';
+    $('estadoCalculo').textContent = 'Calculado. Desplázate hacia abajo para ver las secciones, o usa el índice.';
     $('contenedorSecciones').scrollIntoView({ behavior: 'smooth' });
   } catch (e) {
     $('estadoCalculo').className = 'nota aviso';
@@ -1031,7 +1062,16 @@ function calcularYRenderizar() {
   }
 
   proyectoActual.formulario = leerFormulario();
-  proyectoActual.campos = ultimoLeido;
+  // Una vez que se logra calcular, los campos que seguian marcados "no detectado" ya
+  // fueron confirmados por Isaac (si no, faltantesVisiblesParaCalcular() habria
+  // bloqueado este calculo) -- hay que quitarlos de campos_no_encontrados de forma
+  // PERMANENTE aqui, no solo en el DOM de esta sesion. Si no se hace esto, cada vez
+  // que se reabre el proyecto (otra sesion, otra pestaña, recargar la pagina)
+  // marcarCamposNoDetectados() vuelve a leer el mismo campos_no_encontrados original
+  // de la lectura del recibo y repinta las mismas marcas naranja para siempre, aunque
+  // ya se hayan confirmado y calculado bien una vez -- bug real reportado por el
+  // usuario, 2026-11-01 ("no aparece el indice" se repetia sesion tras sesion).
+  proyectoActual.campos = sincronizarCamposConfirmados(ultimoLeido);
   proyectoActual.inmueble = inmueble;
   guardarProyecto(clienteActual, proyectoActual);
 
@@ -1318,7 +1358,7 @@ function renderIndice(r) {
   const cont = $('indiceLista');
   cont.innerHTML = '';
   if (!r) {
-    cont.innerHTML = '<p class="nota">Calcula primero (sección "Datos y recibo") para ver el índice de las 21 secciones.</p>';
+    cont.innerHTML = '<p class="nota">Calcula primero (sección "Datos y recibo") para ver el índice de secciones.</p>';
     return;
   }
   const activos = seccionesActivasEnOrden(r);
