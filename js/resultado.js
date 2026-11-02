@@ -67,6 +67,13 @@ export function construirResultado(input) {
   // son atipicos).
   const historialConfiable = historialUsado && historialUsado.length >= 3;
   const desdeHistorial = historialConfiable ? consumoMensualDesdeHistorial(historialUsado, diasPorPeriodoHistorial) : null;
+  // Con 1-2 periodos (insuficientes para un promedio confiable) no se desperdicia el
+  // dato -- se compara contra el periodo facturado real y se usa el MAYOR de los dos, para
+  // no subestimar si ese periodo parcial resulta ser el mas bajo (pedido explicito del
+  // usuario, 2026-11-01: "si son [menos de] 3 pon el mayor, o da la opcion").
+  const desdeHistorialParcial = (historialUsado && historialUsado.length && !historialConfiable)
+    ? consumoMensualDesdeHistorial(historialUsado, diasPorPeriodoHistorial) : null;
+  const consumoMensualPeriodo = normalizarConsumoMensual(periodoKwh, periodoDias);
 
   let consumoMensual, dailyKwh, metodoGeneracion, basisConsumo;
   if (desdeHistorial) {
@@ -81,15 +88,25 @@ export function construirResultado(input) {
       `${consumoMensual.toFixed(2)} kWh/mes (30.5 días) -- mas representativo que un solo periodo.`;
     basisConsumo = `historial real de ${desdeHistorial.periodosUsados} periodos` +
       (historialManual && historialManual.length ? ' (capturados a mano)' : ' (impresos en el recibo)');
+  } else if (desdeHistorialParcial && desdeHistorialParcial.consumoMensual > consumoMensualPeriodo) {
+    consumoMensual = desdeHistorialParcial.consumoMensual;
+    dailyKwh = consumoMensual / DIAS_MES_REF;
+    metodoGeneracion = `Horas-sol fijas (${horasUtiles} h/día, criterio del usuario, no oficial de CFE/PVGIS). ` +
+      `Consumo normalizado de ${desdeHistorialParcial.periodosUsados} período(s) de historial parcial (insuficiente ` +
+      `para promediar con confianza, pero MAYOR que el período facturado real) -- se usa por seguridad, para no ` +
+      `subestimar el sistema: ${consumoMensual.toFixed(2)} kWh/mes.`;
+    basisConsumo = `el mayor entre el período facturado y ${desdeHistorialParcial.periodosUsados} período(s) de ` +
+      `historial parcial -- salió más alto el historial parcial`;
   } else {
     dailyKwh = periodoKwh / periodoDias;
-    consumoMensual = normalizarConsumoMensual(periodoKwh, periodoDias);
+    consumoMensual = consumoMensualPeriodo;
     metodoGeneracion = `Horas-sol fijas (${horasUtiles} h/día, criterio del usuario, no oficial de CFE/PVGIS). ` +
       `Consumo normalizado de este servicio: ${consumoMensual.toFixed(2)} kWh/mes (30.5 días), a partir del período ` +
       `real facturado (${periodoKwh} kWh en ${periodoDias} días).`;
-    basisConsumo = (historialUsado && historialUsado.length)
-      ? `extrapolación de un solo período (${periodoDias} días) -- el historial capturado tiene solo ` +
-        `${historialUsado.length} período${historialUsado.length > 1 ? 's' : ''}, no se usa su promedio hasta tener al menos 3 (para que un único período atípico no distorsione el tamaño del sistema)`
+    basisConsumo = desdeHistorialParcial
+      ? `extrapolación de un solo período (${periodoDias} días) -- también hay ${desdeHistorialParcial.periodosUsados} ` +
+        `período(s) de historial parcial, pero su consumo normalizado (${desdeHistorialParcial.consumoMensual.toFixed(0)} kWh/mes) ` +
+        `es menor, así que se usa el período facturado real (más alto) por seguridad`
       : `extrapolación de un solo período (${periodoDias} días)`;
   }
   // Bug real encontrado en la auditoria de 2026-11-01: `historial` (usado en secciones.js
