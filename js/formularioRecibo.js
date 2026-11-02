@@ -172,8 +172,17 @@ export function llenarFormularioDesdeReciboCampos(c) {
   }
   // Si el recibo trae impresa la grafica/tabla de historial, precarga los campos de
   // historial para que se vea y se pueda corregir a mano -- no solo quede guardado
-  // internamente. Los mas recientes van primero (igual orden que recibo.js).
+  // internamente. recibo.js devuelve los periodos en orden CRONOLOGICO ASCENDENTE (el mas
+  // antiguo primero, el mas reciente al final -- el ultimo normalmente coincide con el
+  // periodo que se esta facturando ahora). Bug real encontrado probando con un recibo real
+  // de 13 periodos (2026-11-01): esta funcion llenaba las primeras N casillas del arreglo
+  // (la comprension anterior, "los mas recientes van primero", era incorrecta) -- con un
+  // historial MAS LARGO que las casillas disponibles (12 para no domesticas, 6 para
+  // domesticas), eso descartaba en silencio los periodos MAS RECIENTES (los del final del
+  // arreglo), justo los mas importantes, en vez de los mas viejos. Se usa slice(-n) para
+  // quedarse siempre con los N periodos MAS RECIENTES cuando hay mas de los que caben.
   if (c.historial && c.historial.length) {
-    aplicarGridHistorial(dom ? 'hist_d_' : 'hist_nd_', dom ? 6 : 12, c.historial.map(h => h.kwh));
+    const n = dom ? 6 : 12;
+    aplicarGridHistorial(dom ? 'hist_d_' : 'hist_nd_', n, c.historial.slice(-n).map(h => h.kwh));
   }
 }

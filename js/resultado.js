@@ -78,9 +78,16 @@ export function construirResultado(input) {
     (historialUsado && historialUsado.length
       ? `Consumo mensual normalizado: promedio de ${consumosMensuales.length} período(s) de historial = ${consumoMensual.toFixed(2)} kWh/mes.`
       : `Consumo mensual normalizado del período facturado actual (${periodoKwh} kWh en ${periodoDias} días, sin historial capturado) = ${consumoMensual.toFixed(2)} kWh/mes.`);
+  // Bug real encontrado probando con un PDF real (2026-11-01): esto decia "(capturados a
+  // mano)" siempre que historialManual tuviera datos -- pero historialManual se llena
+  // igual tanto si el usuario los tecleo como si el OCR/texto nativo del PDF los escribio
+  // solo en las casillas (aplicarGridHistorial, ver formularioRecibo.js). La UNICA forma de
+  // saber que de verdad son "a mano" es que el OCR no haya encontrado ningun historial para
+  // este recibo en absoluto.
+  const historialVieneDelRecibo = !!(leido && leido.historial && leido.historial.length);
   const basisConsumo = (historialUsado && historialUsado.length)
     ? `historial real de ${consumosMensuales.length} período(s)` +
-      (historialManual && historialManual.length ? ' (capturados a mano)' : ' (impresos en el recibo)')
+      (historialVieneDelRecibo ? ' (impresos en el recibo)' : ' (capturados a mano)')
     : `extrapolación de un solo período (${periodoDias} días, sin historial capturado)`;
   // Bug real encontrado en la auditoria de 2026-11-01: `historial` (usado en secciones.js
   // para la grafica/tabla de la seccion 5 y la comparacion generacion-vs-historial de la

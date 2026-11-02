@@ -300,7 +300,11 @@ export function llenarFormularioTarifaDesdeRecibo(tarifa, c) {
     if (c.periodo_dias != null) $(`${p}periodoDias`).value = c.periodo_dias;
     if (c.periodo_kwh != null) $(`${p}periodoKwh`).value = c.periodo_kwh;
     if (c.dap != null) $(`${p}dap`).value = c.dap;
-    if (c.historial && c.historial.length) aplicarGridHistorial(p, 6, c.historial.map(h => h.kwh));
+    // recibo.js devuelve los periodos en orden cronologico ascendente (el mas reciente al
+    // final) -- con slice(-n) se mantienen siempre los N periodos MAS RECIENTES cuando el
+    // historial trae mas periodos que casillas disponibles (mismo fix que en
+    // formularioRecibo.js, 2026-11-01).
+    if (c.historial && c.historial.length) aplicarGridHistorial(p, 6, c.historial.slice(-6).map(h => h.kwh));
     return;
   }
   if (c.periodo_dias != null) $(`${p}periodoDias`).value = c.periodo_dias;
@@ -324,5 +328,6 @@ export function llenarFormularioTarifaDesdeRecibo(tarifa, c) {
   }
   if (c.bt_monto) { $(`${p}traeBt`).checked = true; $(`${p}btMonto`).disabled = false; $(`${p}btMonto`).value = c.bt_monto; }
   if (c.bonus_monto) { $(`${p}traeBonus`).checked = true; $(`${p}bonusMonto`).disabled = false; $(`${p}bonusMonto`).value = Math.abs(c.bonus_monto); }
-  if (c.historial && c.historial.length) aplicarGridHistorial(p, 12, c.historial.map(h => h.kwh));
+  // Mismo fix que arriba: quedarse con los 12 periodos MAS RECIENTES, no los primeros 12.
+  if (c.historial && c.historial.length) aplicarGridHistorial(p, 12, c.historial.slice(-12).map(h => h.kwh));
 }
