@@ -56,7 +56,17 @@ export function construirResultado(input) {
   const diasPorPeriodoHistorial = esDomestica ? DIAS_MES_REF * 2 : DIAS_MES_REF;
   const historialOcr = (leido && leido.historial) ? leido.historial.map(h => h.kwh) : null;
   const historialUsado = (historialManual && historialManual.length) ? historialManual : historialOcr;
-  const desdeHistorial = historialUsado ? consumoMensualDesdeHistorial(historialUsado, diasPorPeriodoHistorial) : null;
+  // Bug real reportado por el usuario, 2026-11-01: con 1 (o 2) periodo(s) de historial
+  // capturado -- a veces un periodo atipico/parcial, ej. el primer mes de servicio -- el
+  // "promedio" terminaba siendo ESE UNICO valor, sin ningun suavizado real, y si ese valor
+  // era bajo, dimensionaba un sistema chico cuyos costos fijos (ingenieria, tramites, etc.)
+  // no bajan proporcionalmente -- la recuperacion se disparaba a años irracionales. Se exige
+  // un minimo de 3 periodos (mismo umbral que ya usa la seccion 5 para la insignia
+  // "Comprobado") antes de confiar en el promedio para dimensionar; con menos de 3 se usa el
+  // periodo facturado real (mas confiable que 1-2 puntos sueltos sin forma de detectar si
+  // son atipicos).
+  const historialConfiable = historialUsado && historialUsado.length >= 3;
+  const desdeHistorial = historialConfiable ? consumoMensualDesdeHistorial(historialUsado, diasPorPeriodoHistorial) : null;
 
   let consumoMensual, dailyKwh, metodoGeneracion, basisConsumo;
   if (desdeHistorial) {
@@ -77,7 +87,10 @@ export function construirResultado(input) {
     metodoGeneracion = `Horas-sol fijas (${horasUtiles} h/día, criterio del usuario, no oficial de CFE/PVGIS). ` +
       `Consumo normalizado de este servicio: ${consumoMensual.toFixed(2)} kWh/mes (30.5 días), a partir del período ` +
       `real facturado (${periodoKwh} kWh en ${periodoDias} días).`;
-    basisConsumo = `extrapolación de un solo período (${periodoDias} días)`;
+    basisConsumo = (historialUsado && historialUsado.length)
+      ? `extrapolación de un solo período (${periodoDias} días) -- el historial capturado tiene solo ` +
+        `${historialUsado.length} período${historialUsado.length > 1 ? 's' : ''}, no se usa su promedio hasta tener al menos 3 (para que un único período atípico no distorsione el tamaño del sistema)`
+      : `extrapolación de un solo período (${periodoDias} días)`;
   }
   // Bug real encontrado en la auditoria de 2026-11-01: `historial` (usado en secciones.js
   // para la grafica/tabla de la seccion 5 y la comparacion generacion-vs-historial de la
