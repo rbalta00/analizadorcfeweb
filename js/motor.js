@@ -220,6 +220,11 @@ export function normalizarConsumoMensual(periodoKwh, periodoDias, diasMes = DIAS
 export function dimensionarHorasSol(consumoMensualKwh, moduloWp, cobertura = 1.0,
                                      horasUtiles = HORAS_UTILES_REF, diasMes = DIAS_MES_REF) {
   const genPanel = generacionMensualPanel(moduloWp, horasUtiles, diasMes);
+  // moduloWp/horasUtiles tecleados a mano (0 o negativo) hacian genPanel <= 0, lo que
+  // produce n=Infinity/NaN y se propaga en silencio a kwp/genMensual/genAnual y de ahi a
+  // TODO el presupuesto y el flujo a 25 años (hallazgo de la auditoria de 2026-11-01,
+  // mismo patron que el freno ya agregado a periodoDias/periodoKwh).
+  if (!(genPanel > 0)) throw new Error('moduloWp y horasUtiles deben ser > 0');
   const n = Math.ceil(consumoMensualKwh * cobertura / genPanel);
   const kwp = R(n * moduloWp / 1000);
   const genMensual = R(n * genPanel);
