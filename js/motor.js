@@ -154,10 +154,19 @@ export function flujoMensualAnual(invoiceFn, consumoDiarioKwh, generacionMensual
 // escalones: lista de [limiteKwhONull, tarifaMxnKwh], el ultimo con limite null.
 export function construirInvoiceDomestica(escalones, periodoDias, dapBimestral, ivaPct = 0.16) {
   if (!(periodoDias > 0)) throw new Error('periodoDias debe ser > 0');
-  function energia(kwh) {
+  // Los limites de escalon (Basico/Intermedio) vienen calibrados al periodo completo
+  // del recibo (periodoDias, bimestral ~61 dias). invoice() tambien se llama con un
+  // solo mes (~30 dias) dentro de la proyeccion a 25 anios (flujoMensualAnual) -- sin
+  // prorratear el limite por dias/periodoDias, un mes caia en los tramos baratos
+  // pensados para los dos meses del bimestre completo, subvaluando la factura "sin
+  // solar" (~8%) y el ahorro proyectado (~9%). Si dias === periodoDias el factor es 1
+  // y el resultado es identico al de antes.
+  function energia(kwh, dias) {
+    const factor = dias / periodoDias;
     let restante = kwh, total = 0.0;
     for (const [limite, tarifa] of escalones) {
-      const usar = (limite === null) ? restante : Math.min(restante, limite);
+      const limiteProrrateado = (limite === null) ? null : limite * factor;
+      const usar = (limiteProrrateado === null) ? restante : Math.min(restante, limiteProrrateado);
       total += usar * tarifa;
       restante -= usar;
       if (restante <= 0) break;
@@ -165,7 +174,7 @@ export function construirInvoiceDomestica(escalones, periodoDias, dapBimestral, 
     return R(total);
   }
   function invoice(dias, netEnergy) {
-    const base = energia(netEnergy);
+    const base = energia(netEnergy, dias);
     const vat = R(base * ivaPct);
     const dap = R(dapBimestral * dias / periodoDias);
     return { base, bt: 0.0, bonus: 0.0, subtotal: base, iva: vat, dap, total: R(base + vat + dap) };

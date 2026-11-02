@@ -14,7 +14,7 @@
 // de 204,742.76 a 201,229.17 (-1.7%), TIR de 16.84% a 16.73%, recuperacion de 6.321 a
 // 6.359 años. Los valores esperados de abajo ya reflejan el calculo corregido.
 import {
-  construirInvoice, pisoDeAhorro, flujoMensualAnual, dimensionarHorasSol,
+  construirInvoice, construirInvoiceDomestica, pisoDeAhorro, flujoMensualAnual, dimensionarHorasSol,
   normalizarConsumoMensual, presupuestar, costoInversor, flujo25Anios, COSTOS_RESIDENCIAL,
 } from './motor.js';
 
@@ -107,6 +107,21 @@ cerca('flujo1.acumulado', fila1.acumuladoMxn, -260887.93);
 const fila25 = flujo25.flujo.find(x => x.anio === 25);
 cerca('flujo25.flujo_neto', fila25.flujoMxn, 99650.31, 0.5);
 cerca('flujo25.acumulado', fila25.acumuladoMxn, 1329829.75, 2.0);
+
+// Regresion 2026-11-02: los limites de escalon domestico (01/DAC) se prorratean por
+// dias/periodoDias. Bug real encontrado -- invoice() se llama por mes (~30 dias)
+// dentro de flujoMensualAnual() pero usaba los limites del bimestre completo sin
+// prorratear, subvaluando la factura "sin solar" cerca de 8% y el ahorro ~9%.
+{
+  const escalones = [[300, 1.0], [700, 1.3], [null, 3.7]]; // bimestre de 61 dias
+  const invoiceDom = construirInvoiceDomestica(escalones, 61, 50, 0.16);
+  const bimestre = invoiceDom(61, 900);
+  // 300 kWh * 1.0 + 600 kWh * 1.3 = 1080 (900 kWh agota el tramo basico e intermedio
+  // completos, calculado a mano para este escalones/kwh exactos).
+  cerca('domestica.bimestre', bimestre.base, 1080, 0.1);
+  const mes = invoiceDom(30.5, 450);
+  cerca('domestica.mes_es_mitad', mes.base, bimestre.base / 2, 0.1);
+}
 
 console.log('\n' + (fallos === 0 ? 'TODO OK' : `${fallos} FALLOS`));
 process.exit(fallos === 0 ? 0 : 1);
