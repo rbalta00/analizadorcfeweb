@@ -875,10 +875,23 @@ function s05(r, _leido, onToggle) {
     art.append(p(`El propio recibo trae impreso un historial de ${historial.length} períodos ya facturados — es ` +
       'la base más confiable para calcular el consumo anual, mejor que suponer que todos los meses son iguales al último período.'));
     const meses = historial.map(x => `${x.mes}${x.anio}`);
-    const kwh = historial.map(x => x.kwh);
-    const prom = kwh.reduce((a, b) => a + b, 0) / kwh.length;
-    art.append(barraAgrupada(meses, 'Consumo real facturado', kwh, 'Promedio del historial', kwh.map(() => prom)));
-    art.append(tabla(['Período', 'Consumo facturado'], historial.map(x => [`${x.mes} ${x.anio}`, `${x.kwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]), { small: true }));
+    // Bug real reportado por el usuario, 2026-11-01: esta grafica usaba el kWh CRUDO de
+    // cada periodo (tal como viene impreso) para la barra Y TAMBIEN para la linea de
+    // "promedio", mientras que la tabla de "Consumo mensual normalizado" de mas abajo usa
+    // los mismos periodos ya normalizados a kWh/mes. Para tarifas NO domesticas esto no se
+    // notaba (el factor de normalizacion es 1:1, 30.5÷30.5). Para tarifas domesticas (01/
+    // DAC, periodos BIMESTRALES) el kWh crudo es el doble del valor mensual -- el
+    // "promedio" de esta grafica salia 2x mas alto que el "Consumo mensual normalizado" de
+    // la tabla de abajo, dos numeros distintos para la misma idea en la misma seccion. Se
+    // usa r.consumosMensualesUsados (ya normalizado, mismo orden que historial) para que la
+    // grafica y la tabla de abajo digan siempre el mismo numero.
+    const kwhNormalizado = r.consumosMensualesUsados;
+    const kwhCrudo = historial.map(x => x.kwh);
+    const prom = kwhNormalizado.reduce((a, b) => a + b, 0) / kwhNormalizado.length;
+    art.append(barraAgrupada(meses, 'Consumo normalizado a kWh/mes', kwhNormalizado, 'Promedio mensual', kwhNormalizado.map(() => prom)));
+    art.append(tabla(['Período', 'Consumo facturado (real, tal como en el recibo)', 'Normalizado a kWh/mes'],
+      historial.map((x, i) => [`${x.mes} ${x.anio}`, `${kwhCrudo[i].toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${kwhNormalizado[i].toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`]),
+      { small: true }));
   } else {
     art.append(badgeEstado('supuesto'));
   }
@@ -889,7 +902,7 @@ function s05(r, _leido, onToggle) {
     ['Gasto anual de referencia', M(r.annualbefore) + ' con IVA y 12 cuotas de DAP'],
   ]));
   if (historial && historial.length >= 6) {
-    art.append(avisoCream(`El consumo anual se promedia con el historial real de consumo del propio recibo (${historial.length} períodos) más el período actual -- no es una extrapolación de un solo mes.`));
+    art.append(avisoCream(`El consumo anual se promedia con el historial real de consumo del propio recibo (${historial.length} períodos) -- no es una extrapolación de un solo mes.`));
   } else {
     art.append(avisoCream('Por ahora solo se tiene el período facturado actual (sin historial, o con pocos períodos ' +
       'capturados). El historial de consumo de 12 meses, cuando esté disponible, debe capturarse para promediar ' +
@@ -1051,14 +1064,22 @@ function s07(r, _leido, onToggle) {
   // supera o se queda corto respecto a lo que generarian los paneles propuestos.
   if (r.historial && r.historial.length >= 2) {
     const genMensualEstimada = r.gen / 12;
+    // Bug real reportado por el usuario, 2026-11-01: esta grafica comparaba generacion
+    // MENSUAL contra el kWh CRUDO de cada periodo de historial -- para tarifas domesticas
+    // (01/DAC, periodos BIMESTRALES) eso compara un numero mensual contra uno bimestral (el
+    // doble), haciendo ver que el sistema genera mucho menos de lo que realmente consume
+    // cada mes. Se usa r.consumosMensualesUsados (ya normalizado a kWh/mes, mismo orden que
+    // r.historial) para que ambas barras esten en la misma unidad -- mismo fix que en la
+    // seccion 5.
     art.append(subtituloChico(7, 'generacion-vs-historial', 'Generación mensual estimada vs. su consumo real facturado'));
     art.append(barraAgrupada(
       r.historial.map(h => `${h.mes} ${h.anio}`),
       'Generación mensual estimada con los paneles propuestos', r.historial.map(() => genMensualEstimada),
-      'Su consumo real facturado ese período', r.historial.map(h => h.kwh),
+      'Su consumo normalizado a kWh/mes ese período', r.consumosMensualesUsados,
     ));
-    art.append(p(`Cada barra de "consumo real facturado" es el dato impreso en su propio recibo para ese período -- ` +
-      'no un promedio ni una extrapolación. La generación estimada es la misma para los ' +
+    art.append(p(`Cada barra de "consumo normalizado a kWh/mes" parte del dato real impreso en su propio recibo para ` +
+      'ese período, convertido a su equivalente mensual (así un período bimestral no se compara contra una ' +
+      'generación mensual como si fuera el mismo). La generación estimada es la misma para los ' +
       `${r.historial.length} períodos porque el criterio de horas-sol fijas no varía mes a mes (ver aviso abajo); ` +
       'compararla contra cada período real muestra en cuáles meses el sistema propuesto generaría más o menos de lo ' +
       'que ese período concreto consumió.'));
