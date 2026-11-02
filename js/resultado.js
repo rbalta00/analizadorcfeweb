@@ -68,7 +68,17 @@ export function construirResultado(input) {
   // facturado por separado solo se usa cuando NO hay ningun historial capturado.
   const diasPorPeriodoHistorial = esDomestica ? DIAS_MES_REF * 2 : DIAS_MES_REF;
   const historialOcr = (leido && leido.historial) ? leido.historial.map(h => h.kwh) : null;
-  const historialUsado = (historialManual && historialManual.length) ? historialManual : historialOcr;
+  const historialUsadoCrudo = (historialManual && historialManual.length) ? historialManual : historialOcr;
+  // El ULTIMO periodo del historial (impreso en el recibo, o copiado a las casillas al
+  // leerlo) es el MISMO periodo que se esta facturando ahora -- si se corrige "kWh del
+  // período" a mano en el formulario (porque el OCR lo leyo mal, o por cualquier motivo),
+  // esa correccion tiene que reflejarse aqui tambien. Sin esto, la correccion "no hacia
+  // nada" porque el promedio seguia usando el valor viejo que quedo en la ultima casilla
+  // del historial, sin tocar (bug real reportado por el usuario, 2026-11-01: "por que
+  // siguen afectando cuando cambio... los kwh del periodo").
+  const historialUsado = (historialUsadoCrudo && historialUsadoCrudo.length)
+    ? [...historialUsadoCrudo.slice(0, -1), periodoKwh]
+    : historialUsadoCrudo;
   const consumosMensuales = (historialUsado && historialUsado.length)
     ? historialUsado.map(kwh => kwh / diasPorPeriodoHistorial * DIAS_MES_REF)
     : [normalizarConsumoMensual(periodoKwh, periodoDias)];
@@ -99,9 +109,15 @@ export function construirResultado(input) {
   // que realmente se uso para dimensionar, para que lo que se grafica nunca contradiga lo
   // que se calculo. Los periodos manuales no tienen mes/año real (el formulario solo pide
   // "P1..P12" genericos) -- se etiquetan como "P1", "P2"... en vez de inventar un mes.
-  const historialParaMostrar = (historialManual && historialManual.length)
+  const historialParaMostrarCrudo = (historialManual && historialManual.length)
     ? historialManual.map((kwh, i) => ({ mes: `P${i + 1}`, anio: '', kwh }))
     : (leido ? leido.historial : null);
+  // Mismo reemplazo del ultimo periodo que arriba (historialUsado), para que la grafica y
+  // la tabla de la seccion 5/7 muestren el MISMO numero que realmente se promedio -- nunca
+  // el valor viejo que haya quedado en la casilla si se corrigio "kWh del período" aparte.
+  const historialParaMostrar = (historialParaMostrarCrudo && historialParaMostrarCrudo.length)
+    ? historialParaMostrarCrudo.map((h, i) => i === historialParaMostrarCrudo.length - 1 ? { ...h, kwh: periodoKwh } : h)
+    : historialParaMostrarCrudo;
   // 2026-10-29): dimensionarHorasSol() SI calcula genMensual (produccion mensual real
   // del sistema), pero aqui nunca se usaba -- monthlyE se llenaba con genAnual/kwp
   // (kWh por kWp AL AÑO), no genMensual/kwp (kWh por kWp AL MES). flujoMensualAnual()
