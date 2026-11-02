@@ -6,7 +6,7 @@
 import {
   construirInvoice, construirInvoiceDomestica, pisoDeAhorro, flujoMensualAnual,
   dimensionarHorasSol, normalizarConsumoMensual, presupuestar, costoInversor, flujo25Anios, R,
-  consumoMensualDesdeHistorial, DIAS_MES_REF,
+  DIAS_MES_REF,
 } from './motor.js';
 import { generarNotas } from './notas.js';
 import { fechaEstudioEs, fechaVigenciaEs } from './util.js';
@@ -47,68 +47,45 @@ export function construirResultado(input) {
     meta = { tieneDemandaContratada: false, reducibles: ['energia'], noReducibles: [] };
   }
 
-  // Consumo base para dimensionar: si hay historial real (varios periodos, a mano o
-  // detectado del recibo) se promedia -- mas representativo que extrapolar un solo
-  // periodo porque suaviza variacion estacional. diasPorPeriodo distingue tarifas que
-  // se facturan mensual (~30.5 dias) de las domesticas/01/DAC, que se facturan
-  // bimestral (~61 dias) -- sin esto, promediar kWh/periodo directo subestimaria a la
-  // mitad el consumo mensual real de un cliente domestico.
+  // Consumo base para dimensionar: SIEMPRE se promedia el periodo que se esta facturando
+  // ahora (periodoKwh/periodoDias, real y siempre presente) junto con CUALQUIER periodo de
+  // historial capturado (a mano o detectado del recibo), normalizando todos a kWh/mes antes
+  // de promediar -- asi ningun periodo pesa mas que otro solo por tener mas o menos dias, y
+  // nunca se descarta un dato real capturado, sea 1 periodo o 12. diasPorPeriodoHistorial
+  // distingue tarifas que se facturan mensual (~30.5 dias) de las domesticas/01/DAC, que se
+  // facturan bimestral (~61 dias).
+  //
+  // Diseño corregido 2026-11-01 a pedido explicito del usuario: un primer intento exigia un
+  // minimo de 3 periodos de historial antes de confiar en su promedio (con menos, usaba solo
+  // el periodo facturado); un segundo intento comparaba el periodo facturado contra el
+  // historial parcial y usaba el mayor de los dos. El usuario senalo que ambos eran
+  // complicaciones innecesarias: "deberia ser el promedio [anual]" -- punto. El periodo que
+  // se factura ahora YA es un dato real (como cualquier periodo de historial), asi que
+  // promediarlo junto con el resto, sin umbrales ni comparaciones, es el diseño correcto: si
+  // el recibo imprime su historial incluyendo el periodo mas reciente (lo normal en CFE),
+  // promediarlo de nuevo con el periodo actual no distorsiona nada (es el mismo valor); si el
+  // historial capturado es de periodos genuinamente distintos, se incorporan de verdad,
+  // suavizando la estacionalidad -- con 1 solo periodo de historial YA DISTINTO al actual, el
+  // promedio de ambos (2 datos reales) nunca puede colapsar a un unico valor atipico.
   const diasPorPeriodoHistorial = esDomestica ? DIAS_MES_REF * 2 : DIAS_MES_REF;
   const historialOcr = (leido && leido.historial) ? leido.historial.map(h => h.kwh) : null;
   const historialUsado = (historialManual && historialManual.length) ? historialManual : historialOcr;
-  // Bug real reportado por el usuario, 2026-11-01: con 1 (o 2) periodo(s) de historial
-  // capturado -- a veces un periodo atipico/parcial, ej. el primer mes de servicio -- el
-  // "promedio" terminaba siendo ESE UNICO valor, sin ningun suavizado real, y si ese valor
-  // era bajo, dimensionaba un sistema chico cuyos costos fijos (ingenieria, tramites, etc.)
-  // no bajan proporcionalmente -- la recuperacion se disparaba a años irracionales. Se exige
-  // un minimo de 3 periodos (mismo umbral que ya usa la seccion 5 para la insignia
-  // "Comprobado") antes de confiar en el promedio para dimensionar; con menos de 3 se usa el
-  // periodo facturado real (mas confiable que 1-2 puntos sueltos sin forma de detectar si
-  // son atipicos).
-  const historialConfiable = historialUsado && historialUsado.length >= 3;
-  const desdeHistorial = historialConfiable ? consumoMensualDesdeHistorial(historialUsado, diasPorPeriodoHistorial) : null;
-  // Con 1-2 periodos (insuficientes para un promedio confiable) no se desperdicia el
-  // dato -- se compara contra el periodo facturado real y se usa el MAYOR de los dos, para
-  // no subestimar si ese periodo parcial resulta ser el mas bajo (pedido explicito del
-  // usuario, 2026-11-01: "si son [menos de] 3 pon el mayor, o da la opcion").
-  const desdeHistorialParcial = (historialUsado && historialUsado.length && !historialConfiable)
-    ? consumoMensualDesdeHistorial(historialUsado, diasPorPeriodoHistorial) : null;
-  const consumoMensualPeriodo = normalizarConsumoMensual(periodoKwh, periodoDias);
-
-  let consumoMensual, dailyKwh, metodoGeneracion, basisConsumo;
-  if (desdeHistorial) {
-    consumoMensual = desdeHistorial.consumoMensual;
-    // El promedio del historial tambien alimenta la simulacion de factura (dailyKwh)
-    // -- si no, el sistema quedaria dimensionado para el consumo promedio real pero
-    // el ahorro se calcularia contra el periodo mas reciente, que puede ser atipico
-    // (mes bajo/alto), dando un ahorro inconsistente con el tamano del sistema.
-    dailyKwh = consumoMensual / DIAS_MES_REF;
-    metodoGeneracion = `Horas-sol fijas (${horasUtiles} h/día, criterio del usuario, no oficial de CFE/PVGIS). ` +
-      `Consumo normalizado promedio de ${desdeHistorial.periodosUsados} periodos reales de historial: ` +
-      `${consumoMensual.toFixed(2)} kWh/mes (30.5 días) -- mas representativo que un solo periodo.`;
-    basisConsumo = `historial real de ${desdeHistorial.periodosUsados} periodos` +
-      (historialManual && historialManual.length ? ' (capturados a mano)' : ' (impresos en el recibo)');
-  } else if (desdeHistorialParcial && desdeHistorialParcial.consumoMensual > consumoMensualPeriodo) {
-    consumoMensual = desdeHistorialParcial.consumoMensual;
-    dailyKwh = consumoMensual / DIAS_MES_REF;
-    metodoGeneracion = `Horas-sol fijas (${horasUtiles} h/día, criterio del usuario, no oficial de CFE/PVGIS). ` +
-      `Consumo normalizado de ${desdeHistorialParcial.periodosUsados} período(s) de historial parcial (insuficiente ` +
-      `para promediar con confianza, pero MAYOR que el período facturado real) -- se usa por seguridad, para no ` +
-      `subestimar el sistema: ${consumoMensual.toFixed(2)} kWh/mes.`;
-    basisConsumo = `el mayor entre el período facturado y ${desdeHistorialParcial.periodosUsados} período(s) de ` +
-      `historial parcial -- salió más alto el historial parcial`;
-  } else {
-    dailyKwh = periodoKwh / periodoDias;
-    consumoMensual = consumoMensualPeriodo;
-    metodoGeneracion = `Horas-sol fijas (${horasUtiles} h/día, criterio del usuario, no oficial de CFE/PVGIS). ` +
-      `Consumo normalizado de este servicio: ${consumoMensual.toFixed(2)} kWh/mes (30.5 días), a partir del período ` +
-      `real facturado (${periodoKwh} kWh en ${periodoDias} días).`;
-    basisConsumo = desdeHistorialParcial
-      ? `extrapolación de un solo período (${periodoDias} días) -- también hay ${desdeHistorialParcial.periodosUsados} ` +
-        `período(s) de historial parcial, pero su consumo normalizado (${desdeHistorialParcial.consumoMensual.toFixed(0)} kWh/mes) ` +
-        `es menor, así que se usa el período facturado real (más alto) por seguridad`
-      : `extrapolación de un solo período (${periodoDias} días)`;
+  const consumoMensualPeriodoActual = normalizarConsumoMensual(periodoKwh, periodoDias);
+  const consumosMensuales = [consumoMensualPeriodoActual];
+  if (historialUsado && historialUsado.length) {
+    for (const kwh of historialUsado) consumosMensuales.push(kwh / diasPorPeriodoHistorial * DIAS_MES_REF);
   }
+  const consumoMensual = consumosMensuales.reduce((a, b) => a + b, 0) / consumosMensuales.length;
+  const dailyKwh = consumoMensual / DIAS_MES_REF;
+  const metodoGeneracion = `Horas-sol fijas (${horasUtiles} h/día, criterio del usuario, no oficial de CFE/PVGIS). ` +
+    `Consumo mensual normalizado: promedio de ${consumosMensuales.length} período(s) real(es) -- el período ` +
+    `facturado actual (${periodoKwh} kWh en ${periodoDias} días)` +
+    (historialUsado && historialUsado.length ? ` + ${historialUsado.length} período(s) de historial` : '') +
+    ` = ${consumoMensual.toFixed(2)} kWh/mes.`;
+  const basisConsumo = (historialUsado && historialUsado.length)
+    ? `promedio de ${consumosMensuales.length} períodos reales (el período facturado actual + ${historialUsado.length} de historial` +
+      (historialManual && historialManual.length ? ', capturados a mano)' : ', impresos en el recibo)')
+    : `extrapolación de un solo período (${periodoDias} días, sin historial capturado)`;
   // Bug real encontrado en la auditoria de 2026-11-01: `historial` (usado en secciones.js
   // para la grafica/tabla de la seccion 5 y la comparacion generacion-vs-historial de la
   // seccion 7) solo se llenaba con `leido.historial` (historial leido por OCR del PDF) --
@@ -201,7 +178,7 @@ export function construirResultado(input) {
     van: flujo25.van, tir: flujo25.tir, recuperacionAcumulada: flujo25.recuperacionAcumulada,
     flujo25Rows: flujo25.flujo, escalamientoTarifaPct: escalamientoPct,
     materiales: pres.materiales, rows,
-    historial: historialParaMostrar, basisConsumo,
+    historial: historialParaMostrar, basisConsumo, consumosMensualesUsados: consumosMensuales,
     inmueble: inmueble || null, escenarioVerificado,
     aplicaIsr: !!aplicaIsr, tasaIsrPct: tasaIsrPct || 0, ahorroFiscalIsr, inversionNetaIsr,
     vanNetoIsr, tirNetoIsr, paybackNetoIsr,

@@ -889,21 +889,27 @@ function s05(r, _leido, onToggle) {
     ['Gasto anual de referencia', M(r.annualbefore) + ' con IVA y 12 cuotas de DAP'],
   ]));
   if (historial && historial.length >= 6) {
-    art.append(avisoCream(`Esta base usa el historial real de consumo del propio recibo (${historial.length} períodos), no una extrapolación de un solo mes.`));
+    art.append(avisoCream(`El consumo anual se promedia con el historial real de consumo del propio recibo (${historial.length} períodos) más el período actual -- no es una extrapolación de un solo mes.`));
   } else {
-    art.append(avisoCream('La extrapolación de un solo período sirve para presupuestar. El historial de consumo ' +
-      'de 12 meses, cuando esté disponible, debe usarse para confirmar esta base antes de comprometer una cifra de ahorro definitiva.'));
+    art.append(avisoCream('Por ahora solo se tiene el período facturado actual (sin historial, o con pocos períodos ' +
+      'capturados). El historial de consumo de 12 meses, cuando esté disponible, debe capturarse para promediar ' +
+      'una base más representativa antes de comprometer una cifra de ahorro definitiva.'));
   }
   art.append(bloqueCalculo(5, [
-    historial && historial.length >= 3
-      ? p(`Fórmula: se promedian los ${historial.length} períodos del historial (${historial.map(x => `${x.mes} ${x.anio}: ${x.kwh.toLocaleString('en-US')} kWh`).join(', ')}) ` +
-          `y ese promedio se normaliza a un mes de 30.5 días -- así un período corto o largo no distorsiona el promedio mensual.`)
-      : p(`Fórmula: ${r.periodoKwh.toLocaleString('en-US')} kWh ÷ ${r.periodoDias} días × 30.5 días/mes = consumo mensual normalizado, extrapolado a 12 meses.`),
-    tabla(['Variable', 'Valor'], [
-      ['Consumo mensual normalizado', `${(r.annualKwh / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/mes`],
-      ['Consumo anual de referencia', `${r.annualKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año`],
-      ['Base usada', r.basisConsumo],
+    p('Fórmula: se promedia el período que se está facturando ahora junto con cualquier período de historial ' +
+      'capturado -- cada uno normalizado a kWh/mes antes de promediar (así un período de 28 días no pesa distinto ' +
+      'a uno de 32), y ese promedio se multiplica por 12 para el consumo anual. Nunca se descarta ningún período ' +
+      'real capturado, sea 1 solo o 12:'),
+    tabla(['Período usado', 'kWh (normalizado a 30.5 días/mes)'], [
+      ['Período facturado actual', `${r.periodoKwh.toLocaleString('en-US')} kWh ÷ ${r.periodoDias} días × 30.5 = ${(r.consumosMensualesUsados[0]).toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`],
+      ...r.consumosMensualesUsados.slice(1).map((kwh, i) => [`Historial P${i + 1}`, `${kwh.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`]),
     ], { small: true }),
+    tabla(['Variable', 'Cómo se obtuvo', 'Valor'], [
+      ['Suma de los períodos de arriba', r.consumosMensualesUsados.map(v => v.toFixed(1)).join(' + '), `${r.consumosMensualesUsados.reduce((a, b) => a + b, 0).toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh`],
+      ['Consumo mensual normalizado', `Suma ÷ ${r.consumosMensualesUsados.length} período(s)`, `${(r.annualKwh / 12).toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`],
+      ['Consumo anual de referencia', 'Consumo mensual × 12', `${r.annualKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año`],
+    ], { small: true, textCols: [1] }),
+    avisoCream(`Base usada: ${r.basisConsumo}.`),
   ], r));
   return art;
 }
