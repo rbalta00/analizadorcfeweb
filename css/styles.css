@@ -99,6 +99,16 @@ div.campo-no-detectado {
   div.campo-no-detectado { background: #3a2f10; }
 }
 
+/* Marca "se usa para calcular" -- pedido explicito del usuario (2026-11-01): poder ver
+   de un vistazo cuales campos capturados SI alimentan el calculo del sistema (paneles,
+   inversion, ahorro), distinto de datos solo informativos (titular, domicilio,
+   condiciones del inmueble). Se aplica en label/h3/h4 de "Datos y recibo", nunca
+   cambia el valor ni el comportamiento del campo. */
+.campo-usado-calculo::after {
+  content: ' \1F4D0'; /* 📐 */
+  font-size: 0.85em; cursor: help; opacity: 0.85;
+}
+
 .input-precio-material { width: 110px; padding: 4px 6px; }
 
 .lista-archivos-recibo { margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }

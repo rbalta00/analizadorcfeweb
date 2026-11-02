@@ -147,6 +147,10 @@
 
     <section class="tarjeta" id="tabCaptura">
       <h2>Datos y recibo</h2>
+      <p class="nota">Los campos y secciones marcados con <span class="campo-usado-calculo"></span> sí alimentan el
+        cálculo del sistema (paneles, inversión, ahorro) -- pasa el cursor sobre la marca para ver exactamente
+        para qué se usa ese dato. Los demás (titular, domicilio, condiciones del inmueble, etc.) son solo
+        informativos para la cotización.</p>
 
       <h3>1. Recibo CFE</h3>
       <p class="nota">Sube el PDF o una foto del recibo: se detecta la tarifa sola y, si hay suficientes datos, se
@@ -169,7 +173,7 @@
       <h3>2. Datos del cliente y la tarifa</h3>
       <div class="fila">
         <label>Titular / inmueble<input id="titular" type="text" /></label>
-        <label>Tarifa CFE
+        <label class="campo-usado-calculo" title="Se usa para calcular el sistema: decide la fórmula de facturación que compara el motor.">Tarifa CFE
           <select id="tarifa">
             <option value="GDMTO">GDMTO (media tensión, con demanda)</option>
             <option value="GDMTH">GDMTH (media tensión, con demanda, por horario)</option>
@@ -188,16 +192,16 @@
       <section id="bloqueNoDomestica">
         <h3>3. Datos del recibo</h3>
         <div class="fila">
-          <label>Días del período<input id="periodoDias" type="number" value="30" min="1" /></label>
-          <label>kWh del período<input id="periodoKwh" type="number" value="1000" min="0.01" step="0.01" /></label>
-          <label>DAP (alumbrado público), por período<input id="dap" type="number" value="197" min="0" step="0.01" /></label>
+          <label class="campo-usado-calculo" title="Se usa para calcular el sistema: con esto se obtiene el consumo diario/mensual que dimensiona los paneles.">Días del período<input id="periodoDias" type="number" value="30" min="1" /></label>
+          <label class="campo-usado-calculo" title="Se usa para calcular el sistema: es la base del consumo que dimensiona los paneles.">kWh del período<input id="periodoKwh" type="number" value="1000" min="0.01" step="0.01" /></label>
+          <label class="campo-usado-calculo" title="Se usa para calcular el ahorro: se suma al pago, no baja con los paneles.">DAP (alumbrado público), por período<input id="dap" type="number" value="197" min="0" step="0.01" /></label>
         </div>
-        <h4>Historial de consumo (opcional, mejora la precisión del dimensionamiento)</h4>
+        <h4 class="campo-usado-calculo" title="Se usa para calcular el sistema: si se captura, el consumo mensual se promedia con estos datos reales en vez de extrapolar un solo período.">Historial de consumo (opcional, mejora la precisión del dimensionamiento)</h4>
         <p class="nota">Si tu recibo trae la gráfica/tabla de "Historial de consumo" (normalmente los últimos 12
           meses), captura el kWh de cada uno -- el sistema se dimensiona con el promedio real en vez de
           extrapolar un solo período. Llena los que tengas, los demás déjalos en blanco.</p>
         <div class="fila historial" id="gridHistorialNoDom"></div>
-        <h4>Desglose de cargos del período (MXN)</h4>
+        <h4 class="campo-usado-calculo" title="Se usan para calcular el ahorro: cada cargo se clasifica como reducible (baja con los paneles) o no, según la columna &quot;$/kW&quot;.">Desglose de cargos del período (MXN)</h4>
         <div class="fila cargos">
           <label>Suministro<input id="c_suministro" type="number" value="0" step="0.01" /></label>
           <label>Distribución<input id="c_distribucion" type="number" value="0" step="0.01" /></label>
@@ -208,13 +212,13 @@
           <label>SCnMEM<input id="c_scnmem" type="number" value="0" step="0.01" /></label>
         </div>
         <div class="fila cargos" id="grupoEnergiaGDMTH" hidden>
-          <p class="nota" style="flex-basis:100%">Tarifa GDMTH (por horario): tu recibo trae la Energía partida en 3 renglones
+          <p class="nota campo-usado-calculo" title="Se usan para calcular el ahorro: Base/Intermedia sí bajan con los paneles, Punta no (el sol ya no genera en ese horario).">Tarifa GDMTH (por horario): tu recibo trae la Energía partida en 3 renglones
             "Generación Base/Intermedia/Punta" en vez de uno solo -- captura cada uno.</p>
           <label>Energía Base<input id="c_energia_base" type="number" value="0" step="0.01" /></label>
           <label>Energía Intermedia<input id="c_energia_intermedia" type="number" value="0" step="0.01" /></label>
           <label>Energía Punta<input id="c_energia_punta" type="number" value="0" step="0.01" /></label>
         </div>
-        <h4>Columna "$/kW" del recibo — decide si Distribución/Capacidad bajan con los paneles</h4>
+        <h4 class="campo-usado-calculo" title="Se usa para calcular el ahorro: decide si Distribución/Capacidad se incluyen o no en lo que baja con los paneles.">Columna "$/kW" del recibo — decide si Distribución/Capacidad bajan con los paneles</h4>
         <div class="fila" id="grupoRateKw">
           <fieldset>
             <legend>Distribución</legend>
@@ -227,7 +231,7 @@
             <label><input type="radio" name="rkCap" value="mercado" /> Aparece en $0.00 (NO hay demanda)</label>
           </fieldset>
         </div>
-        <h4>Cargos extra del recibo (si aplican)</h4>
+        <h4 class="campo-usado-calculo" title="Se usan para calcular el ahorro: ajustan el pago base antes de IVA/DAP.">Cargos extra del recibo (si aplican)</h4>
         <div class="fila">
           <label><input type="checkbox" id="traeBt" /> Trae cargo de 2% en baja tensión</label>
           <label>Monto del 2% (MXN)<input id="btMonto" type="number" value="0" min="0" step="0.01" disabled /></label>
@@ -237,7 +241,7 @@
       </section>
 
       <section id="bloqueDomestica" hidden>
-        <h3>3. Escalones de la tarifa doméstica</h3>
+        <h3 class="campo-usado-calculo" title="Se usan para calcular el sistema y el ahorro: tarifa doméstica volumétrica por escalones, sin cargo de demanda.">3. Escalones de la tarifa doméstica</h3>
         <div class="fila">
           <label>Límite Básico (kWh)<input id="d_basicoKwh" type="number" value="150" /></label>
           <label>Tarifa Básico ($/kWh)<input id="d_basicoRate" type="number" value="1.140" step="0.001" /></label>
@@ -254,7 +258,7 @@
           <label>Días del período<input id="d_periodoDias" type="number" value="60" /></label>
           <label>kWh del período<input id="d_periodoKwh" type="number" value="400" step="0.01" /></label>
         </div>
-        <h4>Historial de consumo (opcional, mejora la precisión del dimensionamiento)</h4>
+        <h4 class="campo-usado-calculo" title="Se usa para calcular el sistema: si se captura, el consumo mensual se promedia con estos datos reales en vez de extrapolar un solo período.">Historial de consumo (opcional, mejora la precisión del dimensionamiento)</h4>
         <p class="nota">Si tu recibo trae la gráfica/tabla de "Historial de consumo" (normalmente los últimos 6
           bimestres), captura el kWh de cada uno -- el sistema se dimensiona con el promedio real en vez de
           extrapolar un solo período. Llena los que tengas, los demás déjalos en blanco.</p>
@@ -263,22 +267,22 @@
 
       <h3>4. Sistema propuesto</h3>
       <div class="fila">
-        <label>Potencia del módulo (W)<input id="moduloWp" type="number" value="605" /></label>
-        <label>Cobertura objetivo del consumo<input id="cobertura" type="number" value="1.0" step="0.05" /></label>
-        <label>Horas-sol efectivas al día<input id="horasUtiles" type="number" value="4.5" step="0.1" /></label>
+        <label class="campo-usado-calculo" title="Se usa para calcular el sistema: junto con las horas-sol, define cuántos paneles se necesitan.">Potencia del módulo (W)<input id="moduloWp" type="number" value="605" /></label>
+        <label class="campo-usado-calculo" title="Se usa para calcular el sistema: multiplica el consumo a cubrir (1.0 = exacto, más = margen de crecimiento).">Cobertura objetivo del consumo<input id="cobertura" type="number" value="1.0" step="0.05" /></label>
+        <label class="campo-usado-calculo" title="Se usa para calcular el sistema: cuánta energía genera cada panel al día con este criterio.">Horas-sol efectivas al día<input id="horasUtiles" type="number" value="4.5" step="0.1" /></label>
       </div>
       <div class="fila">
-        <label>Escala de costos
+        <label class="campo-usado-calculo" title="Se usa para calcular la inversión: decide la lista de precios (residencial o comercial) para presupuestar.">Escala de costos
           <select id="escalaCostos"><option value="residencial">Residencial (chico)</option><option value="comercial">Comercial (grande)</option></select>
         </label>
-        <label>Incremento anual estimado de la tarifa CFE (%)<input id="escalamiento" type="number" value="4.0" step="0.5" /></label>
+        <label class="campo-usado-calculo" title="Se usa para calcular el flujo a 25 años: cuánto se supone que sube la tarifa de CFE cada año.">Incremento anual estimado de la tarifa CFE (%)<input id="escalamiento" type="number" value="4.0" step="0.5" /></label>
         <label>Vigencia de la cotización (días)<input id="vigenciaDias" type="number" value="15" min="1" step="1" /></label>
       </div>
       <div class="fila">
-        <label><input type="checkbox" id="aplicaIsr" /> Este cliente puede aplicar la deducción 100% inmediata
+        <label class="campo-usado-calculo" title="Se usa para calcular la deducción fiscal (ISR), si aplica -- solo clientes privados/comerciales."><input type="checkbox" id="aplicaIsr" /> Este cliente puede aplicar la deducción 100% inmediata
           de equipo renovable (Art. 34 fracción XIII LISR) -- solo personas morales/físicas con actividad
           empresarial que pagan ISR, NUNCA gobierno</label>
-        <label>Tasa de ISR del cliente (%)<input id="tasaIsr" type="number" value="30" step="1" min="0" max="35" disabled /></label>
+        <label class="campo-usado-calculo" title="Se usa para calcular la deducción fiscal (ISR), si aplica -- solo clientes privados/comerciales.">Tasa de ISR del cliente (%)<input id="tasaIsr" type="number" value="30" step="1" min="0" max="35" disabled /></label>
       </div>
       <p class="nota">Foto del sembrado de paneles (distribución sobre el techo/azotea), si ya la tienes --
         se agrega a la sección 6 en pantalla y al PDF.</p>
