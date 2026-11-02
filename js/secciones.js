@@ -807,8 +807,8 @@ function calculoReciboConDemanda(r) {
     tabla(['Paso', 'Qué incluye', 'Operación', 'Resultado'], pasos, { small: true, textCols: [1, 2] }),
     avisoCream(`Fórmula base según el Acuerdo de la Comisión Nacional de Energía para tarifas finales de ` +
       `suministro básico (apartados 3.1.2, 5.1, 5.2 y 5.5): "cargo fijo por los días del período" + "tarifa por ` +
-      `kWh × energía neta consumida", antes de BT/bonificación/IVA/DAP. El DAP tiene su propio fundamento legal ` +
-      `municipal (p. ej. Ley de Ingresos del Municipio de Puebla 2026, arts. 60 y 92), no de CFE.`),
+      `kWh × energía neta consumida", antes de BT/bonificación/IVA/DAP. El DAP es un cobro municipal aparte, no de ` +
+      `CFE -- fundamento legal y por qué nunca baja con los paneles en la sección ${refSeccion(16, r)}.`),
   ];
 }
 
@@ -858,7 +858,7 @@ function calculoReciboDomestico(r) {
 function s04(r, _leido, onToggle) {
   const art = crearSeccion(4, 'Qué cargos pueden disminuir', '¿Cuánto de la factura SÍ baja con paneles solares, y cuánto no?', r, onToggle);
   const razon = r.tarifa === 'GDMTH'
-    ? `Tiene demanda contratada: Distribución y Capacidad se facturan por kW y no bajan aunque la energía neta llegue a cero. Además, la Energía Punta tampoco baja -- no por ser un cargo fijo, sino porque el sol ya no genera en ese horario (ver sección ${refSeccion(3, r)}).`
+    ? `Tiene demanda contratada: Distribución y Capacidad se facturan por kW y no bajan aunque la energía neta llegue a cero. Además, la Energía Punta tampoco baja (motivo distinto -- ver sección ${refSeccion(3, r)}).`
     : r.meta.tieneDemandaContratada
     ? 'Tiene demanda contratada: Distribución y Capacidad se facturan por kW, no por kWh, y no bajan aunque la energía neta llegue a cero.'
     : 'No tiene demanda contratada: casi toda la factura se factura por kWh, por lo que casi todo baja con la energía solar.';
@@ -1267,9 +1267,9 @@ function s12(r, _leido, onToggle) {
   art.append(p(`Subtotal: ${M(r.ventaSinIva)} · IVA: ${M(r.iva)} · Inversión con IVA: ${M(r.investment)}.`));
   art.append(detalle('Ver detalle', p(
     `Verificación: la suma de las ${r.materiales.length} partidas (${M(sumaPartidas)}) coincide con el Subtotal ` +
-    `(${M(r.ventaSinIva)}); el IVA se aplica una sola vez sobre ese Subtotal. Los costos de adquisición, ` +
-    'contingencia y margen comercial se reparten de forma proporcional dentro del precio de cada partida — no se ' +
-    'exponen como un renglón de utilidad aparte en este documento para el cliente.')));
+    `(${M(r.ventaSinIva)}) de la sección ${refSeccion(11, r)}, donde está la fórmula completa del IVA y la inversión total. Los costos ` +
+    'de adquisición, contingencia y margen comercial se reparten de forma proporcional dentro del precio de cada ' +
+    'partida — no se exponen como un renglón de utilidad aparte en este documento para el cliente.')));
   art.append(avisoCream('Las capacidades, longitudes y accesorios son provisiones. El modelo de inversor, ' +
     'calibres y cantidades finales se ajustarán mediante ingeniería y cotización vigente antes de contratar.'));
   return art;
@@ -1344,9 +1344,9 @@ function s14(r, _leido, onToggle) {
   if (flujo25.length) {
     const reposicionAnio = flujo25.find(x => x.reposicionMxn)?.anio;
     const montoReposicion = flujo25.find(x => x.reposicionMxn)?.reposicionMxn || 0;
-    art.append(p(`Año cero: inversión de ${M(r.investment)}. El flujo neto descuenta mantenimiento` +
-      (reposicionAnio ? ` y, en el año ${reposicionAnio}, ${M(montoReposicion)} de reposición del inversor (precio de hoy del inversor presupuestado, escalado al año ${reposicionAnio}).` : '. No se incluyó reposición de inversor en este cálculo.') +
-      ' Importes en MXN.'));
+    art.append(p(`Año cero: inversión de ${M(r.investment)}. El flujo neto de cada año sigue los mismos supuestos de ` +
+      `la sección ${refSeccion(13, r)} (degradación, mantenimiento creciente${reposicionAnio ? `, y los ${M(montoReposicion)} de reposición de ` +
+      `inversor en el año ${reposicionAnio}` : ''}). Importes en MXN.`));
     const filasFlujo = flujo25.filter(x => x.anio > 0).map(x => [
       x.reposicionMxn ? `${x.anio} *` : x.anio, M(x.ahorroMxn), M(x.flujoMxn), M(x.acumuladoMxn)]);
     art.append(detalle('Ver tabla completa', tabla(['Año', 'Ahorro factura', 'Flujo neto', 'Acumulado'], filasFlujo, { small: true })));
@@ -1411,12 +1411,9 @@ function s16(r, _leido, onToggle) {
   art.append(avisoCream('No se ofrece un porcentaje de ahorro garantizado ni se declara un piso absoluto de pago. ' +
     'El contrato deberá usar un compromiso sustentado en medición, ingeniería y reglas de facturación verificadas.'));
   art.append(bloqueCalculo(16, [
-    p(`Fórmula del ahorro máximo (el mismo piso ya calculado en la sección ${refSeccion(4, r)}, mostrado aquí con sus números reales):`),
-    tabla(['Variable', 'Fórmula', 'Sustitución'], [
-      ['Piso estructural', `Pago recurrente simulado con energía solar = al consumo del período (ver sección ${refSeccion(4, r)})`, M(r.pisoPeriodo)],
-      ['Ahorro máximo por período', 'Pago actual − piso estructural', `${M(r.pagoRecurrentePeriodo)} − ${M(r.pisoPeriodo)} = ${M(r.pagoRecurrentePeriodo - r.pisoPeriodo)}`],
-      ['% máximo de ahorro', 'Ahorro máximo ÷ pago actual', PCT(r.pctMaxPeriodo)],
-    ], { small: true }),
+    p(`La fórmula completa del piso estructural (de dónde sale ${M(r.pisoPeriodo)}) y su ahorro máximo ya se muestran, ` +
+      `paso a paso, en la sección ${refSeccion(4, r)} -- aquí solo se grafica el resultado (gauge de arriba) junto con la ` +
+      `segunda razón (el DAP) que entre las dos explican por qué no se llega al 100%.`),
   ], r));
   return art;
 }

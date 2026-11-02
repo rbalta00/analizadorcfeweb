@@ -340,6 +340,16 @@
       <p class="nota" id="estadoCalculo"></p>
     </section>
 
+    <!-- Aviso flotante: hay cambios en el formulario desde el ultimo "Calcular" -- la pantalla
+         y el PDF siguen mostrando los datos de ANTES de esos cambios. Se muestra/oculta desde
+         app.js (hayCambiosSinCalcular) sin importar el scroll, para que no pase inadvertido
+         aunque el usuario este revisando las secciones o los botones de exportar, lejos del
+         boton "Calcular" de arriba. -->
+    <div id="avisoCambiosSinCalcular" class="aviso-flotante-cambios" hidden role="status">
+      ⚠️ Hay cambios en el formulario que no se han calculado -- lo que ves aquí (y el PDF) sigue siendo de
+      antes de esos cambios. <button type="button" id="btnIrACalcular" class="btn-link-flotante">Ir a Calcular ↑</button>
+    </div>
+
     <!-- Las 21 secciones se insertan aquí dinámicamente tras calcular -->
     <p class="nota nota-ayuda-edicion" id="ayudaEdicion" hidden>✎ Los párrafos y avisos de cada sección se
       pueden editar: haz clic directo en el texto, escribe, y clic afuera para guardar (se marca en dorado).

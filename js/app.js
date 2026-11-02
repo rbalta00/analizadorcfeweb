@@ -34,6 +34,8 @@ let clienteActual = null;
 let proyectoActual = null;
 let ultimoResultado = null;
 let ultimoLeido = null;
+// Snapshot JSON del formulario que produjo ultimoResultado -- ver hayCambiosSinCalcular().
+let ultimoInputJSON = null;
 let seccionObserver = null;
 // Fotos del recibo acumuladas entre varias selecciones -- un <input type="file"> normal
 // REEMPLAZA la seleccion anterior cada vez que se usa de nuevo (no la suma), lo cual
@@ -120,7 +122,8 @@ function mostrarPantallaClientes() {
   $('pantallaEnvios').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
-  clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null;
+  clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
+  ocultarAvisoCambiosSinCalcular();
   renderListaClientes();
 }
 
@@ -388,7 +391,8 @@ function renderListaProyectos() {
 function mostrarPantallaProyectos(clienteId) {
   clienteActual = obtenerCliente(clienteId);
   if (!clienteActual) { mostrarPantallaClientes(); return; }
-  proyectoActual = null; ultimoResultado = null; ultimoLeido = null;
+  proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
+  ocultarAvisoCambiosSinCalcular();
   archivosReciboAcumulados = []; // empieza limpio -- no arrastrar fotos de otro cliente/proyecto
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
@@ -494,6 +498,8 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   if (!camposIniciales) archivosReciboAcumulados = [];
   ultimoLeido = proyectoActual.campos || null;
   ultimoResultado = null;
+  ultimoInputJSON = null;
+  ocultarAvisoCambiosSinCalcular();
   $('contenedorSecciones').innerHTML = '';
   $('ayudaEdicion').hidden = true;
   $('tabPdf').hidden = true;
@@ -979,7 +985,11 @@ function migrarSeccionesActivasBloquesNuevos(seccionesActivas) {
   return faltantes.length ? [...seccionesActivas, ...faltantes] : seccionesActivas;
 }
 
-function calcularYRenderizar() {
+// Lee SOLO el formulario (sin calcular ni tocar proyectoActual) -- separado de
+// calcularYRenderizar() para poder comparar "lo que hay en el formulario ahora mismo" contra
+// "lo que se uso en el ultimo calculo" y avisar si hay cambios sin aplicar antes de descargar
+// el PDF o generar la invitacion (ver hayCambiosSinCalcular/ultimoInputJSON). 2026-11-02.
+function leerInputCalculo() {
   const tarifa = $('tarifa').value;
   const esDom = esDomestica(tarifa);
   const costos = $('escalaCostos').value === 'residencial' ? COSTOS_RESIDENCIAL : COSTOS_COMERCIAL;
@@ -1041,9 +1051,57 @@ function calcularYRenderizar() {
       dapDomestica: Number($('d_dap').value), moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
       aplicaIsr, tasaIsrPct, historialManual, vigenciaDias };
   }
+  return input;
+}
+
+// Compara el formulario AHORA MISMO contra el que produjo ultimoResultado -- si no coinciden,
+// el usuario edito algo (tarifa, cargos, inmueble, etc.) despues de calcular y no ha vuelto a
+// pulsar "Calcular": lo que ve en pantalla y lo que descargaria en PDF siguen siendo de la
+// version anterior. Antes no existia ningun aviso para este caso (solo habia bloqueo para
+// "nunca calculaste"). 2026-11-02.
+function hayCambiosSinCalcular() {
+  if (!ultimoResultado || !ultimoInputJSON) return false;
+  try {
+    return JSON.stringify(leerInputCalculo()) !== ultimoInputJSON;
+  } catch (e) {
+    return false; // no bloquear con un falso positivo si la lectura falla a medio-editar
+  }
+}
+
+function mostrarAvisoCambiosSinCalcular() {
+  const el = $('avisoCambiosSinCalcular');
+  if (el) el.hidden = false;
+}
+function ocultarAvisoCambiosSinCalcular() {
+  const el = $('avisoCambiosSinCalcular');
+  if (el) el.hidden = true;
+}
+// Delegado en #tabCaptura (solo el formulario de captura, NO las secciones del reporte que se
+// insertan debajo -- esas tienen su propio texto editable/toggles que NO requieren recalcular,
+// y marcarlas como "cambio sin calcular" habria sido un falso positivo constante).
+$('tabCaptura').addEventListener('input', () => { if (hayCambiosSinCalcular()) mostrarAvisoCambiosSinCalcular(); });
+$('tabCaptura').addEventListener('change', () => { if (hayCambiosSinCalcular()) mostrarAvisoCambiosSinCalcular(); });
+$('btnIrACalcular').addEventListener('click', () => $('btnCalcular').scrollIntoView({ behavior: 'smooth', block: 'center' }));
+
+function calcularYRenderizar() {
+  const input = leerInputCalculo();
+  const { titular, inmueble } = input;
 
   const r = construirResultado(input);
-  r.seccionesActivas = migrarSeccionesActivasBloquesNuevos(proyectoActual.seccionesActivas);
+  // Snapshot del formulario que se acaba de usar -- si el usuario sigue editando campos
+  // despues de este punto sin volver a pulsar "Calcular", hayCambiosSinCalcular() lo detecta
+  // comparando contra esto y se muestra un aviso flotante (antes no habia ningun aviso: el
+  // PDF/pantalla podian quedarse con numeros de la version anterior del formulario sin que
+  // nada lo dijera). 2026-11-02.
+  ultimoInputJSON = JSON.stringify(input);
+  ocultarAvisoCambiosSinCalcular();
+  // Persistir la migracion en proyectoActual (no solo en r) -- antes solo se escribia en r,
+  // asi que el PDF (generarPdf lee proyectoActual.seccionesActivas) y onToggleBloque (tambien
+  // lee de proyectoActual) seguian viendo la version SIN migrar: el indice en pantalla
+  // mostraba "Documentos"/"Comparativo verificacion" como incluidas (leia r.seccionesActivas)
+  // pero el PDF las excluia en silencio. Hallazgo real, 2026-11-02.
+  proyectoActual.seccionesActivas = migrarSeccionesActivasBloquesNuevos(proyectoActual.seccionesActivas);
+  r.seccionesActivas = proyectoActual.seccionesActivas;
   r.calculosActivos = proyectoActual.calculosActivos || todosLosBloques();
   r.ordenSecciones = proyectoActual.ordenSecciones || null;
   r.textosEditados = proyectoActual.textosEditados || {};
@@ -1480,20 +1538,32 @@ function nombreArchivoProyecto(prefijo) {
   return `${prefijo}_${base}.pdf`;
 }
 
+// Confirma antes de exportar si el formulario tiene cambios desde el ultimo "Calcular" -- sin
+// esto, el PDF salia silenciosamente con los numeros de ANTES de esos cambios (el unico
+// guardia que existia era "nunca calculaste", no "calculaste y luego cambiaste algo"). 2026-11-02.
+function confirmarSiHayCambiosSinCalcular() {
+  if (!hayCambiosSinCalcular()) return true;
+  return confirm('Hiciste cambios en el formulario después de la última vez que calculaste -- este PDF saldría con ' +
+    'los datos de ANTES de esos cambios. ¿Generar de todos modos?\n\n(Cancelar para volver y presionar "Calcular" primero)');
+}
+
 $('btnGenerarPdf').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  if (!confirmarSiHayCambiosSinCalcular()) return;
   const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas });
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
 });
 
 $('btnResumenEjecutivo').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  if (!confirmarSiHayCambiosSinCalcular()) return;
   const doc = generarResumenEjecutivo(ultimoResultado);
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Resumen_ejecutivo'));
 });
 
 $('btnAnexoInterconexion').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  if (!confirmarSiHayCambiosSinCalcular()) return;
   const doc = generarAnexoInterconexion(ultimoResultado);
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Anexo_interconexion_CFE'));
 });
@@ -1530,6 +1600,7 @@ $('btnGuardarCotizacion').addEventListener('click', () => {
 // mano. El numero de destino lo dio el usuario directamente.
 $('btnEnviarWhatsapp').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  if (!confirmarSiHayCambiosSinCalcular()) return;
   const r = ultimoResultado;
   const mensaje = `Cotización ${r.titular}\n` +
     `Sistema: ${r.n} paneles (${r.kwp.toFixed(2)} kWp)\n` +
