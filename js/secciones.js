@@ -90,6 +90,42 @@ function filaAhorroConcepto(reducible, monto, r) {
   return [real, maximo];
 }
 
+// Mapa "que dato alimenta que calculo", adaptado a la tarifa actual -- pedido explicito
+// del usuario, 2026-11-01: "explica bien... de donde salen [los datos] y que se entienda
+// dependiendo de cada servicio o tarifa". Antes esto solo vivia como tooltips 📐 en el
+// formulario de captura (index.html); aqui se repite dentro de la propia cotizacion,
+// adaptando el texto segun si la tarifa es domestica, GDMTH (franjas horarias), o tiene
+// demanda contratada -- mismas referencias cruzadas (refSeccion) que el resto de la app.
+function mapaCamposCalculo(r) {
+  const esGdmth = r.tarifa === 'GDMTH';
+  const filas = [
+    ['Tarifa CFE', `Decide toda la fórmula de facturación que se usa en el resto del estudio (ver sección ${refSeccion(3, r)})`, r.tarifa],
+    ['Días y kWh del período facturado', `Base del consumo mensual cuando no hay historial, y siempre la base del pago real de este período (ver sección ${refSeccion(5, r)})`, `${r.periodoKwh.toLocaleString('en-US')} kWh en ${r.periodoDias} días`],
+    ['Historial de consumo (P1-P12)', `Se promedia con el período actual para el consumo anual que dimensiona el sistema (ver sección ${refSeccion(5, r)})`, r.historial && r.historial.length ? `${r.historial.length} período(s) capturados` : 'Sin capturar -- se usa solo el período facturado'],
+  ];
+  if (r.esDomestica) {
+    filas.push(['Escalones (Básico/Intermedio/Excedente)', `Arman el cargo de energía por tramos de esta tarifa volumétrica, sin cargo de demanda (ver sección ${refSeccion(3, r)})`, `${(r.escalones || []).length} tramo(s) capturados`]);
+  } else {
+    filas.push(['Desglose de cargos del recibo', esGdmth
+      ? `Esta tarifa factura la Energía en 3 franjas (Base/Intermedia/Punta) con su propio precio cada una -- clasifica qué baja con los paneles y qué no (ver sección ${refSeccion(4, r)})`
+      : `Un solo renglón de Energía -- clasifica qué conceptos bajan con los paneles y cuáles no (ver sección ${refSeccion(4, r)})`,
+      `${Object.keys(r.cargos).length} conceptos capturados`]);
+    filas.push(['Columna "$/kW" (Distribución/Capacidad)', 'Decide si esos dos cargos son por demanda contratada (no bajan con los paneles) o por consumo (sí bajan)', r.meta.tieneDemandaContratada ? 'Por demanda -- no bajan' : 'Por consumo -- sí bajan']);
+    filas.push(['2% de baja tensión / bonificación por factor de potencia', 'Ajustan el cargo base de este período antes de IVA y DAP', r.btPct || r.fpBonusPct ? `BT ${PCT(r.btPct || 0)} / bonificación ${PCT(r.fpBonusPct || 0)}` : 'No capturados en este recibo']);
+  }
+  filas.push(['DAP (alumbrado público)', 'Se suma al pago de cada período; nunca baja con los paneles -- lo cobra el municipio, no CFE', M(r.dap || 0) + '/período']);
+  filas.push(['Potencia del módulo, cobertura objetivo y horas-sol', `Fórmula completa del número de paneles: (consumo mensual × cobertura) ÷ generación de 1 panel (ver sección ${refSeccion(6, r)})`, `${r.moduloWp} W, cobertura ${r.cobertura}, ${r.horasUtiles} h-sol/día`]);
+  filas.push(['Escala de costos (residencial/comercial)', `Decide la lista de precios con la que se presupuesta la inversión (ver sección ${refSeccion(11, r)})`, `Inversión resultante: ${M(r.investment)}`]);
+  filas.push(['Incremento anual estimado de la tarifa CFE', `Solo afecta el flujo a 25 años, no el año 1 (ver sección ${refSeccion(13, r)}/${refSeccion(14, r)})`, `${(r.escalamientoTarifaPct || 0).toFixed(1)}% anual`]);
+  if (r.aplicaIsr) {
+    filas.push(['Aplica deducción ISR / tasa de ISR', `Solo la deducción fiscal -- no cambia el ahorro de factura (ver sección ${refSeccion(13, r)})`, `${r.tasaIsrPct.toFixed(0)}% de ISR`]);
+  }
+  if (r.escenarioVerificado) {
+    filas.push(['Paneles que sugiere la verificación en campo', `Dispara un segundo escenario completo con ese número de paneles, aparte del calculado por consumo (ver sección ${refSeccion(19, r)}/${refSeccion(20, r)})`, `${r.escenarioVerificado.n} paneles`]);
+  }
+  return filas;
+}
+
 function el(tag, cls, html) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -487,11 +523,17 @@ function s02(r, leido, onToggle) {
   ]));
   art.append(avisoCream('Los datos de este recibo se usan como base de cálculo del estudio completo; cualquier ' +
     'corrección debe confirmarse contra el documento original de CFE.'));
+  const bloqueMapa = [
+    p(`Qué dato alimenta qué cálculo, para la tarifa ${r.tarifa}${r.esDomestica ? ' (doméstica, volumétrica)' : ''} -- ` +
+      'cada fila dice de dónde sale el dato y a qué sección va a parar:'),
+    tabla(['Dato capturado', 'Para qué se usa (fórmula)', 'Valor en este caso'], mapaCamposCalculo(r), { small: true, textCols: [1] }),
+  ];
   if (leido) {
-    art.append(bloqueCalculo(2, [
-      p(`De dónde sale cada dato de este recibo -- esta trazabilidad es la base de TODO lo que sigue en el ` +
-        `estudio: el número de paneles y el sistema propuesto (sección ${refSeccion(6, r)}), la producción estimada (sección ${refSeccion(7, r)}) y el ` +
-        `presupuesto (sección ${refSeccion(11, r)}) se calculan a partir de estos mismos valores, nunca de una suposición aparte.`),
+    bloqueMapa.push(
+      p(`Y de dónde salió cada dato DE ESTE recibo en concreto -- esta trazabilidad es la base de todo lo de ` +
+        `arriba: el número de paneles y el sistema propuesto (sección ${refSeccion(6, r)}), la producción estimada ` +
+        `(sección ${refSeccion(7, r)}) y el presupuesto (sección ${refSeccion(11, r)}) se calculan a partir de estos ` +
+        'mismos valores, nunca de una suposición aparte:'),
       tabla(['Dato', 'Cómo se obtuvo'], [
         ['Texto del PDF', leido.uso_ocr
           ? 'El PDF no traía texto seleccionable (o venía codificado) -- se usó reconocimiento óptico de caracteres (OCR, Tesseract.js) sobre la imagen del documento. El OCR es menos confiable que leer texto nativo; conviene cotejar los números contra el PDF original.'
@@ -506,8 +548,11 @@ function s02(r, leido, onToggle) {
       ], { small: true }),
       avisoCream(`Cualquier dato que la lectura automática no haya podido encontrar se deja marcado para captura ` +
         `manual -- nunca se inventa un valor. Ver "Qué hace falta" (sección ${refSeccion(21, r)}) si algo del recibo no se detectó solo.`),
-    ], r));
+    );
+  } else {
+    bloqueMapa.push(avisoCream('Este proyecto se capturó 100% a mano (sin leer ningún PDF/foto) -- todos los datos de la tabla de arriba se escribieron directamente.'));
   }
+  art.append(bloqueCalculo(2, bloqueMapa, r));
   return art;
 }
 
