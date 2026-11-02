@@ -74,6 +74,12 @@ export function construirInvoice(tariff, periodoDias, periodoKwh, cargos, rateKw
                                   dapMensual, btPct, fpBonusPct, ivaPct = 0.16) {
   const tieneDemanda = verificarClasificacion(tariff, rateKw);
   if (periodoKwh <= 0) throw new Error('periodoKwh debe ser > 0');
+  // periodoDias llega aqui ya validado si vino de un recibo leido por OCR (recibo.js acota
+  // 1-100), pero NO si se tecleo a mano -- el min="1" del <input> es solo cosmetico, no
+  // bloquea el valor real leido por JS. Sin este freno, un 0 o negativo tecleado a mano
+  // produce Infinity/NaN en monthlyFixed sin ningun aviso (hallazgo de la auditoria de
+  // 2026-11-01). Mismo patron que el freno de periodoKwh de la linea de arriba.
+  if (!(periodoDias > 0)) throw new Error('periodoDias debe ser > 0');
 
   let noReducibles, reducibles;
   if (tieneDemanda) {
@@ -147,6 +153,7 @@ export function flujoMensualAnual(invoiceFn, consumoDiarioKwh, generacionMensual
 // Tarifa domestica (01/DAC): volumetrica por escalones, sin cargo de demanda.
 // escalones: lista de [limiteKwhONull, tarifaMxnKwh], el ultimo con limite null.
 export function construirInvoiceDomestica(escalones, periodoDias, dapBimestral, ivaPct = 0.16) {
+  if (!(periodoDias > 0)) throw new Error('periodoDias debe ser > 0');
   function energia(kwh) {
     let restante = kwh, total = 0.0;
     for (const [limite, tarifa] of escalones) {

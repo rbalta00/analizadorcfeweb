@@ -184,21 +184,38 @@ export function extraerCampos(texto, usoOcr = false) {
   campos.iva_resumen = resumen.iva ?? null;
   campos.total_resumen = resumen.total ?? null;
 
+  // Mismo criterio que el fix de periodo_dias (2026-11-01): un OCR mal leido en estos 3
+  // metodos de respaldo puede inflar/reducir el consumo real sin ningun aviso. Se acota a un
+  // rango plausible para cualquier recibo de este proyecto -- desde chico/domestico hasta el
+  // inmueble de gobierno mas grande ya visto (~90 mil kWh/periodo), con margen amplio -- en
+  // vez de aceptar cualquier numero. Fuera de rango se deja null a proposito, para que caiga
+  // en campos_no_encontrados (se marca en naranja y bloquea el calculo) en lugar de corromper
+  // el dimensionamiento en silencio.
+  const kwhPlausible = (v) => Number.isFinite(v) && v > 0 && v <= 5000000;
   if (campos.periodo_kwh === null) {
     const partesKwh = [];
     for (const patron of [/kWh\s*base\s*([\d,]+)/i, /kWh\s*intermedia\s*([\d,]+)/i, /kWh\s*punta\s*([\d,]+)/i]) {
       const mm = norm.match(patron);
       if (mm) partesKwh.push(num(mm[1]));
     }
-    if (partesKwh.length === 3) campos.periodo_kwh = partesKwh.reduce((a, b) => a + b, 0);
+    if (partesKwh.length === 3) {
+      const suma = partesKwh.reduce((a, b) => a + b, 0);
+      if (kwhPlausible(suma)) campos.periodo_kwh = suma;
+    }
   }
   if (campos.periodo_kwh === null && campos.multiplicador) {
     const mm = norm.match(/kWh\s+[A-Z0-9]+\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)/i);
-    if (mm) campos.periodo_kwh = num(mm[3]) * campos.multiplicador;
+    if (mm) {
+      const valor = num(mm[3]) * campos.multiplicador;
+      if (kwhPlausible(valor)) campos.periodo_kwh = valor;
+    }
   }
   if (campos.periodo_kwh === null) {
     const mm = norm.match(/Energ[i1i]a\s*\(kWh\)\s*([\d,]+)\s+([\d,]+)/i);
-    if (mm) campos.periodo_kwh = Math.abs(num(mm[1]) - num(mm[2]));
+    if (mm) {
+      const valor = Math.abs(num(mm[1]) - num(mm[2]));
+      if (kwhPlausible(valor)) campos.periodo_kwh = valor;
+    }
   }
 
   campos.historial = leerHistorialConsumo(norm);

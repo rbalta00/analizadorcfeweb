@@ -70,7 +70,19 @@ export function construirResultado(input) {
       `real facturado (${periodoKwh} kWh en ${periodoDias} días).`;
     basisConsumo = `extrapolación de un solo período (${periodoDias} días)`;
   }
-  // Bug real encontrado el 2026-11-01 (desde el commit que introdujo este archivo,
+  // Bug real encontrado en la auditoria de 2026-11-01: `historial` (usado en secciones.js
+  // para la grafica/tabla de la seccion 5 y la comparacion generacion-vs-historial de la
+  // seccion 7) solo se llenaba con `leido.historial` (historial leido por OCR del PDF) --
+  // el historial capturado A MANO (historialManual, que SI se usa arriba para dimensionar
+  // el sistema cuando esta presente, ver `historialUsado`) nunca se reflejaba aqui.
+  // Resultado: para un cliente 100% manual, esas graficas se quedaban vacias/"supuesto"
+  // aunque el calculo si uso datos reales. historialParaMostrar refleja la MISMA fuente
+  // que realmente se uso para dimensionar, para que lo que se grafica nunca contradiga lo
+  // que se calculo. Los periodos manuales no tienen mes/año real (el formulario solo pide
+  // "P1..P12" genericos) -- se etiquetan como "P1", "P2"... en vez de inventar un mes.
+  const historialParaMostrar = (historialManual && historialManual.length)
+    ? historialManual.map((kwh, i) => ({ mes: `P${i + 1}`, anio: '', kwh }))
+    : (leido ? leido.historial : null);
   // 2026-10-29): dimensionarHorasSol() SI calcula genMensual (produccion mensual real
   // del sistema), pero aqui nunca se usaba -- monthlyE se llenaba con genAnual/kwp
   // (kWh por kWp AL AÑO), no genMensual/kwp (kWh por kWp AL MES). flujoMensualAnual()
@@ -150,7 +162,7 @@ export function construirResultado(input) {
     van: flujo25.van, tir: flujo25.tir, recuperacionAcumulada: flujo25.recuperacionAcumulada,
     flujo25Rows: flujo25.flujo, escalamientoTarifaPct: escalamientoPct,
     materiales: pres.materiales, rows,
-    historial: leido ? leido.historial : null, basisConsumo,
+    historial: historialParaMostrar, basisConsumo,
     inmueble: inmueble || null, escenarioVerificado,
     aplicaIsr: !!aplicaIsr, tasaIsrPct: tasaIsrPct || 0, ahorroFiscalIsr, inversionNetaIsr,
     vanNetoIsr, tirNetoIsr, paybackNetoIsr,

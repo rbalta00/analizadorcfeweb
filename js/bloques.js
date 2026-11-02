@@ -27,17 +27,32 @@ export function todosLosBloques() {
   return BLOQUES_COTIZACION.map(([clave]) => clave);
 }
 
+// Mapea 1..25 a la clave de bloque a la que pertenece esa pagina/seccion. Orden
+// narrativo (pedido explicito del usuario, 2026-11-01): resumen -> calculo ->
+// documentos/verificacion en sitio/comparativo -> cierre administrativo.
+const MAPA_SECCION_BLOQUE = {
+  1: 'resumen', 2: 'recibo_cargos', 3: 'recibo_cargos', 4: 'recibo_cargos',
+  5: 'consumo_sistema', 6: 'consumo_sistema', 7: 'produccion', 8: 'ambiental',
+  9: 'ahorro_pagos', 10: 'ahorro_pagos', 11: 'presupuesto', 12: 'presupuesto',
+  13: 'recuperacion', 14: 'recuperacion', 15: 'pagos_100', 16: 'pagos_100',
+  17: 'documentos', 18: 'documentos', 19: 'comparativo_verificacion', 20: 'comparativo_verificacion',
+  21: 'pendientes', 22: 'alcance', 23: 'alcance', 24: 'glosario_fuentes', 25: 'glosario_fuentes',
+};
+
 export function bloqueDeSeccion(numeroSeccion) {
-  // Mapea 1..25 a la clave de bloque a la que pertenece esa pagina/seccion. Orden
-  // narrativo (pedido explicito del usuario, 2026-11-01): resumen -> calculo ->
-  // documentos/verificacion en sitio/comparativo -> cierre administrativo.
-  const mapa = {
-    1: 'resumen', 2: 'recibo_cargos', 3: 'recibo_cargos', 4: 'recibo_cargos',
-    5: 'consumo_sistema', 6: 'consumo_sistema', 7: 'produccion', 8: 'ambiental',
-    9: 'ahorro_pagos', 10: 'ahorro_pagos', 11: 'presupuesto', 12: 'presupuesto',
-    13: 'recuperacion', 14: 'recuperacion', 15: 'pagos_100', 16: 'pagos_100',
-    17: 'documentos', 18: 'documentos', 19: 'comparativo_verificacion', 20: 'comparativo_verificacion',
-    21: 'pendientes', 22: 'alcance', 23: 'alcance', 24: 'glosario_fuentes', 25: 'glosario_fuentes',
-  };
-  return mapa[numeroSeccion];
+  return MAPA_SECCION_BLOQUE[numeroSeccion];
+}
+
+// Varias secciones comparten un mismo bloque apagable (ver comentario de
+// BLOQUES_COTIZACION arriba) -- el checkbox "Incluir este detalle" de cada bloque de
+// calculo (bloqueCalculo() en secciones.js) apaga/prende ese bloque COMPLETO, no solo la
+// seccion individual donde se hizo clic. Antes el texto del checkbox no lo decia, lo que
+// hacia parecer que cada seccion era independiente (hallazgo de la auditoria de
+// 2026-11-01). Usado para avisar en el propio checkbox cuales otras secciones comparten
+// el mismo interruptor.
+export function seccionesDelBloque(bloqueClave) {
+  return Object.keys(MAPA_SECCION_BLOQUE)
+    .map(Number)
+    .filter((n) => MAPA_SECCION_BLOQUE[n] === bloqueClave)
+    .sort((a, b) => a - b);
 }
