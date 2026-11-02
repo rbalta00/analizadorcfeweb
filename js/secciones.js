@@ -59,6 +59,29 @@ function razonSiReducible(concepto, r) {
   return 'Se factura por kWh consumidos -- la energía solar sustituye kWh comprados a CFE a esta tarifa, 1 a 1.';
 }
 
+// Fraccion REALISTA de la energia facturada por kWh que el sistema PROPUESTO (no uno
+// ilimitado) alcanza a sustituir -- reusa la misma generacion/consumo promedio mensual
+// ya mostrados en la seccion 7 (r.gen/12 vs r.annualKwh/12, la proporcion es la misma
+// sin importar entre 12 o 1), asi no se inventa un numero nuevo. Pedido explicito del
+// usuario, 2026-11-01: "cuanto de ahorro se puede aplicar a cada dato" -- no solo decir
+// SI/NO baja, sino cuanto en pesos/% le toca a CADA concepto reducible.
+function coberturaRealizadaPct(r) {
+  if (!r.annualKwh) return 0;
+  return Math.min(1, r.gen / r.annualKwh);
+}
+
+// Renglon de ahorro por concepto: cuanto de ESE cargo especifico bajaria con el sistema
+// PROPUESTO (realista, limitado por cuantos paneles se van a instalar) y cuanto bajaria
+// en el escenario de ahorro MAXIMO (paneles ilimitados, el mismo piso ya usado en el
+// resto de la seccion). Los conceptos NO reducibles (incluye energia_punta, que nunca
+// baja aunque SI dependa del consumo -- ver razonNoReducible) se quedan en $0/0% en
+// ambas columnas, con paneles o sin ellos.
+function filaAhorroConcepto(reducible, monto, r) {
+  if (!reducible) return [M(0) + ' (0%)', M(0) + ' (0%)'];
+  const cobertura = coberturaRealizadaPct(r);
+  return [`${M(monto * cobertura)} (${PCT(cobertura)})`, `${M(monto)} (100%)`];
+}
+
 function el(tag, cls, html) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -663,10 +686,13 @@ function calculoReciboConDemanda(r) {
     ...(esGdmth ? [
       p('Esta tarifa (GDMTH) factura la Energía en 3 franjas horarias con su propio precio cada una, impresas tal ' +
         'cual en el recibo como "Generación Base/Intermedia/Punta" — no es un solo precio por kWh:'),
-      tabla(['Franja horaria', 'Importe en este recibo', '¿Baja con los paneles?'], [
-        ['Base', M(r.cargos.energia_base || 0), 'Sí — el sol genera en este horario'],
-        ['Intermedia', M(r.cargos.energia_intermedia || 0), 'Sí — el sol genera en este horario'],
-        ['Punta', M(r.cargos.energia_punta || 0), 'No — el sol ya no genera en el horario pico (tarde/noche), aunque SÍ es un cargo por consumo'],
+      tabla(['Franja horaria', 'Importe en este recibo', '¿Baja con los paneles?', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'], [
+        ['Base', M(r.cargos.energia_base || 0), 'Sí — el sol genera en este horario',
+          ...filaAhorroConcepto(true, r.cargos.energia_base || 0, r)],
+        ['Intermedia', M(r.cargos.energia_intermedia || 0), 'Sí — el sol genera en este horario',
+          ...filaAhorroConcepto(true, r.cargos.energia_intermedia || 0, r)],
+        ['Punta', M(r.cargos.energia_punta || 0), 'No — el sol ya no genera en el horario pico (tarde/noche), aunque SÍ es un cargo por consumo',
+          ...filaAhorroConcepto(false, r.cargos.energia_punta || 0, r)],
       ], { small: true }),
       avisoCream('Importante y específico de GDMTH: "Energía Punta" se agrupa abajo con los conceptos que no ' +
         'bajan con los paneles, pero NO es porque sea un cargo fijo como Suministro/Distribución/Capacidad — sí ' +
@@ -751,8 +777,9 @@ function s04(r, _leido, onToggle) {
       'que se facture por kW. Todo el cargo de energía se factura por kWh consumido (por tramos en la tarifa 01, ' +
       'a precio único en DAC), así que la energía solar sustituye kWh comprados a CFE prácticamente 1 a 1, sin el ' +
       'piso de cargos fijos de demanda que sí tienen GDMTO/GDMTH/GDBT.'),
-    tabla(['Concepto', 'Clasificación', 'Por qué'], [
-      ['Energía (todos los tramos)', 'Sí baja', 'Se factura por kWh -- la energía solar sustituye kWh comprados a CFE.'],
+    tabla(['Concepto', 'Clasificación', 'Por qué', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'], [
+      ['Energía (todos los tramos)', 'Sí baja', 'Se factura por kWh -- la energía solar sustituye kWh comprados a CFE.',
+        ...filaAhorroConcepto(true, r.cargos.energia || 0, r)],
     ], { small: true }),
     avisoCream('El único piso que queda es el IVA y el DAP, que no dependen del consumo -- por eso el % máximo de ' +
       'ahorro de una tarifa doméstica suele ser más alto que el de una tarifa con demanda contratada.'),
@@ -767,9 +794,11 @@ function s04(r, _leido, onToggle) {
       'contra kWh consumidos, pero no modifica por sí sola el cargo por demanda contratada -- ese cargo depende ' +
       'de la potencia máxima que el inmueble le exige a la red, no de cuánta energía neta se le compra a CFE en ' +
       'el mes. Sin una medición de la demanda real después de instalar, no hay base para prometer que ese cargo baje.'),
-    tabla(['Concepto', 'Clasificación', 'Cómo se abate (o por qué no) con el SFV propuesto'], [
-      ...r.meta.reducibles.map(k => [listaConceptos([k]), 'Sí baja', razonSiReducible(k, r)]),
-      ...r.meta.noReducibles.map(k => [listaConceptos([k]), 'No baja', razonNoReducible(k)]),
+    tabla(['Concepto', 'Clasificación', 'Cómo se abate (o por qué no) con el SFV propuesto', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'], [
+      ...r.meta.reducibles.map(k => [listaConceptos([k]), 'Sí baja', razonSiReducible(k, r),
+        ...filaAhorroConcepto(true, r.cargos[k] || 0, r)]),
+      ...r.meta.noReducibles.map(k => [listaConceptos([k]), 'No baja', razonNoReducible(k),
+        ...filaAhorroConcepto(false, r.cargos[k] || 0, r)]),
     ], { small: true }),
     avisoCream('Esta clasificación es la misma para cualquier recibo con la misma tarifa y el mismo patrón en la ' +
       'columna "$/kW" -- no es un supuesto por tarifa, se lee directo del recibo de cada cliente.'),
