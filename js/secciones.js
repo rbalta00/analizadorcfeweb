@@ -209,17 +209,25 @@ function tarjetas(items) {
   return cont;
 }
 
-function tabla(headers, filas, { small = false } = {}) {
+// textCols: indices de columnas que llevan texto explicativo largo (no un numero/monto) --
+// esas van alineadas a la izquierda y con ajuste de linea normal, en vez del alineado a la
+// derecha + "una sola linea" que se usa por defecto para columnas de numeros. Sin esto, una
+// columna como "Como se abate... con el SFV propuesto" (parrafos largos) se alineaba a la
+// derecha como si fuera un importe, y su encabezado forzaba la tabla entera a estirarse en
+// una sola linea -- el resultado se veia roto y se salia de su recuadro (reportado por el
+// usuario, 2026-11-01).
+function tabla(headers, filas, { small = false, textCols = [] } = {}) {
   const wrap = el('div', 'tabla-wrap');
   const t = el('table', 'tabla-seccion' + (small ? ' tabla-chica' : ''));
+  const clase = (i) => (i === 0 ? null : textCols.includes(i) ? 'texto' : 'num');
   const thead = el('thead');
   const trh = el('tr');
-  headers.forEach((h, i) => trh.append(el('th', i > 0 ? 'num' : null, h)));
+  headers.forEach((h, i) => trh.append(el('th', clase(i), h)));
   thead.append(trh);
   const tbody = el('tbody');
   for (const fila of filas) {
     const tr = el('tr');
-    fila.forEach((c, i) => tr.append(el('td', i > 0 ? 'num' : null, String(c))));
+    fila.forEach((c, i) => tr.append(el('td', clase(i), String(c))));
     tbody.append(tr);
   }
   t.append(thead, tbody);
@@ -693,7 +701,7 @@ function calculoReciboConDemanda(r) {
           ...filaAhorroConcepto(true, r.cargos.energia_intermedia || 0, r)],
         ['Punta', M(r.cargos.energia_punta || 0), 'No — el sol ya no genera en el horario pico (tarde/noche), aunque SÍ es un cargo por consumo',
           ...filaAhorroConcepto(false, r.cargos.energia_punta || 0, r)],
-      ], { small: true }),
+      ], { small: true, textCols: [2] }),
       avisoCream('Importante y específico de GDMTH: "Energía Punta" se agrupa abajo con los conceptos que no ' +
         'bajan con los paneles, pero NO es porque sea un cargo fijo como Suministro/Distribución/Capacidad — sí ' +
         'depende de cuánto consume. La razón real es de horario: los paneles solares generan con luz de sol, y la ' +
@@ -708,7 +716,7 @@ function calculoReciboConDemanda(r) {
       ['2% de baja tensión', r.btPct ? `${PCT(r.btPct)} del cargo base del período, tal como lo trae impreso el recibo` : 'Este recibo no lo trae impreso este período', r.btPct ? PCT(r.btPct) : '—'],
       ['Bonificación factor de potencia', r.fpBonusPct ? `${PCT(r.fpBonusPct)} del (cargo base + 2% BT), tal como lo trae impreso el recibo` : 'Este recibo no la trae impresa este período', r.fpBonusPct ? PCT(r.fpBonusPct) : '—'],
       ['DAP', `Importe fijo que cobra el municipio, no CFE (p. ej. Ley de Ingresos del Municipio de Puebla 2026, arts. 60 y 92, que fija una cuota mensual con un estímulo contemplado)`, M(r.dap || 0) + '/período'],
-    ], { small: true }),
+    ], { small: true, textCols: [1] }),
     p(`Con estos 5 valores se reconstruye el total exacto de este recibo: ${M(r.meta.monthlyFixed)}/día × ${r.periodoDias} ` +
       `días + ${r.meta.energyRate.toFixed(4)} $/kWh × ${r.periodoKwh.toLocaleString('en-US')} kWh = ${M(r.meta.monthlyFixed * r.periodoDias + r.meta.energyRate * r.periodoKwh)} de cargo base, y de ahí se aplican BT/bonificación, IVA y DAP hasta llegar a ${M(r.pagoRecurrentePeriodo)}.`),
     avisoCream('Esta reconstrucción es aritmética pura sobre los importes ya impresos en el recibo del cliente -- ' +
@@ -737,13 +745,13 @@ function calculoReciboDomestico(r) {
           'al precio del tramo más alto.'
         : 'un único precio por kWh para todo el consumo del período, sin tramos ni cargo fijo de demanda.') +
       ' Después se aplica IVA (16%) y el DAP del período.'),
-    tabla(['Tramo', 'Alcance', 'Precio'], filasEsc, { small: true }),
+    tabla(['Tramo', 'Alcance', 'Precio'], filasEsc, { small: true, textCols: [1] }),
     tabla(['Variable', 'Cómo se obtuvo', 'Valor en este recibo'], [
       ['Consumo del período', 'Impreso en el recibo', `${r.periodoKwh.toLocaleString('en-US')} kWh en ${r.periodoDias} días`],
       ['Cargo de energía', tieneTramos ? 'Suma de lo que corresponde a cada tramo' : `${r.periodoKwh.toLocaleString('en-US')} kWh × precio único`, M(r.cargos.energia)],
       ['Precio efectivo promedio', 'Cargo de energía ÷ kWh del período -- solo como referencia, no es el precio real de ningún tramo', `${rateProm.toFixed(4)} $/kWh`],
       ['DAP', 'Importe fijo del período', M(r.dap || 0)],
-    ], { small: true }),
+    ], { small: true, textCols: [1] }),
     avisoCream('A diferencia de GDMTO/GDMTH/GDBT, aquí NO hay cargo de demanda contratada: prácticamente todo el ' +
       'consumo que se cubra con energía solar se refleja en el ahorro -- ver sección 4.'),
   ];
@@ -780,7 +788,7 @@ function s04(r, _leido, onToggle) {
     tabla(['Concepto', 'Clasificación', 'Por qué', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'], [
       ['Energía (todos los tramos)', 'Sí baja', 'Se factura por kWh -- la energía solar sustituye kWh comprados a CFE.',
         ...filaAhorroConcepto(true, r.cargos.energia || 0, r)],
-    ], { small: true }),
+    ], { small: true, textCols: [2] }),
     avisoCream('El único piso que queda es el IVA y el DAP, que no dependen del consumo -- por eso el % máximo de ' +
       'ahorro de una tarifa doméstica suele ser más alto que el de una tarifa con demanda contratada.'),
   ] : [
@@ -799,7 +807,7 @@ function s04(r, _leido, onToggle) {
         ...filaAhorroConcepto(true, r.cargos[k] || 0, r)]),
       ...r.meta.noReducibles.map(k => [listaConceptos([k]), 'No baja', razonNoReducible(k),
         ...filaAhorroConcepto(false, r.cargos[k] || 0, r)]),
-    ], { small: true }),
+    ], { small: true, textCols: [2] }),
     avisoCream('Esta clasificación es la misma para cualquier recibo con la misma tarifa y el mismo patrón en la ' +
       'columna "$/kW" -- no es un supuesto por tarifa, se lee directo del recibo de cada cliente.'),
   ]));

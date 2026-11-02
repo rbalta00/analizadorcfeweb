@@ -289,6 +289,16 @@ input[type="file"] { padding: 6px 0; }
 .seccion {
   background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
   padding: 18px; margin: 16px auto; max-width: 980px; scroll-margin-top: 10px;
+  overflow-wrap: break-word;
+}
+/* Parrafos narrativos (p(), avisoCream(), notas) -- sin esto no tenian NINGUNA regla de
+   alineacion (quedaban a la izquierda por default del navegador) ni una red de seguridad
+   contra texto largo sin espacios (numeros/formulas muy largos) que se saliera del
+   recuadro de la seccion. Reportado por el usuario, 2026-11-01: "los textos se salen de
+   la pagina no estan justificados". No se aplica a h2/h3/h4 (titulos) a proposito -- un
+   titulo corto justificado no tiene efecto visible y a veces se ve raro en 1 sola linea. */
+.seccion p, .aviso-cream, .nota {
+  text-align: justify; overflow-wrap: break-word; hyphens: auto;
 }
 .seccion-header { margin-bottom: 10px; }
 .seccion-numero { display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
@@ -384,12 +394,17 @@ input[type="file"] { padding: 6px 0; }
   width: 100%; height: 420px; border: 1px solid var(--border); border-radius: 6px; background: #fff;
 }
 
-.tabla-wrap { overflow-x: auto; margin: 10px 0; }
+.tabla-wrap { overflow-x: auto; margin: 10px 0; max-width: 100%; }
 .tabla-seccion { border-collapse: collapse; width: 100%; font-size: 0.85rem; min-width: 360px; }
 .tabla-seccion.tabla-chica { font-size: 0.78rem; }
-.tabla-seccion th { background: var(--navy); color: #fff; text-align: left; padding: 7px 10px; white-space: nowrap; }
+.tabla-seccion th { background: var(--navy); color: #fff; text-align: left; padding: 7px 10px; }
+/* Columnas de numero/monto: una sola linea, alineadas a la derecha. Las de texto explicativo
+   largo (clase .texto, ver textCols en secciones.js) NUNCA deben forzarse a una sola linea --
+   eso era lo que hacia que la tabla se saliera de su recuadro y necesitara scroll horizontal. */
+.tabla-seccion th.num { white-space: nowrap; }
 .tabla-seccion th.num, .tabla-seccion td.num { text-align: right; }
-.tabla-seccion td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.tabla-seccion th.texto, .tabla-seccion td.texto { text-align: left; white-space: normal; min-width: 220px; max-width: 320px; }
+.tabla-seccion td { padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: normal; }
 .tabla-seccion tr:last-child td { border-bottom: none; }
 
 .recuadro-implica {
