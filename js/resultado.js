@@ -20,21 +20,30 @@ export function construirResultado(input) {
     leido, inmueble, aplicaIsr, tasaIsrPct, historialManual, vigenciaDias,
   } = input;
 
-  let invoice, meta, pagoRecurrentePeriodo, piso, ahorroMax, pctMax, cargosFinal;
+  let invoice, meta, pagoRecurrentePeriodo, piso, ahorroMax, pctMax, cargosFinal, facturaDetalle;
   if (!esDomestica) {
     const construido = construirInvoice(tarifa, periodoDias, periodoKwh, cargos, rateKw, dap, btPct, fpBonusPct);
     invoice = construido.invoice; meta = construido.meta;
-    pagoRecurrentePeriodo = invoice(periodoDias, periodoKwh, false).total;
+    // facturaDetalle: el desglose REAL que ya calcula invoice() (base/bt/bonus/subtotal/
+    // iva/dap/total) -- expuesto en `r` para que secciones.js pueda mostrar el paso a paso
+    // de "como se calculo" con los numeros EXACTOS que ya uso el motor, en vez de que la
+    // vista reconstruya la aritmetica por su cuenta (riesgo de desincronizarse con
+    // motor.js). Pedido del usuario, 2026-11-01: el bloque "como se calculo" seguia sin
+    // ser claro -- la causa real era que mezclaba formula+sustitucion en una sola frase
+    // densa; con este desglose la vista puede armar una tabla paso-por-paso en vez de prosa.
+    facturaDetalle = invoice(periodoDias, periodoKwh, false);
+    pagoRecurrentePeriodo = facturaDetalle.total;
     const pisoCalc = pisoDeAhorro(periodoDias, pagoRecurrentePeriodo, invoice);
     piso = pisoCalc.piso; ahorroMax = pisoCalc.ahorroMax; pctMax = pisoCalc.pct;
     cargosFinal = cargos;
   } else {
     invoice = construirInvoiceDomestica(escalones, periodoDias, dapDomestica);
-    pagoRecurrentePeriodo = invoice(periodoDias, periodoKwh, false).total;
+    facturaDetalle = invoice(periodoDias, periodoKwh, false);
+    pagoRecurrentePeriodo = facturaDetalle.total;
     piso = invoice(periodoDias, 0, true).total;
     ahorroMax = pagoRecurrentePeriodo - piso;
     pctMax = pagoRecurrentePeriodo ? ahorroMax / pagoRecurrentePeriodo : 0;
-    cargosFinal = { energia: invoice(periodoDias, periodoKwh, false).base };
+    cargosFinal = { energia: facturaDetalle.base };
     meta = { tieneDemandaContratada: false, reducibles: ['energia'], noReducibles: [] };
   }
 
@@ -155,7 +164,7 @@ export function construirResultado(input) {
     btPct: btPct || 0, fpBonusPct: fpBonusPct || 0, esDomestica: !!esDomestica,
     escalones: esDomestica ? escalones : null,
     demandaContratadaKw: leido ? leido.demanda_contratada_kw : null,
-    pagoRecurrentePeriodo, pisoPeriodo: piso, ahorroMaxPeriodo: ahorroMax, pctMaxPeriodo: pctMax,
+    pagoRecurrentePeriodo, pisoPeriodo: piso, ahorroMaxPeriodo: ahorroMax, pctMaxPeriodo: pctMax, facturaDetalle,
     n, kwp, moduloWp, gen: genAnual, annualKwh, metodoGeneracion,
     investment: pres.inversion, ventaSinIva: pres.ventaSinIva, iva: pres.iva, acKw: pres.acKw,
     payback, ahorroAnual, pctAhorro, om1, annualbefore, annualafter,

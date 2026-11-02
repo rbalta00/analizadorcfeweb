@@ -79,7 +79,15 @@ function coberturaRealizadaPct(r) {
 function filaAhorroConcepto(reducible, monto, r) {
   if (!reducible) return [M(0) + ' (0%)', M(0) + ' (0%)'];
   const cobertura = coberturaRealizadaPct(r);
-  return [`${M(monto * cobertura)} (${PCT(cobertura)})`, `${M(monto)} (100%)`];
+  const real = `${M(monto * cobertura)} (${PCT(cobertura)})`;
+  // Cuando el sistema propuesto ya cubre el 100% del consumo, "con el sistema propuesto"
+  // y "ahorro maximo" salen con el MISMO numero -- mostrarlo dos veces sin explicar por que
+  // se veia como un dato repetido/sin sentido (reportado por el usuario, 2026-11-01).
+  // Ahora se dice explicitamente por que son iguales, en vez de solo repetir la cifra.
+  const maximo = cobertura >= 1
+    ? 'Igual que a la izquierda -- el sistema propuesto ya cubre el 100% del consumo, no queda margen para más ahorro en este concepto'
+    : `${M(monto)} (100%)`;
+  return [real, maximo];
 }
 
 function el(tag, cls, html) {
@@ -705,42 +713,57 @@ function calculoReciboConDemanda(r) {
   const noReducibleEsFijo = esGdmth
     ? r.meta.noReducibles.filter(k => k !== 'energia_punta')
     : r.meta.noReducibles;
+  // fd = el desglose REAL ya calculado por el motor (invoice(), ver resultado.js) -- se usa
+  // directo en vez de que esta vista reconstruya la aritmetica por su cuenta, para que el
+  // paso a paso mostrado sea GARANTIZADAMENTE el mismo numero que ya se cobra. Pedido del
+  // usuario, 2026-11-01 (repetido varias veces): el bloque "como se calculo" no era claro
+  // -- antes mezclaba la formula, la lista de conceptos y la sustitucion numerica en una
+  // sola frase densa por renglon. Rediseño: una frase de resumen en pesos reales primero,
+  // despues una tabla de pasos con UNA operacion y UN resultado por fila.
+  const fd = r.facturaDetalle;
+  const cargoFijoMonto = r.meta.monthlyFixed * r.periodoDias;
+  const cargoVariableMonto = r.meta.energyRate * r.periodoKwh;
+  const pasos = [
+    ['1', `Cargo fijo (${listaConceptos(noReducibleEsFijo)}${esGdmth ? ' + Energía Punta' : ''})`,
+      `${M(r.meta.monthlyFixed)}/día × ${r.periodoDias} días`, M(cargoFijoMonto)],
+    ['2', `Cargo por consumo (${listaConceptos(r.meta.reducibles)})`,
+      `${r.meta.energyRate.toFixed(4)} $/kWh × ${r.periodoKwh.toLocaleString('en-US')} kWh`, M(cargoVariableMonto)],
+    ['3', 'Cargo base del período', 'Paso 1 + Paso 2', M(fd.base)],
+  ];
+  if (r.btPct) pasos.push([String(pasos.length + 1), '+ 2% de baja tensión', `${PCT(r.btPct)} × ${M(fd.base)}`, M(fd.bt)]);
+  if (r.fpBonusPct) pasos.push([String(pasos.length + 1), '− Bonificación por factor de potencia', `${PCT(r.fpBonusPct)} × (cargo base + BT)`, '−' + M(fd.bonus)]);
+  pasos.push([String(pasos.length + 1), 'Subtotal (antes de IVA)', 'Suma de los pasos anteriores', M(fd.subtotal)]);
+  pasos.push([String(pasos.length + 1), '+ IVA (16%)', `16% × ${M(fd.subtotal)}`, M(fd.iva)]);
+  pasos.push([String(pasos.length + 1), '+ DAP (alumbrado público, lo cobra el municipio, no CFE)', 'Importe fijo de este período', M(fd.dap)]);
+  pasos.push(['=', 'TOTAL de este período', '', M(fd.total)]);
   return [
-    p(`Fórmula de facturación de CFE para la tarifa ${r.tarifa} (Acuerdo de la Comisión Nacional de Energía ` +
-      'para tarifas finales de suministro básico, apartados 3.1.2, 5.1, 5.2 y 5.5): el pago de un período se arma ' +
-      'como "cargo fijo por los días del período" + "tarifa por kWh × energía neta consumida", más el 2% de baja ' +
-      'tensión y la bonificación por factor de potencia cuando el recibo los trae, más IVA (16%) y el Derecho de ' +
-      'Alumbrado Público (DAP).'),
+    p(`En resumen: de los ${M(fd.total)} que paga por este período, ${M(cargoFijoMonto)} son cargo FIJO ` +
+      `(no cambian sin importar cuántos paneles se instalen) y ${M(cargoVariableMonto)} dependen del CONSUMO ` +
+      `(esta es la parte que sí se puede sustituir con energía solar). El resto de la tabla de abajo son ajustes ` +
+      `(baja tensión, bonificación, IVA, DAP) sobre esos dos montos.`),
     ...(esGdmth ? [
       p('Esta tarifa (GDMTH) factura la Energía en 3 franjas horarias con su propio precio cada una, impresas tal ' +
         'cual en el recibo como "Generación Base/Intermedia/Punta" — no es un solo precio por kWh:'),
-      tabla(['Franja horaria', 'Importe en este recibo', '¿Baja con los paneles?', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'], [
-        ['Base', M(r.cargos.energia_base || 0), 'Sí — el sol genera en este horario',
+      tabla(['Franja horaria', 'Importe en este recibo', '¿Baja con los paneles? ¿Cómo/por qué?', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'], [
+        ['Base', M(r.cargos.energia_base || 0), `Sí — ${razonSiReducible('energia_base', r)}`,
           ...filaAhorroConcepto(true, r.cargos.energia_base || 0, r)],
-        ['Intermedia', M(r.cargos.energia_intermedia || 0), 'Sí — el sol genera en este horario',
+        ['Intermedia', M(r.cargos.energia_intermedia || 0), `Sí — ${razonSiReducible('energia_intermedia', r)}`,
           ...filaAhorroConcepto(true, r.cargos.energia_intermedia || 0, r)],
-        ['Punta', M(r.cargos.energia_punta || 0), 'No — el sol ya no genera en el horario pico (tarde/noche), aunque SÍ es un cargo por consumo',
+        ['Punta', M(r.cargos.energia_punta || 0), `No — ${razonNoReducible('energia_punta')}`,
           ...filaAhorroConcepto(false, r.cargos.energia_punta || 0, r)],
       ], { small: true, textCols: [2] }),
-      avisoCream('Importante y específico de GDMTH: "Energía Punta" se agrupa abajo con los conceptos que no ' +
-        'bajan con los paneles, pero NO es porque sea un cargo fijo como Suministro/Distribución/Capacidad — sí ' +
-        'depende de cuánto consume. La razón real es de horario: los paneles solares generan con luz de sol, y la ' +
-        'franja "Punta" de CFE normalmente cae en la tarde/noche cuando ya no hay generación solar, así que esa ' +
-        'parte de la factura no se puede sustituir con energía propia.'),
+      avisoCream('Importante y específico de GDMTH: "Energía Punta" se agrupa en el Paso 1 (cargo fijo) de la tabla ' +
+        'de abajo, pero NO es porque sea un cargo fijo como Suministro/Distribución/Capacidad — sí depende de ' +
+        'cuánto consume. La razón real es de horario: los paneles solares generan con luz de sol, y la franja ' +
+        '"Punta" de CFE normalmente cae en la tarde/noche cuando ya no hay generación solar, así que esa parte de ' +
+        'la factura no se puede sustituir con energía propia -- por eso se agrupa con lo que no baja, no por ser fijo.'),
     ] : []),
-    tabla(['Variable', 'Cómo se obtuvo', 'Valor en este recibo'], [
-      ['Cargo fijo por día', (esGdmth
-        ? `Suma de los conceptos que NO dependen del consumo (${listaConceptos(noReducibleEsFijo)}), más Energía Punta (no es fijo, pero tampoco lo sustituye el sol — ver aviso arriba) ÷ días del período = ${M(r.meta.noReducible)} ÷ ${r.periodoDias} días`
-        : `Suma de los conceptos que NO dependen del consumo (${listaConceptos(r.meta.noReducibles)}) ÷ días del período = ${M(r.meta.noReducible)} ÷ ${r.periodoDias} días`), `${M(r.meta.monthlyFixed)}/día`],
-      ['Tarifa por kWh', `Suma de los conceptos que SÍ dependen del consumo Y sí sustituye el sol (${listaConceptos(r.meta.reducibles)}) ÷ kWh del período = ${M(r.meta.reducible)} ÷ ${r.periodoKwh.toLocaleString('en-US')} kWh`, `${r.meta.energyRate.toFixed(4)} $/kWh`],
-      ['2% de baja tensión', r.btPct ? `${PCT(r.btPct)} del cargo base del período, tal como lo trae impreso el recibo` : 'Este recibo no lo trae impreso este período', r.btPct ? PCT(r.btPct) : '—'],
-      ['Bonificación factor de potencia', r.fpBonusPct ? `${PCT(r.fpBonusPct)} del (cargo base + 2% BT), tal como lo trae impreso el recibo` : 'Este recibo no la trae impresa este período', r.fpBonusPct ? PCT(r.fpBonusPct) : '—'],
-      ['DAP', `Importe fijo que cobra el municipio, no CFE (p. ej. Ley de Ingresos del Municipio de Puebla 2026, arts. 60 y 92, que fija una cuota mensual con un estímulo contemplado)`, M(r.dap || 0) + '/período'],
-    ], { small: true, textCols: [1] }),
-    p(`Con estos 5 valores se reconstruye el total exacto de este recibo: ${M(r.meta.monthlyFixed)}/día × ${r.periodoDias} ` +
-      `días + ${r.meta.energyRate.toFixed(4)} $/kWh × ${r.periodoKwh.toLocaleString('en-US')} kWh = ${M(r.meta.monthlyFixed * r.periodoDias + r.meta.energyRate * r.periodoKwh)} de cargo base, y de ahí se aplican BT/bonificación, IVA y DAP hasta llegar a ${M(r.pagoRecurrentePeriodo)}.`),
-    avisoCream('Esta reconstrucción es aritmética pura sobre los importes ya impresos en el recibo del cliente -- ' +
-      'no depende de ningún precio de lista ni de ningún supuesto del sistema fotovoltaico.'),
+    p('Así se arma, paso a paso, el total exacto de este período (los mismos números que ya calculó el sistema, no una reconstrucción aparte):'),
+    tabla(['Paso', 'Qué incluye', 'Operación', 'Resultado'], pasos, { small: true, textCols: [1, 2] }),
+    avisoCream(`Fórmula base según el Acuerdo de la Comisión Nacional de Energía para tarifas finales de ` +
+      `suministro básico (apartados 3.1.2, 5.1, 5.2 y 5.5): "cargo fijo por los días del período" + "tarifa por ` +
+      `kWh × energía neta consumida", antes de BT/bonificación/IVA/DAP. El DAP tiene su propio fundamento legal ` +
+      `municipal (p. ej. Ley de Ingresos del Municipio de Puebla 2026, arts. 60 y 92), no de CFE.`),
   ];
 }
 
@@ -757,21 +780,30 @@ function calculoReciboDomestico(r) {
     limite == null ? 'Resto del consumo' : `Primeros ${limite} kWh de este tramo`,
     `${Number(tarifa).toFixed(4)} $/kWh`,
   ]);
+  // fd = el desglose REAL ya calculado por el motor (mismo patron que
+  // calculoReciboConDemanda arriba) -- el total de este paso a paso es garantizadamente el
+  // mismo numero ya cobrado, no una reconstruccion aparte.
+  const fd = r.facturaDetalle;
+  const pasos = [
+    ['1', `Cargo de energía (${tieneTramos ? 'suma de los 3 tramos' : 'precio único'})`,
+      tieneTramos ? 'Suma de lo que corresponde a cada tramo' : `${r.periodoKwh.toLocaleString('en-US')} kWh × ${rateProm.toFixed(4)} $/kWh`, M(fd.base)],
+    ['2', 'Subtotal (antes de IVA)', 'Igual al Paso 1 -- esta tarifa no tiene cargo fijo de demanda', M(fd.subtotal)],
+    ['3', '+ IVA (16%)', `16% × ${M(fd.subtotal)}`, M(fd.iva)],
+    ['4', '+ DAP (alumbrado público, lo cobra el municipio, no CFE)', 'Importe fijo de este período', M(fd.dap)],
+    ['=', 'TOTAL de este período', '', M(fd.total)],
+  ];
   return [
-    p(`Fórmula de facturación de CFE para la tarifa ${r.tarifa} (volumétrica por tramos, sin cargo de demanda): ` +
-      (tieneTramos
-        ? 'cada tramo de consumo (Básico, Intermedio, Excedente) tiene su propio precio por kWh, impresos en el ' +
-          'propio recibo -- se cobra el consumo que cae en cada tramo al precio de ese tramo, no todo el consumo ' +
-          'al precio del tramo más alto.'
-        : 'un único precio por kWh para todo el consumo del período, sin tramos ni cargo fijo de demanda.') +
-      ' Después se aplica IVA (16%) y el DAP del período.'),
+    p(`En resumen: de los ${M(fd.total)} que paga por este período, prácticamente todo (${M(fd.base)}) depende ` +
+      `del consumo (kWh) -- a diferencia de GDMTO/GDMTH/GDBT, esta tarifa NO tiene ningún cargo fijo de demanda, ` +
+      `así que casi todo lo que paga sí se puede sustituir con energía solar.`),
+    p(tieneTramos
+      ? 'Cada tramo de consumo (Básico, Intermedio, Excedente) tiene su propio precio por kWh, impreso en el ' +
+        'propio recibo -- se cobra el consumo que cae en cada tramo al precio de ese tramo, no todo el consumo al ' +
+        'precio del tramo más alto:'
+      : 'Esta tarifa usa un único precio por kWh para todo el consumo del período, sin tramos ni cargo fijo de demanda:'),
     tabla(['Tramo', 'Alcance', 'Precio'], filasEsc, { small: true, textCols: [1] }),
-    tabla(['Variable', 'Cómo se obtuvo', 'Valor en este recibo'], [
-      ['Consumo del período', 'Impreso en el recibo', `${r.periodoKwh.toLocaleString('en-US')} kWh en ${r.periodoDias} días`],
-      ['Cargo de energía', tieneTramos ? 'Suma de lo que corresponde a cada tramo' : `${r.periodoKwh.toLocaleString('en-US')} kWh × precio único`, M(r.cargos.energia)],
-      ['Precio efectivo promedio', 'Cargo de energía ÷ kWh del período -- solo como referencia, no es el precio real de ningún tramo', `${rateProm.toFixed(4)} $/kWh`],
-      ['DAP', 'Importe fijo del período', M(r.dap || 0)],
-    ], { small: true, textCols: [1] }),
+    p('Así se arma, paso a paso, el total exacto de este período:'),
+    tabla(['Paso', 'Qué incluye', 'Operación', 'Resultado'], pasos, { small: true, textCols: [1, 2] }),
     avisoCream(`A diferencia de GDMTO/GDMTH/GDBT, aquí NO hay cargo de demanda contratada: prácticamente todo el ` +
       `consumo que se cubra con energía solar se refleja en el ahorro -- ver sección ${refSeccion(4, r)}.`),
   ];
