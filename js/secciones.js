@@ -895,15 +895,18 @@ function s05(r, _leido, onToggle) {
       'capturados). El historial de consumo de 12 meses, cuando esté disponible, debe capturarse para promediar ' +
       'una base más representativa antes de comprometer una cifra de ahorro definitiva.'));
   }
+  const hayHistorialUsado = historial && historial.length > 0;
   art.append(bloqueCalculo(5, [
-    p('Fórmula: se promedia el período que se está facturando ahora junto con cualquier período de historial ' +
-      'capturado -- cada uno normalizado a kWh/mes antes de promediar (así un período de 28 días no pesa distinto ' +
-      'a uno de 32), y ese promedio se multiplica por 12 para el consumo anual. Nunca se descarta ningún período ' +
-      'real capturado, sea 1 solo o 12:'),
-    tabla(['Período usado', 'kWh (normalizado a 30.5 días/mes)'], [
-      ['Período facturado actual', `${r.periodoKwh.toLocaleString('en-US')} kWh ÷ ${r.periodoDias} días × 30.5 = ${(r.consumosMensualesUsados[0]).toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`],
-      ...r.consumosMensualesUsados.slice(1).map((kwh, i) => [`Historial P${i + 1}`, `${kwh.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`]),
-    ], { small: true }),
+    p(hayHistorialUsado
+      ? 'Fórmula: se promedian TODOS los períodos de historial capturados -- cada uno normalizado a kWh/mes antes ' +
+        'de promediar (así un período de 28 días no pesa distinto a uno de 32), y ese promedio se multiplica por ' +
+        '12 para el consumo anual. Nunca se descarta ningún período real capturado, sea 1 solo o 12:'
+      : 'Fórmula: sin historial capturado, se usa el único dato real disponible -- el período que se está ' +
+        'facturando ahora, normalizado a kWh/mes y multiplicado por 12 para el consumo anual:'),
+    tabla(['Período usado', 'kWh (normalizado a 30.5 días/mes)'], hayHistorialUsado
+      ? r.consumosMensualesUsados.map((kwh, i) => [`Historial P${i + 1}`, `${kwh.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`])
+      : [['Período facturado actual (sin historial)', `${r.periodoKwh.toLocaleString('en-US')} kWh ÷ ${r.periodoDias} días × 30.5 = ${r.consumosMensualesUsados[0].toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`]],
+      { small: true }),
     tabla(['Variable', 'Cómo se obtuvo', 'Valor'], [
       ['Suma de los períodos de arriba', r.consumosMensualesUsados.map(v => v.toFixed(1)).join(' + '), `${r.consumosMensualesUsados.reduce((a, b) => a + b, 0).toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh`],
       ['Consumo mensual normalizado', `Suma ÷ ${r.consumosMensualesUsados.length} período(s)`, `${(r.annualKwh / 12).toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`],
@@ -981,15 +984,27 @@ function s06(r, _leido, onToggle) {
       'del recibo, y ninguna fotografía o inspección visual aquí descrita es un dictamen estructural.'));
   }
   const genPanelMensual = r.n ? r.gen / 12 / r.n : 0;
+  const consumoMensualRef = r.annualKwh / 12;
+  const cobertura = r.cobertura || 1;
+  const consumoACubrir = consumoMensualRef * cobertura;
+  // La fila "Paneles necesarios" antes NO incluia la cobertura en la cuenta mostrada --
+  // la formula real (motor.js, dimensionarHorasSol) SI la multiplica: n = ceil(consumo *
+  // cobertura / genPanel). Con cobertura = 1.0 (el valor por defecto) esto no se notaba
+  // porque multiplicar por 1 no cambia nada, pero con cualquier otro valor capturado en el
+  // formulario, la formula mostrada no habria reproducido el numero real de paneles.
+  // Corregido para que la tabla muestre EXACTAMENTE la misma cuenta que ya corrio el motor
+  // (pedido del usuario, 2026-11-01: "pon la formula como obtuviste la cantidad de paneles").
   art.append(bloqueCalculo(6, [
-    p('Fórmula de dimensionamiento: número de paneles = consumo mensual a cubrir ÷ generación mensual estimada de ' +
-      'UN panel, redondeado siempre hacia arriba (nunca se recomienda instalar una fracción de panel).'),
-    tabla(['Variable', 'Cómo se obtuvo', 'Valor'], [
-      ['Consumo mensual de referencia', r.basisConsumo || 'Normalizado del período facturado', `${(r.annualKwh / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/mes`],
-      ['Generación mensual de un panel', `${r.moduloWp} W, con el criterio de horas-sol fijas de este estudio (ver aviso abajo)`, `${genPanelMensual.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`],
-      ['Paneles necesarios', `${(r.annualKwh / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh ÷ ${genPanelMensual.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh, redondeado hacia arriba`, `${r.n} paneles`],
-      ['Potencia nominal del sistema', `${r.n} paneles × ${r.moduloWp} W ÷ 1000`, `${r.kwp.toFixed(2)} kWp`],
-    ], { small: true }),
+    p('Fórmula de dimensionamiento: número de paneles = (consumo mensual de referencia × cobertura objetivo) ÷ ' +
+      'generación mensual estimada de UN panel, redondeado siempre hacia arriba (nunca se recomienda instalar una ' +
+      'fracción de panel). Paso a paso, con los números reales de este estudio:'),
+    tabla(['Paso', 'Qué incluye', 'Operación', 'Resultado'], [
+      ['1', 'Consumo mensual de referencia', r.basisConsumo || 'Normalizado del período facturado', `${consumoMensualRef.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`],
+      ['2', 'Consumo a cubrir (con margen de cobertura)', `${consumoMensualRef.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes × ${cobertura} de cobertura`, `${consumoACubrir.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`],
+      ['3', `Generación mensual de 1 panel (${r.moduloWp} W)`, `${r.moduloWp} W ÷ 1000 × 30.5 días × ${r.horasUtiles} h-sol/día`, `${genPanelMensual.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`],
+      ['4', 'Paneles necesarios', `${consumoACubrir.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh ÷ ${genPanelMensual.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh, redondeado hacia arriba`, `${r.n} paneles`],
+      ['5', 'Potencia nominal del sistema', `${r.n} paneles × ${r.moduloWp} W ÷ 1000`, `${r.kwp.toFixed(2)} kWp`],
+    ], { small: true, textCols: [1, 2] }),
     avisoCream(r.metodoGeneracion || 'Criterio de horas-sol fijas, no una simulación con PVGIS ni datos de irradiancia reales del sitio.'),
   ], r));
   return art;

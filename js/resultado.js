@@ -47,44 +47,40 @@ export function construirResultado(input) {
     meta = { tieneDemandaContratada: false, reducibles: ['energia'], noReducibles: [] };
   }
 
-  // Consumo base para dimensionar: SIEMPRE se promedia el periodo que se esta facturando
-  // ahora (periodoKwh/periodoDias, real y siempre presente) junto con CUALQUIER periodo de
-  // historial capturado (a mano o detectado del recibo), normalizando todos a kWh/mes antes
-  // de promediar -- asi ningun periodo pesa mas que otro solo por tener mas o menos dias, y
-  // nunca se descarta un dato real capturado, sea 1 periodo o 12. diasPorPeriodoHistorial
-  // distingue tarifas que se facturan mensual (~30.5 dias) de las domesticas/01/DAC, que se
-  // facturan bimestral (~61 dias).
+  // Consumo base para dimensionar: se promedian TODOS los periodos de historial
+  // capturados (a mano o detectados del recibo), normalizados a kWh/mes antes de
+  // promediar -- asi ningun periodo pesa mas que otro solo por tener mas o menos dias.
+  // Sin historial capturado, se usa el periodo que se esta facturando ahora (el unico
+  // dato real disponible). diasPorPeriodoHistorial distingue tarifas que se facturan
+  // mensual (~30.5 dias) de las domesticas/01/DAC, que se facturan bimestral (~61 dias).
   //
-  // Diseño corregido 2026-11-01 a pedido explicito del usuario: un primer intento exigia un
-  // minimo de 3 periodos de historial antes de confiar en su promedio (con menos, usaba solo
-  // el periodo facturado); un segundo intento comparaba el periodo facturado contra el
-  // historial parcial y usaba el mayor de los dos. El usuario senalo que ambos eran
-  // complicaciones innecesarias: "deberia ser el promedio [anual]" -- punto. El periodo que
-  // se factura ahora YA es un dato real (como cualquier periodo de historial), asi que
-  // promediarlo junto con el resto, sin umbrales ni comparaciones, es el diseño correcto: si
-  // el recibo imprime su historial incluyendo el periodo mas reciente (lo normal en CFE),
-  // promediarlo de nuevo con el periodo actual no distorsiona nada (es el mismo valor); si el
-  // historial capturado es de periodos genuinamente distintos, se incorporan de verdad,
-  // suavizando la estacionalidad -- con 1 solo periodo de historial YA DISTINTO al actual, el
-  // promedio de ambos (2 datos reales) nunca puede colapsar a un unico valor atipico.
+  // Diseño corregido 2026-11-01, dos veces, a pedido explicito del usuario: un primer
+  // intento exigia un minimo de 3 periodos de historial antes de confiar en su promedio; un
+  // segundo intento comparaba el periodo facturado contra el historial parcial y usaba el
+  // mayor de los dos; un tercer intento agregaba el periodo facturado actual como un dato
+  // MAS junto con el historial, sin importar cuantos periodos de historial hubiera. Ese
+  // tercer intento resulto en una inconsistencia real: el recibo de CFE normalmente YA
+  // incluye el periodo mas reciente como el ultimo dato de su propio historial impreso, asi
+  // que sumar el periodo actual por separado lo contaba DOS VECES -- visible como un
+  // desajuste real (13 periodos en la formula de la seccion 5/6 contra 12 en la grafica de
+  // la seccion 7, que solo usa el historial). Diseño final: el historial, cuando existe, ES
+  // la fuente completa (incluye el periodo actual si el recibo lo imprime asi); el periodo
+  // facturado por separado solo se usa cuando NO hay ningun historial capturado.
   const diasPorPeriodoHistorial = esDomestica ? DIAS_MES_REF * 2 : DIAS_MES_REF;
   const historialOcr = (leido && leido.historial) ? leido.historial.map(h => h.kwh) : null;
   const historialUsado = (historialManual && historialManual.length) ? historialManual : historialOcr;
-  const consumoMensualPeriodoActual = normalizarConsumoMensual(periodoKwh, periodoDias);
-  const consumosMensuales = [consumoMensualPeriodoActual];
-  if (historialUsado && historialUsado.length) {
-    for (const kwh of historialUsado) consumosMensuales.push(kwh / diasPorPeriodoHistorial * DIAS_MES_REF);
-  }
+  const consumosMensuales = (historialUsado && historialUsado.length)
+    ? historialUsado.map(kwh => kwh / diasPorPeriodoHistorial * DIAS_MES_REF)
+    : [normalizarConsumoMensual(periodoKwh, periodoDias)];
   const consumoMensual = consumosMensuales.reduce((a, b) => a + b, 0) / consumosMensuales.length;
   const dailyKwh = consumoMensual / DIAS_MES_REF;
   const metodoGeneracion = `Horas-sol fijas (${horasUtiles} h/día, criterio del usuario, no oficial de CFE/PVGIS). ` +
-    `Consumo mensual normalizado: promedio de ${consumosMensuales.length} período(s) real(es) -- el período ` +
-    `facturado actual (${periodoKwh} kWh en ${periodoDias} días)` +
-    (historialUsado && historialUsado.length ? ` + ${historialUsado.length} período(s) de historial` : '') +
-    ` = ${consumoMensual.toFixed(2)} kWh/mes.`;
+    (historialUsado && historialUsado.length
+      ? `Consumo mensual normalizado: promedio de ${consumosMensuales.length} período(s) de historial = ${consumoMensual.toFixed(2)} kWh/mes.`
+      : `Consumo mensual normalizado del período facturado actual (${periodoKwh} kWh en ${periodoDias} días, sin historial capturado) = ${consumoMensual.toFixed(2)} kWh/mes.`);
   const basisConsumo = (historialUsado && historialUsado.length)
-    ? `promedio de ${consumosMensuales.length} períodos reales (el período facturado actual + ${historialUsado.length} de historial` +
-      (historialManual && historialManual.length ? ', capturados a mano)' : ', impresos en el recibo)')
+    ? `historial real de ${consumosMensuales.length} período(s)` +
+      (historialManual && historialManual.length ? ' (capturados a mano)' : ' (impresos en el recibo)')
     : `extrapolación de un solo período (${periodoDias} días, sin historial capturado)`;
   // Bug real encontrado en la auditoria de 2026-11-01: `historial` (usado en secciones.js
   // para la grafica/tabla de la seccion 5 y la comparacion generacion-vs-historial de la
@@ -172,7 +168,7 @@ export function construirResultado(input) {
     escalones: esDomestica ? escalones : null,
     demandaContratadaKw: leido ? leido.demanda_contratada_kw : null,
     pagoRecurrentePeriodo, pisoPeriodo: piso, ahorroMaxPeriodo: ahorroMax, pctMaxPeriodo: pctMax, facturaDetalle,
-    n, kwp, moduloWp, gen: genAnual, annualKwh, metodoGeneracion,
+    n, kwp, moduloWp, cobertura, horasUtiles, gen: genAnual, annualKwh, metodoGeneracion,
     investment: pres.inversion, ventaSinIva: pres.ventaSinIva, iva: pres.iva, acKw: pres.acKw,
     payback, ahorroAnual, pctAhorro, om1, annualbefore, annualafter,
     van: flujo25.van, tir: flujo25.tir, recuperacionAcumulada: flujo25.recuperacionAcumulada,
