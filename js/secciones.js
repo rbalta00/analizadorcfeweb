@@ -1144,7 +1144,7 @@ function s07(r, _leido, onToggle) {
       `número casi constante -- ver sección ${refSeccion(6, r)} para cómo se obtuvo el número de paneles/kWp).`),
     tabla(['Variable', 'Cómo se obtuvo', 'Valor'], [
       ['Potencia nominal', `Sección ${refSeccion(6, r)}: paneles × W por panel ÷ 1000`, `${r.kwp.toFixed(2)} kWp`],
-      ['Índice kWh/kWp al año', 'Horas-sol fijas × 365 días (criterio del estudio)', `${(r.gen / r.kwp).toLocaleString('en-US', { maximumFractionDigits: 2 })} kWh/kWp`],
+      ['Índice kWh/kWp al año', 'Horas-sol fijas × 30.5 días/mes × 12 meses (criterio del estudio)', `${(r.gen / r.kwp).toLocaleString('en-US', { maximumFractionDigits: 2 })} kWh/kWp`],
       ['Generación anual estimada', `${r.kwp.toFixed(2)} kWp × ${(r.gen / r.kwp).toLocaleString('en-US', { maximumFractionDigits: 2 })} kWh/kWp`, `${r.gen.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año`],
     ], { small: true }),
     p('La generación mensual de cada mes (usada en la gráfica arriba) reparte este mismo total anual entre los 12 ' +
@@ -1293,7 +1293,7 @@ function s13(r, _leido, onToggle) {
     ['TIR (tasa interna de retorno)', r.tir ? `${PCT(r.tir)} del flujo de 25 años: equivale a la ganancia anual de invertir ese dinero ahí en vez de en otra parte. No es una tasa garantizada.` : 'No calculable con un solo cambio de signo.'],
     ['VAN (valor actual neto) al 10%', `${M(r.van)}: cuánto más valen, en pesos de hoy, los ahorros futuros que lo que costó el sistema.`],
   ];
-  if (bc != null) filasInd.push(['Beneficio/costo', `${bc.toFixed(2)}: por cada peso invertido (y gastado en mantenimiento), regresa ${bc.toFixed(2)} pesos actualizados en ahorros.`]);
+  if (bc != null) filasInd.push(['Beneficio/costo', `${bc.toFixed(2)}: por cada peso invertido (y gastado en mantenimiento${reposicionAnio ? ' y reposición del inversor' : ''}), regresa ${bc.toFixed(2)} pesos actualizados en ahorros.`]);
   art.append(tabla(['Indicador estimado', 'Resultado y explicación'], filasInd, { small: true }));
   const escPct = r.escalamientoTarifaPct || 0;
   const escTxt = escPct
@@ -1333,7 +1333,7 @@ function beneficioCosto(r) {
   const flujo25 = r.flujo25Rows || [];
   if (!flujo25.length) return null;
   const beneficioDesc = flujo25.filter(x => x.anio > 0).reduce((s, x) => s + x.ahorroMxn / Math.pow(1.10, x.anio), 0);
-  const costoDesc = r.investment + flujo25.filter(x => x.anio > 0).reduce((s, x) => s + x.omMxn / Math.pow(1.10, x.anio), 0);
+  const costoDesc = r.investment + flujo25.filter(x => x.anio > 0).reduce((s, x) => s + (x.omMxn + (x.reposicionMxn || 0)) / Math.pow(1.10, x.anio), 0);
   return costoDesc ? beneficioDesc / costoDesc : null;
 }
 
