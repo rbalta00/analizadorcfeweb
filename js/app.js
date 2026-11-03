@@ -20,8 +20,9 @@ import {
   TARIFAS_SOPORTADAS, esDomestica, conectarEventosFormularioRecibo,
   leerFormularioRecibo, aplicarFormularioRecibo, llenarFormularioDesdeReciboCampos,
 } from './formularioRecibo.js';
-import { supabaseListar, supabaseActualizar, supabaseEliminar, supabaseSubirArchivo, supabaseEliminarArchivo } from './supabase.js';
+import { supabaseListar, supabaseActualizar, supabaseEliminar, supabaseSubirArchivo, supabaseEliminarArchivo, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase.js';
 import { subirANube, bajarDeNube } from './nube.js';
+import { panelesEnRectangulo, crearEditorPaneles, hornearImagenSembrado, PANEL_ANCHO_M, PANEL_ALTO_M } from './sembrador.js';
 
 window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 
@@ -515,6 +516,8 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   aplicarFormulario(proyectoActual.formulario);
   aplicarInmueble(proyectoActual.inmueble);
   mostrarPreviaSembrado(proyectoActual.fotoSembrado);
+  aplicarFuenteSembrado(proyectoActual.sembradoFuente);
+  mostrarSembradorAuto(proyectoActual.sembradorAuto);
   renderArchivosRecibo();
   renderArchivosVerificacion();
   renderIndice(null);
@@ -753,6 +756,266 @@ $('btnQuitarSembrado').addEventListener('click', () => {
   mostrarPreviaSembrado(null);
   if (ultimoResultado) { ultimoResultado.fotoSembrado = null; renderSecciones(ultimoResultado); }
 });
+
+// ---------------- Sembrador automatico de paneles (beta) ----------------
+// Segunda forma de conseguir la imagen de fotoSembrado (la primera es subir la foto ya
+// armada a mano, arriba). El usuario sube SU captura (satelital o la que sea, no se
+// descarga ninguna aqui -- sin Google Maps ni llaves de API, decision explicita del
+// usuario 2026-11-02 "lo dejamos asi"), marca escala y techo con 2 clics cada uno, y se
+// siembra en rejilla el mismo r.n ya calculado (ver sembrador.js). Guardar "hornea" el
+// resultado en un canvas y lo deja en proyectoActual.fotoSembrado -- MISMA variable que
+// usa la foto manual, asi que solo hay una imagen "activa" a la vez (la ultima que se
+// guarde), tal como se pidio.
+let modoMarcadoSembrador = null; // null | 'escala' | 'techo'
+let puntosMarcadosSembrador = [];
+const editorSembrador = crearEditorPaneles($('svgSembradorAuto'));
+editorSembrador.onCambio((paneles) => {
+  if (proyectoActual && proyectoActual.sembradorAuto) {
+    proyectoActual.sembradorAuto.paneles = paneles;
+    guardarProyecto(clienteActual, proyectoActual);
+  }
+});
+
+function dibujarMarcadoresSembrador() {
+  const svg = $('svgMarcadoresAuto');
+  svg.innerHTML = '';
+  const est = proyectoActual && proyectoActual.sembradorAuto;
+  function linea(p1, p2, color) {
+    if (!p1 || !p2) return;
+    const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l.setAttribute('x1', p1[0]); l.setAttribute('y1', p1[1]);
+    l.setAttribute('x2', p2[0]); l.setAttribute('y2', p2[1]);
+    l.setAttribute('stroke', color); l.setAttribute('stroke-width', 3); l.setAttribute('stroke-dasharray', '6 4');
+    svg.appendChild(l);
+  }
+  function punto(p, color) {
+    if (!p) return;
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', p[0]); c.setAttribute('cy', p[1]); c.setAttribute('r', 6);
+    c.setAttribute('fill', color); c.setAttribute('stroke', '#fff'); c.setAttribute('stroke-width', 2);
+    svg.appendChild(c);
+  }
+  const colorEscala = '#c99a2e', colorTecho = '#0f8b8d';
+  linea(est && est.cotaP1, est && est.cotaP2, colorEscala);
+  linea(est && est.techoP1, est && est.techoP2, colorTecho);
+  punto(est && est.cotaP1, colorEscala); punto(est && est.cotaP2, colorEscala);
+  punto(est && est.techoP1, colorTecho); punto(est && est.techoP2, colorTecho);
+  if (modoMarcadoSembrador) {
+    const color = modoMarcadoSembrador === 'escala' ? colorEscala : colorTecho;
+    puntosMarcadosSembrador.forEach((p) => punto(p, color));
+  }
+}
+
+function terminarMarcadoSembrador() {
+  modoMarcadoSembrador = null;
+  puntosMarcadosSembrador = [];
+  delete $('svgSembradorAuto').dataset.modoMarcado;
+  $('estadoSembradorAuto').textContent = '';
+}
+
+function empezarMarcadoSembrador(tipo) {
+  if (!proyectoActual || !proyectoActual.sembradorAuto) return;
+  modoMarcadoSembrador = tipo;
+  puntosMarcadosSembrador = [];
+  $('svgSembradorAuto').dataset.modoMarcado = tipo;
+  $('estadoSembradorAuto').textContent = tipo === 'escala'
+    ? 'Haz clic en 2 puntos de distancia real conocida sobre la imagen (ej. el ancho de una banqueta, un auto, un predio vecino).'
+    : 'Haz clic en 2 esquinas opuestas del rectángulo donde se van a sembrar los paneles.';
+  dibujarMarcadoresSembrador();
+}
+
+$('svgSembradorAuto').addEventListener('click', (e) => {
+  if (!modoMarcadoSembrador || !proyectoActual || !proyectoActual.sembradorAuto) return;
+  const svg = $('svgSembradorAuto');
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  puntosMarcadosSembrador.push([Math.round(p.x), Math.round(p.y)]);
+  dibujarMarcadoresSembrador();
+  if (puntosMarcadosSembrador.length === 2) {
+    const est = proyectoActual.sembradorAuto;
+    if (modoMarcadoSembrador === 'escala') { est.cotaP1 = puntosMarcadosSembrador[0]; est.cotaP2 = puntosMarcadosSembrador[1]; }
+    else { est.techoP1 = puntosMarcadosSembrador[0]; est.techoP2 = puntosMarcadosSembrador[1]; }
+    guardarProyecto(clienteActual, proyectoActual);
+    terminarMarcadoSembrador();
+    dibujarMarcadoresSembrador();
+  }
+});
+
+$('btnMarcarEscala').addEventListener('click', () => empezarMarcadoSembrador('escala'));
+$('btnMarcarTecho').addEventListener('click', () => empezarMarcadoSembrador('techo'));
+
+$('archivoAutoSembrado').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  $('archivoAutoSembrado').disabled = true;
+  try {
+    const foto = await archivoAImagenComprimida(file, { maxAncho: 1600, calidad: 0.85 });
+    proyectoActual.sembradorAuto = {
+      imagenDataUrl: foto.dataUrl, anchoImg: foto.ancho, altoImg: foto.alto,
+      // ppmConocido/direccionFormateada: solo se llenan cuando la captura viene de "Buscar en
+      // Google Maps" (la escala ya se sabe del zoom real, no hace falta marcarla a mano).
+      // Subiendo una foto propia aqui, SI hace falta marcar la escala (ver btnMarcarEscala).
+      ppmConocido: null, direccionFormateada: null,
+      cotaP1: null, cotaP2: null, cotaMetros: null, techoP1: null, techoP2: null, angulo: 0, paneles: [],
+    };
+    guardarProyecto(clienteActual, proyectoActual);
+    mostrarSembradorAuto(proyectoActual.sembradorAuto);
+  } catch (err) {
+    alert('No se pudo procesar la imagen: ' + err.message);
+    console.error(err);
+  } finally {
+    $('archivoAutoSembrado').disabled = false;
+    e.target.value = '';
+  }
+});
+
+// Busca la captura satelital directo por direccion, vía la Edge Function "captura-azotea"
+// (repo Supabase prchqgvwaepzmcohoehu) -- esa funcion es la UNICA que ve la llave de
+// Google Maps (secreto GOOGLE_MAPS_API_KEY de la funcion, nunca en este archivo ni en
+// el codigo que llega al navegador). Pedido explicito del usuario, 2026-11-02: "una vez
+// que se cargue el recibo el cotizador jala los datos y la direccion de ahi la tomas
+// para que funcione el sembrador y busque la captura en maps y la suba".
+$('btnBuscarMaps').addEventListener('click', async () => {
+  const direccion = $('autoDireccionMaps').value.trim();
+  if (!direccion) { alert('Escribe o confirma la dirección a buscar.'); return; }
+  $('btnBuscarMaps').disabled = true;
+  $('estadoBuscarMaps').textContent = 'Buscando en Google Maps…';
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/captura-azotea`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      body: JSON.stringify({ direccion }),
+    });
+    const datos = await resp.json();
+    if (!resp.ok || datos.error) throw new Error(datos.error || `Error ${resp.status}`);
+    proyectoActual.sembradorAuto = {
+      imagenDataUrl: datos.imagenDataUrl, anchoImg: null, altoImg: null,
+      ppmConocido: datos.ppm, direccionFormateada: datos.direccionFormateada,
+      cotaP1: null, cotaP2: null, cotaMetros: null, techoP1: null, techoP2: null, angulo: 0, paneles: [],
+    };
+    guardarProyecto(clienteActual, proyectoActual);
+    mostrarSembradorAuto(proyectoActual.sembradorAuto);
+    $('estadoBuscarMaps').textContent = `Encontrado: ${datos.direccionFormateada}. Escala ya calculada -- marca directo las esquinas del techo.`;
+  } catch (err) {
+    $('estadoBuscarMaps').textContent = '';
+    alert('No se pudo buscar la captura en Maps: ' + err.message);
+    console.error(err);
+  } finally {
+    $('btnBuscarMaps').disabled = false;
+  }
+});
+
+$('btnSembrarAuto').addEventListener('click', () => {
+  const est = proyectoActual && proyectoActual.sembradorAuto;
+  if (!est || !est.imagenDataUrl) return;
+  if (!ultimoResultado || !ultimoResultado.n) {
+    alert('Calcula primero la cotización (botón "Calcular") para saber cuántos paneles sembrar.');
+    return;
+  }
+  // La escala puede venir de 2 lugares: marcada a mano (cotaP1/cotaP2/cotaMetros, para
+  // una foto subida por el usuario) o ya conocida (ppmConocido, cuando la captura vino
+  // de "Buscar en Google Maps" -- ahi no hace falta marcar nada, el zoom real ya la da).
+  // Si el usuario marco una escala a mano SOBRE una captura de Maps (para calibrar/
+  // corregir), esa marca manual gana sobre la de Maps.
+  const cotaMetros = Number($('autoCotaMetros').value);
+  const hayEscalaManual = est.cotaP1 && est.cotaP2 && cotaMetros > 0;
+  if (!hayEscalaManual && !est.ppmConocido) {
+    alert('Falta la escala: marca 2 puntos y su distancia real en metros, o busca la captura en Google Maps (ya trae la escala).');
+    return;
+  }
+  if (!est.techoP1 || !est.techoP2) {
+    alert('Falta marcar las 2 esquinas del techo.');
+    return;
+  }
+  est.angulo = Number($('autoAngulo').value) || 0;
+  let ppm;
+  if (hayEscalaManual) {
+    est.cotaMetros = cotaMetros;
+    ppm = Math.hypot(est.cotaP2[0] - est.cotaP1[0], est.cotaP2[1] - est.cotaP1[1]) / est.cotaMetros;
+  } else {
+    ppm = est.ppmConocido;
+  }
+  const panelWpx = PANEL_ANCHO_M * ppm, panelHpx = PANEL_ALTO_M * ppm;
+  const gapPx = Math.max(1, panelWpx * 0.04);
+  const { paneles, cabenTodos, colocados } = panelesEnRectangulo({
+    x0: est.techoP1[0], y0: est.techoP1[1], x1: est.techoP2[0], y1: est.techoP2[1],
+    n: ultimoResultado.n, panelWpx, panelHpx, gapPx, angulo: est.angulo,
+  });
+  est.paneles = paneles;
+  guardarProyecto(clienteActual, proyectoActual);
+  editorSembrador.cargar(paneles);
+  $('estadoSembradorAuto').textContent = cabenTodos
+    ? `${colocados} paneles sembrados. Arrastra, gira o borra (tecla Supr) a mano si hace falta ajustar.`
+    : `Aviso: el rectángulo marcado solo alcanza para ${colocados} de ${ultimoResultado.n} paneles -- agranda el techo marcado o ajusta a mano.`;
+});
+
+$('btnGuardarSembradoAuto').addEventListener('click', () => {
+  const paneles = editorSembrador.obtener();
+  if (!paneles.length) { alert('Todavía no hay paneles sembrados -- usa "③ Sembrar paneles" primero.'); return; }
+  const foto = hornearImagenSembrado($('imgSembradorAuto'), paneles);
+  proyectoActual.fotoSembrado = foto;
+  proyectoActual.sembradoFuente = 'auto';
+  guardarProyecto(clienteActual, proyectoActual);
+  mostrarPreviaSembrado(foto);
+  if (ultimoResultado) { ultimoResultado.fotoSembrado = foto; renderSecciones(ultimoResultado); }
+  alert('Guardado -- esta imagen es ahora la activa en la sección 6 y el PDF.');
+});
+
+$('btnQuitarSembradoAuto').addEventListener('click', () => {
+  if (!proyectoActual) return;
+  proyectoActual.sembradorAuto = null;
+  guardarProyecto(clienteActual, proyectoActual);
+  mostrarSembradorAuto(null);
+});
+
+function aplicarFuenteSembrado(valor) {
+  const val = valor === 'auto' ? 'auto' : 'manual';
+  const radio = document.querySelector(`input[name="fuenteSembrado"][value="${val}"]`);
+  if (radio) radio.checked = true;
+  $('panelSembradoManual').hidden = val !== 'manual';
+  $('panelSembradoAuto').hidden = val !== 'auto';
+}
+
+document.querySelectorAll('input[name="fuenteSembrado"]').forEach((r) => {
+  r.addEventListener('change', () => {
+    const val = document.querySelector('input[name="fuenteSembrado"]:checked').value;
+    $('panelSembradoManual').hidden = val !== 'manual';
+    $('panelSembradoAuto').hidden = val !== 'auto';
+    if (val === 'auto' && !$('autoDireccionMaps').value) {
+      $('autoDireccionMaps').value = $('domicilio').value || '';
+    }
+    if (proyectoActual) { proyectoActual.sembradoFuente = val; guardarProyecto(clienteActual, proyectoActual); }
+  });
+});
+
+function mostrarSembradorAuto(estado) {
+  terminarMarcadoSembrador();
+  const panel = $('editorAutoSembrado');
+  if (!estado || !estado.imagenDataUrl) {
+    panel.hidden = true;
+    $('imgSembradorAuto').src = '';
+    $('svgMarcadoresAuto').innerHTML = '';
+    editorSembrador.cargar([]);
+    return;
+  }
+  panel.hidden = false;
+  const img = $('imgSembradorAuto');
+  img.onload = () => {
+    $('svgMarcadoresAuto').setAttribute('viewBox', `0 0 ${img.naturalWidth} ${img.naturalHeight}`);
+    $('svgSembradorAuto').setAttribute('viewBox', `0 0 ${img.naturalWidth} ${img.naturalHeight}`);
+    dibujarMarcadoresSembrador();
+    editorSembrador.cargar(estado.paneles || []);
+  };
+  img.src = estado.imagenDataUrl;
+  $('autoCotaMetros').value = estado.cotaMetros || '';
+  $('autoAngulo').value = estado.angulo || 0;
+  $('sembradorAutoN').textContent = ultimoResultado ? ultimoResultado.n : '--';
+  $('pasoEscalaTexto').textContent = estado.ppmConocido ? '① Marcar escala (opcional -- ya se sabe por Maps)' : '① Marcar escala';
+  if (!$('autoDireccionMaps').value) {
+    $('autoDireccionMaps').value = estado.direccionFormateada || $('domicilio').value || '';
+  }
+}
 
 // ---------------- Recibo: leer + autollenar + auto-calcular ----------------
 // Campos que el lector de recibo puede marcar como "no detectado" y que SI tienen un
@@ -1152,6 +1415,10 @@ function calcularYRenderizar() {
   renderFinanciamiento(r);
   renderComparacion();
   $('tabPdf').hidden = false;
+  // El sembrador automatico siembra exactamente r.n (el mismo numero ya calculado,
+  // nunca un segundo criterio de dimensionamiento aparte) -- se actualiza aqui para que
+  // quede al dia si se recalcula con datos distintos mientras esa pestaña esta abierta.
+  $('sembradorAutoN').textContent = r.n;
   return r;
 }
 

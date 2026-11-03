@@ -159,7 +159,16 @@ export function crearProyecto(cliente, { nombre } = {}) {
     // pantalla (atenuado) para que Isaac pueda reactivarlo, el estado es lo que decide
     // si queda incluido.
     textosOcultos: {},
-    fotoSembrado: null, // data URL JPEG comprimido (ver imagenes.js) de la distribucion de paneles sobre el techo
+    fotoSembrado: null, // data URL JPEG comprimido (ver imagenes.js) de la distribucion de paneles sobre el techo -- es
+    // la UNICA imagen activa que se muestra en la seccion 6/PDF, venga de la foto manual o de "Guardar" del sembrador
+    // automatico (ver abajo) -- siempre gana la ultima que se guarde, no hay bandera de cual fuente esta "prendida".
+    sembradoFuente: 'manual', // 'manual' | 'auto' -- solo recuerda que pestaña dejar abierta al reabrir, cosmetico
+    // sembradorAuto: estado editable del sembrador automatico (pedido explicito del usuario, 2026-11-02 -- "sembrador
+    // de paneles", portado de js/sembrador.js a partir del repo cotizador-fv-cfe/sembrador_de_paneles). Independiente
+    // de fotoSembrado para poder seguir ajustando el diseño sin perderlo aunque la foto manual sea la activa ahorita.
+    sembradorAuto: null, // { imagenDataUrl, anchoImg, altoImg, ppmConocido, direccionFormateada, cotaP1, cotaP2,
+    // cotaMetros, techoP1, techoP2, angulo, paneles } -- ppmConocido/direccionFormateada solo se llenan cuando la
+    // captura vino de "Buscar en Google Maps" (Edge Function captura-azotea), null si se subio una foto propia.
     archivosRecibo: null, // array de {nombre,tipo,url,ruta} -- archivos originales subidos a Supabase Storage (ver supabase.js)
     archivosVerificacion: null, // igual forma que archivosRecibo, para el documento de verificacion en sitio (evidencia adjunta, no se lee)
   };

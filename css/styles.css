@@ -123,6 +123,23 @@ div.campo-no-detectado {
 }
 .seccion-img-sembrado { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); margin: 10px 0; display: block; }
 
+/* ===================== Sembrador automatico de paneles (beta) ===================== */
+.fuente-sembrado-selector { gap: 18px; align-items: center; margin: 4px 0 10px; }
+.fuente-sembrado-selector label { display: flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer; }
+.sembrador-pasos { align-items: center; gap: 14px; margin: 10px 0 6px; }
+.sembrador-pasos label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+.stage-sembrador {
+  position: relative; display: inline-block; max-width: 100%; line-height: 0;
+  background: #ddd; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); margin: 8px 0;
+}
+.stage-sembrador img { display: block; max-width: 100%; height: auto; }
+.stage-sembrador svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+#svgMarcadoresAuto { pointer-events: none; }
+.panel-sembrador { fill: rgba(15, 139, 141, .78); stroke: #fff; stroke-width: 1.2; cursor: move; }
+.panel-sembrador.sel { fill: rgba(201, 154, 46, .88); stroke: #111; stroke-width: 1.6; }
+.handle-sembrador { fill: #fff; stroke: #111; stroke-width: 1; cursor: grab; }
+.guia-sembrador { stroke: #fff; stroke-width: 1; }
+
 .pie-cliente { max-width: 980px; margin: 0 auto; padding: 8px 16px 24px; text-align: center; }
 
 /* ===================== Envios de clientes (bandeja de entrada) ===================== */
