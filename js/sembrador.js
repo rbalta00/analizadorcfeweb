@@ -66,6 +66,73 @@ export function panelesEnRectangulo({ x0, y0, x1, y1, n, panelWpx, panelHpx, gap
 
 function round2(x) { return Math.round(x * 100) / 100; }
 
+// ejesDelTecho: dado el lado p1->p2 y un punto p3 del lado opuesto, regresa el angulo
+// real (grados), el largo/ancho detectados, y los vectores unitarios u (a lo largo del
+// lado) / v (perpendicular, hacia p3) -- base compartida por panelesEnTecho() y por la
+// vista previa del marcado (app.js), para que lo que se ve al marcar sea exactamente el
+// rectangulo que despues se siembra.
+export function ejesDelTecho(p1, p2, p3) {
+  const ex = p2[0] - p1[0], ey = p2[1] - p1[1];
+  const largo = Math.hypot(ex, ey);
+  if (!(largo > 0)) return null;
+  const anguloEdge = Math.atan2(ey, ex) * 180 / Math.PI;
+  const ux = ex / largo, uy = ey / largo;
+  let vx = -uy, vy = ux;
+  const proj = (p3[0] - p1[0]) * vx + (p3[1] - p1[1]) * vy;
+  const ancho = Math.abs(proj);
+  if (proj < 0) { vx = -vx; vy = -vy; }
+  return { largo, ancho, anguloEdge, ux, uy, vx, vy };
+}
+
+// esquinasDelTecho: las 4 esquinas del rectangulo real detectado, en pixeles de la
+// imagen -- para dibujar la guia visual mientras se marca.
+export function esquinasDelTecho(p1, p2, p3) {
+  const ejes = ejesDelTecho(p1, p2, p3);
+  if (!ejes) return null;
+  const { largo, ancho, ux, uy, vx, vy } = ejes;
+  const c = (s, t) => [p1[0] + s * ux + t * vx, p1[1] + s * uy + t * vy];
+  return [c(0, 0), c(largo, 0), c(largo, ancho), c(0, ancho)];
+}
+
+// panelesEnTecho: siembra alineado al techo REAL tal como se ve en la foto (no a los ejes
+// de la pantalla) -- se marca con 3 clics: p1->p2 es un lado del techo (da el angulo y el
+// largo), p3 es cualquier punto del lado opuesto (da el ancho). Pedido explicito del
+// usuario, 2026-11-02: "intenta tu primero poner los paneles sobre la azotea" -- antes
+// panelesEnRectangulo() siempre sembraba sin rotar (alineado a la pantalla), aunque la
+// azotea de la foto estuviera en diagonal; esto reusa exactamente esa misma rejilla pero
+// en el sistema de coordenadas LOCAL del techo (ejes u/v del lado marcado), y convierte
+// cada panel de vuelta a pixeles de la imagen. anguloManualExtra es el "Ángulo del
+// bloque" que el usuario puede seguir ajustando a mano encima del angulo ya detectado --
+// el usuario puede seguir reorientando, esto solo mejora el primer intento automatico.
+export function panelesEnTecho({ p1, p2, p3, n, panelWpx, panelHpx, gapPx = 0, anguloManualExtra = 0 }) {
+  const ejes = ejesDelTecho(p1, p2, p3);
+  if (!ejes) return { paneles: [], colocados: 0, cabenTodos: false, anguloDetectado: 0 };
+  const { largo, ancho, anguloEdge, ux, uy, vx, vy } = ejes;
+  if (!(ancho > 0)) return { paneles: [], colocados: 0, cabenTodos: false, anguloDetectado: anguloEdge };
+
+  const local = panelesEnRectangulo({ x0: 0, y0: 0, x1: largo, y1: ancho, n, panelWpx, panelHpx, gapPx, angulo: 0 });
+  const anguloTotal = anguloEdge + (anguloManualExtra || 0);
+  const radExtra = (anguloManualExtra || 0) * Math.PI / 180;
+  const cosExtra = Math.cos(radExtra), sinExtra = Math.sin(radExtra);
+  const centroLocalX = largo / 2, centroLocalY = ancho / 2;
+
+  const paneles = local.paneles.map((p) => {
+    // offset del panel respecto al centro del techo, en el sistema local (u,v) -- ya
+    // alineado al angulo de la foto -- y despues, si hay angulo manual extra, se rota
+    // esa posicion otro poco encima (fine-tune, no reemplaza el auto-detectado).
+    let ox = (p.cx - centroLocalX) * ux + (p.cy - centroLocalY) * vx;
+    let oy = (p.cx - centroLocalX) * uy + (p.cy - centroLocalY) * vy;
+    if (anguloManualExtra) {
+      const rox = ox * cosExtra - oy * sinExtra, roy = ox * sinExtra + oy * cosExtra;
+      ox = rox; oy = roy;
+    }
+    const centroGlobalX = p1[0] + centroLocalX * ux + centroLocalY * vx;
+    const centroGlobalY = p1[1] + centroLocalX * uy + centroLocalY * vy;
+    return { cx: round2(centroGlobalX + ox), cy: round2(centroGlobalY + oy), w: p.w, h: p.h, ang: round2(anguloTotal) };
+  });
+  return { paneles, colocados: local.colocados, cabenTodos: local.cabenTodos, anguloDetectado: round2(anguloEdge) };
+}
+
 // ---------------------------------------------------------------------------
 // Editor interactivo: mover (arrastrar panel), girar (arrastrar el circulo blanco),
 // seleccion multiple (shift+clic), teclado (flechas/[ ]/Supr). Mismo comportamiento que

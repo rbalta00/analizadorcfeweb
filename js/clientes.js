@@ -166,9 +166,11 @@ export function crearProyecto(cliente, { nombre } = {}) {
     // sembradorAuto: estado editable del sembrador automatico (pedido explicito del usuario, 2026-11-02 -- "sembrador
     // de paneles", portado de js/sembrador.js a partir del repo cotizador-fv-cfe/sembrador_de_paneles). Independiente
     // de fotoSembrado para poder seguir ajustando el diseño sin perderlo aunque la foto manual sea la activa ahorita.
-    sembradorAuto: null, // { imagenDataUrl, anchoImg, altoImg, cotaP1, cotaP2, cotaMetros, techoP1, techoP2, angulo, paneles }
+    sembradorAuto: null, // { imagenDataUrl, anchoImg, altoImg, cotaP1, cotaP2, cotaMetros, techoP1, techoP2, techoP3, angulo, paneles }
     // La captura se consigue abriendo Google Maps gratis (boton "Abrir en Google Maps") y subiendo una captura de
-    // pantalla propia -- sin API de pago ni facturacion, decision explicita del usuario, 2026-11-02.
+    // pantalla propia -- sin API de pago ni facturacion, decision explicita del usuario, 2026-11-02. El techo son 3
+    // puntos (no 2): p1->p2 es un lado del techo tal como se ve en la foto (da el angulo real), p3 el lado opuesto
+    // -- el sembrador se alinea solo al techo en vez de sembrar siempre sin rotar (ver panelesEnTecho en sembrador.js).
     archivosRecibo: null, // array de {nombre,tipo,url,ruta} -- archivos originales subidos a Supabase Storage (ver supabase.js)
     archivosVerificacion: null, // igual forma que archivosRecibo, para el documento de verificacion en sitio (evidencia adjunta, no se lee)
   };

@@ -306,8 +306,9 @@
         <p class="nota">1) Abre Google Maps con la dirección del recibo (gratis, sin llaves ni facturación) y cambia a
           vista satelital con el botón de capas. 2) Toma una captura de pantalla de la azotea (cualquier herramienta
           de tu sistema). 3) Súbela aquí abajo. Marca la escala real (2 clics sobre algo que midas, ej. la barra de
-          escala que Maps ya dibuja en la esquina) y las 2 esquinas del techo (2 clics), y el sembrador coloca solos
-          los <strong id="sembradorAutoN">--</strong> paneles que ya calculó el cotizador. Después puedes
+          escala que Maps ya dibuja en la esquina) y el techo (3 clics: 2 a lo largo de un lado del techo tal como se
+          ve en la foto, 1 más del lado opuesto) -- el sembrador detecta solo el ángulo real del techo en la foto y
+          coloca alineados los <strong id="sembradorAutoN">--</strong> paneles que ya calculó el cotizador. Después puedes
           arrastrar/girar/borrar cada panel a mano. No evita obstáculos (tinacos, equipos) automáticamente -- si un
           panel cae encima de uno, bórralo o muévelo a mano. No es un plano de ingeniería.</p>
         <div class="fila">
@@ -321,8 +322,8 @@
           <div class="fila sembrador-pasos">
             <button type="button" id="btnMarcarEscala" class="btn-link">① Marcar escala</button>
             <label>Distancia real de esos 2 puntos (m)<input type="number" id="autoCotaMetros" step="0.1" min="0.1" style="width:90px" /></label>
-            <button type="button" id="btnMarcarTecho" class="btn-link">② Marcar esquinas del techo</button>
-            <label>Ángulo del bloque (°)<input type="number" id="autoAngulo" value="0" step="1" style="width:70px" /></label>
+            <button type="button" id="btnMarcarTecho" class="btn-link">② Marcar el techo (3 clics)</button>
+            <label>Ajuste de ángulo extra (°)<input type="number" id="autoAngulo" value="0" step="1" style="width:70px" title="El ángulo del techo ya se detecta solo del marcado -- esto es un ajuste fino encima, opcional" /></label>
             <button type="button" id="btnSembrarAuto" class="btn-link">③ Sembrar paneles</button>
           </div>
           <div id="estadoSembradorAuto" class="nota"></div>

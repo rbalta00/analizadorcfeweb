@@ -22,7 +22,7 @@ import {
 } from './formularioRecibo.js';
 import { supabaseListar, supabaseActualizar, supabaseEliminar, supabaseSubirArchivo, supabaseEliminarArchivo } from './supabase.js';
 import { subirANube, bajarDeNube } from './nube.js';
-import { panelesEnRectangulo, crearEditorPaneles, hornearImagenSembrado, PANEL_ANCHO_M, PANEL_ALTO_M } from './sembrador.js';
+import { panelesEnTecho, esquinasDelTecho, crearEditorPaneles, hornearImagenSembrado, PANEL_ANCHO_M, PANEL_ALTO_M } from './sembrador.js';
 
 window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 
@@ -797,9 +797,19 @@ function dibujarMarcadoresSembrador() {
   }
   const colorEscala = '#c99a2e', colorTecho = '#0f8b8d';
   linea(est && est.cotaP1, est && est.cotaP2, colorEscala);
-  linea(est && est.techoP1, est && est.techoP2, colorTecho);
   punto(est && est.cotaP1, colorEscala); punto(est && est.cotaP2, colorEscala);
-  punto(est && est.techoP1, colorTecho); punto(est && est.techoP2, colorTecho);
+  // El techo son 3 puntos (no 2): p1->p2 es el lado del techo tal como se ve en la foto
+  // (da el angulo real, no el de la pantalla), p3 marca el lado opuesto -- ver
+  // panelesEnTecho()/esquinasDelTecho() en sembrador.js. Se dibuja el rectangulo real
+  // detectado (sus 4 esquinas) como guia visual, para que lo marcado coincida exacto con
+  // lo que se va a sembrar.
+  if (est && est.techoP1 && est.techoP2 && est.techoP3) {
+    const esquinas = esquinasDelTecho(est.techoP1, est.techoP2, est.techoP3);
+    if (esquinas) esquinas.forEach((esq, i) => linea(esq, esquinas[(i + 1) % 4], colorTecho));
+  } else if (est && est.techoP1 && est.techoP2) {
+    linea(est.techoP1, est.techoP2, colorTecho);
+  }
+  punto(est && est.techoP1, colorTecho); punto(est && est.techoP2, colorTecho); punto(est && est.techoP3, colorTecho);
   if (modoMarcadoSembrador) {
     const color = modoMarcadoSembrador === 'escala' ? colorEscala : colorTecho;
     puntosMarcadosSembrador.forEach((p) => punto(p, color));
@@ -820,7 +830,7 @@ function empezarMarcadoSembrador(tipo) {
   $('svgSembradorAuto').dataset.modoMarcado = tipo;
   $('estadoSembradorAuto').textContent = tipo === 'escala'
     ? 'Haz clic en 2 puntos de distancia real conocida sobre la imagen (ej. el ancho de una banqueta, un auto, un predio vecino).'
-    : 'Haz clic en 2 esquinas opuestas del rectángulo donde se van a sembrar los paneles.';
+    : 'Haz clic en 2 puntos a lo largo de UN lado del techo tal como se ve en la foto (1→2, define el ángulo real) y luego 1 punto sobre el lado opuesto (3, define el ancho).';
   dibujarMarcadoresSembrador();
 }
 
@@ -832,10 +842,11 @@ $('svgSembradorAuto').addEventListener('click', (e) => {
   const p = pt.matrixTransform(svg.getScreenCTM().inverse());
   puntosMarcadosSembrador.push([Math.round(p.x), Math.round(p.y)]);
   dibujarMarcadoresSembrador();
-  if (puntosMarcadosSembrador.length === 2) {
+  const necesarios = modoMarcadoSembrador === 'escala' ? 2 : 3;
+  if (puntosMarcadosSembrador.length === necesarios) {
     const est = proyectoActual.sembradorAuto;
     if (modoMarcadoSembrador === 'escala') { est.cotaP1 = puntosMarcadosSembrador[0]; est.cotaP2 = puntosMarcadosSembrador[1]; }
-    else { est.techoP1 = puntosMarcadosSembrador[0]; est.techoP2 = puntosMarcadosSembrador[1]; }
+    else { est.techoP1 = puntosMarcadosSembrador[0]; est.techoP2 = puntosMarcadosSembrador[1]; est.techoP3 = puntosMarcadosSembrador[2]; }
     guardarProyecto(clienteActual, proyectoActual);
     terminarMarcadoSembrador();
     dibujarMarcadoresSembrador();
@@ -853,7 +864,7 @@ $('archivoAutoSembrado').addEventListener('change', async (e) => {
     const foto = await archivoAImagenComprimida(file, { maxAncho: 1600, calidad: 0.85 });
     proyectoActual.sembradorAuto = {
       imagenDataUrl: foto.dataUrl, anchoImg: foto.ancho, altoImg: foto.alto,
-      cotaP1: null, cotaP2: null, cotaMetros: null, techoP1: null, techoP2: null, angulo: 0, paneles: [],
+      cotaP1: null, cotaP2: null, cotaMetros: null, techoP1: null, techoP2: null, techoP3: null, angulo: 0, paneles: [],
     };
     guardarProyecto(clienteActual, proyectoActual);
     mostrarSembradorAuto(proyectoActual.sembradorAuto);
@@ -890,25 +901,32 @@ $('btnSembrarAuto').addEventListener('click', () => {
     alert('Falta marcar la escala (2 puntos) y su distancia real en metros.');
     return;
   }
-  if (!est.techoP1 || !est.techoP2) {
-    alert('Falta marcar las 2 esquinas del techo.');
+  if (!est.techoP1 || !est.techoP2 || !est.techoP3) {
+    alert('Falta marcar el techo: 2 puntos a lo largo de un lado y 1 punto del lado opuesto (3 clics).');
     return;
   }
   est.cotaMetros = cotaMetros;
-  est.angulo = Number($('autoAngulo').value) || 0;
+  // "Ángulo del bloque" ahora es un AJUSTE fino encima del ángulo que ya se detecta solo
+  // del lado marcado (ejesDelTecho/panelesEnTecho) -- antes era el único ángulo y
+  // siempre sembraba sin rotar salvo que el usuario lo escribiera a mano. Pedido
+  // explícito del usuario, 2026-11-02: "intenta tú primero poner los paneles sobre la
+  // azotea" -- el primer intento ya sale alineado a como se ve el techo en la foto.
+  const anguloManualExtra = Number($('autoAngulo').value) || 0;
   const ppm = Math.hypot(est.cotaP2[0] - est.cotaP1[0], est.cotaP2[1] - est.cotaP1[1]) / est.cotaMetros;
   const panelWpx = PANEL_ANCHO_M * ppm, panelHpx = PANEL_ALTO_M * ppm;
   const gapPx = Math.max(1, panelWpx * 0.04);
-  const { paneles, cabenTodos, colocados } = panelesEnRectangulo({
-    x0: est.techoP1[0], y0: est.techoP1[1], x1: est.techoP2[0], y1: est.techoP2[1],
-    n: ultimoResultado.n, panelWpx, panelHpx, gapPx, angulo: est.angulo,
+  const { paneles, cabenTodos, colocados, anguloDetectado } = panelesEnTecho({
+    p1: est.techoP1, p2: est.techoP2, p3: est.techoP3,
+    n: ultimoResultado.n, panelWpx, panelHpx, gapPx, anguloManualExtra,
   });
+  est.angulo = anguloManualExtra;
   est.paneles = paneles;
   guardarProyecto(clienteActual, proyectoActual);
   editorSembrador.cargar(paneles);
+  const anguloTxt = `(alineados ${anguloDetectado.toFixed(1)}° al techo marcado${anguloManualExtra ? ` + ${anguloManualExtra}° extra` : ''})`;
   $('estadoSembradorAuto').textContent = cabenTodos
-    ? `${colocados} paneles sembrados. Arrastra, gira o borra (tecla Supr) a mano si hace falta ajustar.`
-    : `Aviso: el rectángulo marcado solo alcanza para ${colocados} de ${ultimoResultado.n} paneles -- agranda el techo marcado o ajusta a mano.`;
+    ? `${colocados} paneles sembrados ${anguloTxt}. Arrastra, gira o borra (tecla Supr) a mano si hace falta ajustar.`
+    : `Aviso: el techo marcado solo alcanza para ${colocados} de ${ultimoResultado.n} paneles ${anguloTxt} -- agranda el techo marcado o ajusta a mano.`;
 });
 
 $('btnGuardarSembradoAuto').addEventListener('click', () => {
