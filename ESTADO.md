@@ -278,15 +278,58 @@ se reinventa una formula aqui, solo se traduce.
       renderizaba en el entorno de prueba de Edge): imagen de prueba subida,
       comprimida, mostrada en pantalla, e incrustada correctamente en una pagina
       nueva "07 | Distribución de paneles..." con renumeracion dinamica correcta.
-- [ ] Fotografias de condiciones generales del inmueble (sombras, cubierta, etc.,
-      mas alla de la foto del sembrado) -- sigue sin construirse, declarado como
-      pendiente en la propia seccion 6 ("No se capturan fotografías en esta versión").
-- [ ] Conectar el texto editado de las 21 secciones tambien al PDF exportado (hoy
-      solo se ve en pantalla, ver nota arriba).
-- [ ] Simulador de financiamiento, editor de precios de materiales y
-      deduccion ISR (funcionalidades de `cotizador_app.py` no portadas a esta
-      version -- fuera del alcance de "las 21 secciones", deliberadamente no
-      tocadas esta sesion).
+- [x] **Simulador de financiamiento, editor de precios de materiales y deducción ISR**
+      -- este checklist decía "no portadas a esta versión" pero SÍ se construyeron en
+      una sesión posterior sin actualizar esta nota (`renderFinanciamiento`/
+      `renderEditorPrecios` en `app.js`, deducción ISR en `resultado.js`/`secciones.js`)
+      -- corregido 2026-11-03 tras una auditoría pedida por el usuario ("revisa si no
+      nos falta otra funcionalidad") que encontró este checklist desactualizado.
+- [x] **Fotografías de condiciones generales del inmueble** (sombras, cubierta, tablero,
+      etc., distinto de la foto del sembrado) -- 2026-11-03. Hasta 6 fotos por
+      cotización (`proyecto.fotosInmueble[]`, comprimidas más agresivo que
+      `fotoSembrado` -- 900px/0.6 de calidad -- para no comerse la cuota de
+      localStorage entre varias), cada una con etiqueta corta editable. Se ven en la
+      sección 6 (galería bajo "Condiciones actuales del inmueble") y en una página
+      condicional nueva del PDF (`pagina06c` en `propuesta.js`, grid de hasta 3
+      columnas, solo existe si hay al menos 1 foto).
+- [x] **Aviso cuando el texto editado en pantalla no va a reflejarse en el PDF**
+      (2026-11-03) -- la limitación real sigue sin resolverse (conectar las dos
+      fuentes de texto requiere rehacer `propuesta.js` para que cada página use el
+      mismo esquema de ids secuenciales que `secciones.js`, con riesgo real de
+      desalinear texto entre las 22+ páginas del generador -- no se intentó por ese
+      riesgo). Lo que SÍ se agregó: antes de generar cualquiera de las 3 variantes de
+      la cotización completa (`confirmarSiHayTextoEditadoSinReflejarEnPdf` en
+      `app.js`), si hay párrafos editados para ese proyecto, se avisa cuántos y se
+      pide confirmar -- antes la limitación solo vivía documentada aquí, nadie se
+      enteraba al momento de exportar.
+- [x] **Aviso de tarifa GDBT sin validar contra un recibo real** (2026-11-03) --
+      GDBT usa el mismo motor que GDMTO/GDMTH (ya probado con varios recibos reales),
+      pero sigue siendo la única de las 6 tarifas soportadas sin un caso real propio
+      que la confirme. No se puede "arreglar" con código -- hace falta un recibo real
+      de un cliente con esta tarifa. Mientras no aparezca uno, se avisa explícito en
+      pantalla (sección 3) y en el PDF (página 3) cada vez que se calcula con GDBT.
+- [x] **`cliente.html` ahora exige los campos de cargos antes de enviar** (2026-11-03)
+      -- antes solo se validaban días/kWh del período; los 7 campos de cargos (y el
+      período) vienen prellenados con valores de EJEMPLO en el formulario (para que no
+      se vea vacío/roto), así que alguien podía pulsar "Enviar" sin tocar nada y el
+      envío se veía "completo" con datos ficticios. Se agregaron dos candados: (1)
+      mismo bloqueo que ya existía en `index.html` -- si se subió un recibo y algo
+      quedó marcado en naranja (no detectado), no se puede enviar sin llenarlo; (2)
+      casilla nueva obligatoria "Confirmo que estos datos son de mi recibo real" --
+      cubre el caso que (1) no cubre, cuando NUNCA se subió ningún recibo y por lo
+      tanto nada se marcó en naranja.
+- [ ] Conectar el texto editado de las 21 secciones tambien al PDF exportado de forma
+      real (hoy solo hay un aviso de que no está conectado, ver arriba) -- pendiente
+      real, requiere una revisión cuidadosa página por página de `propuesta.js`.
+- [ ] Autenticación del editor (`index.html`) -- agregado 2026-11-03 un
+      `middleware.js` (mismo patrón ya probado en `administradorinvitamx`, HTTP Basic
+      Auth vía variable de entorno `ADMIN_PASSWORD` en Vercel) que protege SOLO `/` y
+      `/index.html` -- `cliente.html` y todos los archivos compartidos (js/css/lib/
+      assets/manifest/service-worker) se dejan pasar siempre, sin login. **Mientras no
+      se configure `ADMIN_PASSWORD` en Vercel, no bloquea nada** (sigue público, igual
+      que hoy) -- pendiente que el usuario configure esa variable si quiere activarlo.
+      Antes de este cambio, cualquiera con la URL del deploy veía datos de clientes
+      reales sin ninguna restricción.
 - [ ] Decidir si esto reemplaza a `app/` o conviven mientras se termina.
 - [x] **Publicado en Vercel, con backend compartido (Supabase)** -- pedido explicito
       del usuario: "que cualquier cliente pueda cargar sus datos, le mande un link...

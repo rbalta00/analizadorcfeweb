@@ -144,6 +144,19 @@ $('archivoRecibo').addEventListener('change', async (e) => {
   await procesarArchivosCliente(archivosAcumulados);
 });
 
+// Mismo criterio de bloqueo que index.html (faltantesVisiblesParaCalcular en app.js):
+// si el recibo se leyó pero algún campo de cargos quedó marcado en naranja (no se
+// detectó solo y el cliente no lo llenó a mano), no se debe enviar con el valor por
+// defecto -- Isaac recibiría un envío "completo" que en realidad trae ceros donde
+// debería haber un importe real. Antes esta página solo exigía días/kWh del período;
+// si el cliente no subía recibo (o subía uno que no se leyó bien), podía enviar los 7
+// campos de cargos vacíos sin ningún aviso.
+function faltantesVisiblesParaEnviar() {
+  return Array.from(document.querySelectorAll('#contenedorFormulariosTarifa .campo-no-detectado'))
+    .filter(el2 => el2.offsetParent !== null)
+    .map(el2 => ({ id: el2.id, label: ETIQUETA_CAMPO[el2.id] || el2.id }));
+}
+
 $('btnEnviar').addEventListener('click', async () => {
   const estadoEl = $('estadoEnvio');
   const tarifa = $('tarifa').value;
@@ -155,6 +168,27 @@ $('btnEnviar').addEventListener('click', async () => {
   if (!periodoDias || !periodoKwh) {
     estadoEl.className = 'nota aviso';
     estadoEl.textContent = 'Faltan los días y/o los kWh del período -- revisa la sección 3 antes de enviar.';
+    return;
+  }
+  const faltan = faltantesVisiblesParaEnviar();
+  if (faltan.length) {
+    estadoEl.className = 'nota aviso';
+    estadoEl.textContent = 'Faltan datos marcados en naranja arriba (' + faltan.map(x => x.label).join(', ') +
+      '). Complétalos a mano antes de enviar -- si falta un dato, el cálculo sale mal.';
+    const primero = document.getElementById(faltan[0].id);
+    if (primero) primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  // Los campos de cargos vienen prellenados con valores de ejemplo (para que el
+  // formulario no se vea vacío/roto) -- sin esta casilla, alguien podía pulsar
+  // "Enviar" sin tocar nada y el envío se veía "completo" aunque fueran puros datos
+  // de ejemplo (periodo/cargos no detectados nunca se marcan en naranja si no se
+  // subió ningún recibo). Se exige siempre, incluso si se subió recibo, para que el
+  // cliente de verdad revise los datos antes de mandarlos.
+  if (!$('confirmoDatosReales').checked) {
+    estadoEl.className = 'nota aviso';
+    estadoEl.textContent = 'Marca la casilla de confirmación (abajo) antes de enviar -- confirma que los datos son de tu recibo real, no los de ejemplo.';
+    $('confirmoDatosReales').scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
   const nombre = $('nombreDeclarado').value.trim();

@@ -756,6 +756,12 @@ function s03(r, _leido, onToggle) {
     'disponible la electricidad que usa.'));
   art.append(p('Para valorar el ahorro no se multiplica toda la producción solar por el precio medio de la ' +
     'factura: cada uno de estos cargos tiene su propia regla, explicada en la sección siguiente.'));
+  if (r.tarifa === 'GDBT') {
+    art.append(avisoCream('Tarifa GDBT sin validar contra un recibo real: la fórmula usa el mismo motor que ' +
+      'GDMTO/GDMTH (probado y verificado con varios recibos reales de esas tarifas), pero a diferencia de ellas, ' +
+      'GDBT no se ha confirmado todavía contra un recibo real de un cliente con esta tarifa específica. Revisar a ' +
+      'mano el desglose de este recibo antes de confiar en el resultado.'));
+  }
   art.append(bloqueCalculo(3, r.esDomestica ? calculoReciboDomestico(r) : calculoReciboConDemanda(r), r));
   return art;
 }
@@ -1050,6 +1056,21 @@ function s06(r, _leido, onToggle) {
       '<strong>Qué implica para la propuesta:</strong> estos datos son los que la persona declaró o se observaron ' +
       'en sitio; no reemplazan un levantamiento técnico. No se deduce tensión o fases solo por el número de hilos ' +
       'del recibo, y ninguna fotografía o inspección visual aquí descrita es un dictamen estructural.'));
+  }
+  const fotosInm = r.fotosInmueble || [];
+  if (fotosInm.length) {
+    const galeria = el('div', 'galeria-fotos-inmueble-vista');
+    fotosInm.forEach((foto, i) => {
+      const fig = document.createElement('figure');
+      const img = document.createElement('img');
+      img.src = foto.dataUrl;
+      img.alt = foto.etiqueta || `Foto del inmueble ${i + 1}`;
+      const cap = document.createElement('figcaption');
+      cap.textContent = foto.etiqueta || `Foto ${i + 1}`;
+      fig.append(img, cap);
+      galeria.append(fig);
+    });
+    art.append(galeria);
   }
   const genPanelMensual = r.n ? r.gen / 12 / r.n : 0;
   const consumoMensualRef = r.annualKwh / 12;

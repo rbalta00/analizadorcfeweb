@@ -378,8 +378,13 @@
       <div class="fila">
         <label>Notas de la visita<input id="inmNotas" type="text" /></label>
       </div>
-      <p class="nota">Pendiente real: no hay captura de fotografías en esta versión — adjúntalas por fuera del
-        sistema por ahora. No se deduce tensión o fases solo por el número de hilos del recibo.</p>
+      <h4>Fotos de condiciones del inmueble (sombras, cubierta, tablero, etc.)</h4>
+      <p class="nota">Hasta 6 fotos (se comprimen automáticamente al subirlas). Ponle una etiqueta corta a cada
+        una (ej. "Cubierta", "Sombra del árbol", "Tablero principal") para que se identifiquen en la cotización.
+        Distinto de la foto del sembrado de arriba, que es solo la distribución de paneles.</p>
+      <input type="file" id="archivoFotoInmueble" accept=".jpg,.jpeg,.png,.webp" multiple />
+      <div id="galeriaFotosInmueble" class="galeria-fotos-inmueble" hidden></div>
+      <p class="nota">No se deduce tensión o fases solo por el número de hilos del recibo.</p>
 
       <div class="acciones"><button id="btnCalcular" class="btn-primario">Calcular</button></div>
       <p class="nota" id="estadoCalculo"></p>

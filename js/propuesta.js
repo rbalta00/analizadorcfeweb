@@ -13,7 +13,7 @@
 // cambian -- esa division es solo del lado del PDF.
 import {
   CONTENT_W, CONTENT_TOP, CONTENT_BOTTOM, MARGIN_L, headX, subX, bodyX, spacer, cardsRow,
-  notice, table, curve, groupedBarChart, horizontalBarChart, gauge, buildPdf,
+  notice, table, curve, groupedBarChart, horizontalBarChart, gauge, buildPdf, GREY,
 } from './pdfComponents.js';
 import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA } from './util.js';
 import { BLOQUES_COTIZACION } from './bloques.js';
@@ -134,8 +134,14 @@ function pagina03(doc, r, numero) {
     'hasta su medidor. "CENACE" y "SCnMEM" son cargos que CFE traslada tal cual del operador del sistema ' +
     'eléctrico nacional — no los decide CFE libremente. "Energía" y "Capacidad" son lo que cuesta generar y ' +
     'tener disponible la electricidad que usa.');
-  bodyX(doc, y, 'Para valorar el ahorro no se multiplica toda la producción solar por el precio medio de la ' +
+  y = bodyX(doc, y, 'Para valorar el ahorro no se multiplica toda la producción solar por el precio medio de la ' +
     'factura: cada uno de estos cargos tiene su propia regla, explicada en la página siguiente.');
+  if (r.tarifa === 'GDBT') {
+    y = spacer(y, 4);
+    notice(doc, y, 'Tarifa GDBT sin validar contra un recibo real: la fórmula usa el mismo motor que GDMTO/GDMTH ' +
+      '(probado con varios recibos reales de esas tarifas), pero GDBT no se ha confirmado todavía contra un ' +
+      'recibo real de esta tarifa específica. Revisar a mano el desglose antes de confiar en el resultado.');
+  }
 }
 
 // ---------- Pagina 4: que cargos pueden disminuir ----------
@@ -236,6 +242,39 @@ function pagina06b(doc, r, numero) {
   const wDibujo = ancho * escala, hDibujo = alto * escala;
   const xDibujo = MARGIN_L + (CONTENT_W - wDibujo) / 2;
   doc.addImage(dataUrl, 'JPEG', xDibujo, y, wDibujo, hDibujo);
+}
+
+// ---------- Pagina 6c: fotos de condiciones GENERALES del inmueble (SOLO si
+// r.fotosInmueble tiene al menos 1) ----------
+// Distinta de pagina06b (que es solo la distribucion de paneles): aqui van las fotos
+// de sombras/cubierta/tablero/etc. capturadas en "Condiciones actuales del inmueble".
+// Pedido explicito del usuario, hueco declarado desde 2026-10-29 ("no hay captura de
+// fotografias en esta version"). Grid de hasta 3 columnas, cada foto se ajusta dentro
+// de su celda conservando su proporcion real (nunca se deforma, solo se encoje).
+function pagina06c(doc, r, numero) {
+  let y = encabezado(doc, numero, 'Fotos de condiciones del inmueble', r.titular);
+  y = bodyX(doc, y, 'Evidencia fotográfica aportada para este proyecto -- no sustituye un levantamiento técnico.');
+  y = spacer(y, 8);
+  const fotos = r.fotosInmueble || [];
+  const cols = 3;
+  const gap = 10;
+  const cellW = (CONTENT_W - gap * (cols - 1)) / cols;
+  const cellH = 120; // alto fijo de celda (imagen + etiqueta)
+  fotos.forEach((foto, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const cellX = MARGIN_L + col * (cellW + gap);
+    const cellY = y + row * (cellH + gap);
+    const maxImgAlto = cellH - 16;
+    const escala = Math.min(cellW / foto.ancho, maxImgAlto / foto.alto, 1);
+    const wImg = foto.ancho * escala, hImg = foto.alto * escala;
+    const xImg = cellX + (cellW - wImg) / 2;
+    doc.addImage(foto.dataUrl, 'JPEG', xImg, cellY, wImg, hImg);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(GREY);
+    doc.text(foto.etiqueta || `Foto ${i + 1}`, cellX + cellW / 2, cellY + maxImgAlto + 10, { align: 'center' });
+  });
 }
 
 // ---------- Pagina 7: produccion ----------
@@ -530,12 +569,14 @@ function pagina21(doc, r, numero) {
 }
 
 // Tercer elemento opcional: condicion(r) -- si se da y regresa false, la pagina no se
-// incluye aunque su bloque este activo. Hoy solo la usa pagina06b (la foto del
-// sembrado), que solo existe si el proyecto tiene una foto cargada.
+// incluye aunque su bloque este activo. La usan pagina06b (la foto del sembrado) y
+// pagina06c (fotos de condiciones del inmueble), que solo existen si el proyecto
+// tiene algo cargado.
 const PAGINAS = [
   ['resumen', pagina01], ['recibo_cargos', pagina02], ['recibo_cargos', pagina03], ['recibo_cargos', pagina04],
   ['consumo_sistema', pagina05], ['consumo_sistema', pagina06],
   ['consumo_sistema', pagina06b, (r) => !!r.fotoSembrado],
+  ['consumo_sistema', pagina06c, (r) => !!(r.fotosInmueble && r.fotosInmueble.length)],
   ['produccion', pagina07], ['ambiental', pagina08],
   ['ahorro_pagos', pagina09], ['ahorro_pagos', pagina10], ['presupuesto', pagina11], ['presupuesto', pagina12],
   ['recuperacion', pagina13], ['recuperacion', pagina14], ['pagos_100', pagina15], ['pagos_100', pagina16],

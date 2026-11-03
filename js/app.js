@@ -520,6 +520,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   mostrarSembradorAuto(proyectoActual.sembradorAuto);
   renderArchivosRecibo();
   renderArchivosVerificacion();
+  renderFotosInmueble();
   renderIndice(null);
   renderComparacion();
   aplicarEstadoPanel('chkPanelSeguimiento', 'contenidoSeguimiento', 'seguimiento');
@@ -755,6 +756,85 @@ $('btnQuitarSembrado').addEventListener('click', () => {
   guardarProyecto(clienteActual, proyectoActual);
   mostrarPreviaSembrado(null);
   if (ultimoResultado) { ultimoResultado.fotoSembrado = null; renderSecciones(ultimoResultado); }
+});
+
+// ---------------- Fotos de condiciones GENERALES del inmueble (seccion 5 del formulario,
+// se ven en la seccion 6 de la cotizacion/PDF) ----------------
+// Distinto de fotoSembrado (que es SOLO la distribucion de paneles sobre el techo):
+// aqui se guardan VARIAS fotos (sombras, cubierta, tablero, etc.), cada una con una
+// etiqueta corta opcional. Mismo mecanismo de compresion que fotoSembrado (ver
+// imagenes.js) pero mas agresivo (menor ancho/calidad) porque aqui puede haber varias
+// a la vez compartiendo la misma cuota de localStorage. Tope de 6 fotos por proyecto,
+// pedido explicito del usuario (hueco declarado desde 2026-10-29, "no hay captura de
+// fotografias en esta version").
+const MAX_FOTOS_INMUEBLE = 6;
+
+function renderFotosInmueble() {
+  const cont = $('galeriaFotosInmueble');
+  const fotos = (proyectoActual && proyectoActual.fotosInmueble) || [];
+  cont.innerHTML = '';
+  cont.hidden = !fotos.length;
+  fotos.forEach((foto, i) => {
+    const item = document.createElement('div');
+    item.className = 'foto-inmueble-item';
+    const img = document.createElement('img');
+    img.src = foto.dataUrl;
+    img.alt = foto.etiqueta || `Foto del inmueble ${i + 1}`;
+    const etiqueta = document.createElement('input');
+    etiqueta.type = 'text';
+    etiqueta.placeholder = 'Etiqueta (ej. Cubierta)';
+    etiqueta.value = foto.etiqueta || '';
+    etiqueta.addEventListener('change', () => {
+      proyectoActual.fotosInmueble[i].etiqueta = etiqueta.value.trim();
+      guardarProyecto(clienteActual, proyectoActual);
+      if (ultimoResultado) { ultimoResultado.fotosInmueble = proyectoActual.fotosInmueble; renderSecciones(ultimoResultado); }
+    });
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn-link'; btn.textContent = '🗑 Quitar';
+    btn.addEventListener('click', () => quitarFotoInmueble(i));
+    item.append(img, etiqueta, btn);
+    cont.append(item);
+  });
+}
+
+async function quitarFotoInmueble(indice) {
+  proyectoActual.fotosInmueble = (proyectoActual.fotosInmueble || []).filter((_, i) => i !== indice);
+  guardarProyecto(clienteActual, proyectoActual);
+  renderFotosInmueble();
+  if (ultimoResultado) { ultimoResultado.fotosInmueble = proyectoActual.fotosInmueble; renderSecciones(ultimoResultado); }
+}
+
+$('archivoFotoInmueble').addEventListener('change', async (e) => {
+  const nuevos = Array.from(e.target.files || []);
+  e.target.value = '';
+  if (!nuevos.length) return;
+  const actuales = proyectoActual.fotosInmueble || [];
+  const cupo = MAX_FOTOS_INMUEBLE - actuales.length;
+  if (cupo <= 0) {
+    alert(`Ya hay ${MAX_FOTOS_INMUEBLE} fotos del inmueble -- quita alguna antes de agregar otra.`);
+    return;
+  }
+  const porProcesar = nuevos.slice(0, cupo);
+  if (nuevos.length > cupo) {
+    alert(`Solo se agregaron ${porProcesar.length} foto(s) -- el máximo son ${MAX_FOTOS_INMUEBLE} por cotización.`);
+  }
+  $('archivoFotoInmueble').disabled = true;
+  try {
+    for (const file of porProcesar) {
+      try {
+        const foto = await archivoAImagenComprimida(file, { maxAncho: 900, calidad: 0.6 });
+        actuales.push({ ...foto, etiqueta: '' });
+      } catch (err) {
+        console.error('No se pudo procesar una foto del inmueble:', err);
+      }
+    }
+    proyectoActual.fotosInmueble = actuales;
+    guardarProyecto(clienteActual, proyectoActual);
+    renderFotosInmueble();
+    if (ultimoResultado) { ultimoResultado.fotosInmueble = proyectoActual.fotosInmueble; renderSecciones(ultimoResultado); }
+  } finally {
+    $('archivoFotoInmueble').disabled = false;
+  }
 });
 
 // ---------------- Sembrador automatico de paneles (beta) ----------------
@@ -1346,6 +1426,7 @@ function calcularYRenderizar() {
   r.textosEditados = proyectoActual.textosEditados || {};
   r.textosOcultos = proyectoActual.textosOcultos || {};
   r.fotoSembrado = proyectoActual.fotoSembrado || null;
+  r.fotosInmueble = proyectoActual.fotosInmueble || [];
   r.archivosRecibo = proyectoActual.archivosRecibo || null;
   r.archivosVerificacion = proyectoActual.archivosVerificacion || null;
   // Nota cliente-facing (no solo interna) cuando todavia no hay verificacion en sitio
@@ -1806,9 +1887,24 @@ function confirmarSiHayCambiosSinCalcular() {
     'los datos de ANTES de esos cambios. ¿Generar de todos modos?\n\n(Cancelar para volver y presionar "Calcular" primero)');
 }
 
+// La edicion de texto en pantalla (textoEditable en secciones.js) NO se refleja en el
+// PDF -- propuesta.js arma sus propios parrafos fijos, independientes de
+// proyecto.textosEditados (ver ESTADO.md: conectar las dos fuentes es un trabajo
+// aparte, con riesgo real de desalinear texto entre las 22+ paginas del generador, no
+// hecho todavia). Antes esto solo quedaba documentado en ESTADO.md -- nadie que
+// generara un PDF se enteraba de que sus ediciones no iban a salir ahi. Se avisa aqui,
+// en el momento en que de verdad importa, en vez de dejarlo como una nota enterrada.
+function confirmarSiHayTextoEditadoSinReflejarEnPdf() {
+  const n = Object.keys(proyectoActual.textosEditados || {}).length;
+  if (!n) return true;
+  return confirm(`Editaste ${n} párrafo(s)/aviso(s) en pantalla para esta cotización -- el PDF todavía NO incluye ` +
+    'esas ediciones (sigue usando el texto original de la app). ¿Generar el PDF de todos modos?\n\n(Cancelar para revisar primero qué se editó)');
+}
+
 $('btnGenerarPdf').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
+  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
   const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas });
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
 });
@@ -1836,6 +1932,7 @@ $('btnAnexoInterconexion').addEventListener('click', () => {
 $('btnCotizacion9').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
+  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
   const doc = generarPdf(ultimoResultado, { secciones: BLOQUES_SECCIONES_9 });
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion_corta_9_secciones'));
 });
@@ -1843,6 +1940,7 @@ $('btnCotizacion9').addEventListener('click', () => {
 $('btnCotizacion14').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
+  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
   const doc = generarPdf(ultimoResultado, { secciones: BLOQUES_SECCIONES_14 });
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion_media_14_secciones'));
 });
