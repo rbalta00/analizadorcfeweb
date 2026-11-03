@@ -303,23 +303,23 @@
       </div>
 
       <div id="panelSembradoAuto" hidden>
-        <p class="nota">Busca la captura satelital directo con la dirección del recibo, o sube tu propia captura.
-          Marca las 2 esquinas del techo con 2 clics (si subiste tu propia foto, marca también la escala real), y el
-          sembrador coloca solos los <strong id="sembradorAutoN">--</strong> paneles que ya calculó el cotizador.
-          Después puedes arrastrar/girar/borrar cada panel a mano. No evita obstáculos (tinacos, equipos)
-          automáticamente -- si un panel cae encima de uno, bórralo o muévelo a mano. No es un plano de ingeniería.</p>
+        <p class="nota">1) Abre Google Maps con la dirección del recibo (gratis, sin llaves ni facturación) y cambia a
+          vista satelital con el botón de capas. 2) Toma una captura de pantalla de la azotea (cualquier herramienta
+          de tu sistema). 3) Súbela aquí abajo. Marca la escala real (2 clics sobre algo que midas, ej. la barra de
+          escala que Maps ya dibuja en la esquina) y las 2 esquinas del techo (2 clics), y el sembrador coloca solos
+          los <strong id="sembradorAutoN">--</strong> paneles que ya calculó el cotizador. Después puedes
+          arrastrar/girar/borrar cada panel a mano. No evita obstáculos (tinacos, equipos) automáticamente -- si un
+          panel cae encima de uno, bórralo o muévelo a mano. No es un plano de ingeniería.</p>
         <div class="fila">
-          <label>Dirección a buscar en Maps<input type="text" id="autoDireccionMaps" placeholder="Se jala del domicilio del recibo" /></label>
-          <button type="button" id="btnBuscarMaps" class="btn-link" style="flex:0">📍 Buscar en Google Maps</button>
+          <label>Dirección<input type="text" id="autoDireccionMaps" placeholder="Se jala del domicilio del recibo" /></label>
+          <button type="button" id="btnAbrirMaps" class="btn-link" style="flex:0">🗺️ Abrir en Google Maps</button>
         </div>
-        <div id="estadoBuscarMaps" class="nota"></div>
-        <p class="nota">O sube tu propia captura (ej. una captura de pantalla de Google Maps):</p>
         <div class="fila">
           <label style="flex:0">Subir captura<input type="file" id="archivoAutoSembrado" accept=".jpg,.jpeg,.png,.webp" /></label>
         </div>
         <div id="editorAutoSembrado" hidden>
           <div class="fila sembrador-pasos">
-            <button type="button" id="btnMarcarEscala" class="btn-link"><span id="pasoEscalaTexto">① Marcar escala</span></button>
+            <button type="button" id="btnMarcarEscala" class="btn-link">① Marcar escala</button>
             <label>Distancia real de esos 2 puntos (m)<input type="number" id="autoCotaMetros" step="0.1" min="0.1" style="width:90px" /></label>
             <button type="button" id="btnMarcarTecho" class="btn-link">② Marcar esquinas del techo</button>
             <label>Ángulo del bloque (°)<input type="number" id="autoAngulo" value="0" step="1" style="width:70px" /></label>

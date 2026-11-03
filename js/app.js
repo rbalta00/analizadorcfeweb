@@ -20,7 +20,7 @@ import {
   TARIFAS_SOPORTADAS, esDomestica, conectarEventosFormularioRecibo,
   leerFormularioRecibo, aplicarFormularioRecibo, llenarFormularioDesdeReciboCampos,
 } from './formularioRecibo.js';
-import { supabaseListar, supabaseActualizar, supabaseEliminar, supabaseSubirArchivo, supabaseEliminarArchivo, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase.js';
+import { supabaseListar, supabaseActualizar, supabaseEliminar, supabaseSubirArchivo, supabaseEliminarArchivo } from './supabase.js';
 import { subirANube, bajarDeNube } from './nube.js';
 import { panelesEnRectangulo, crearEditorPaneles, hornearImagenSembrado, PANEL_ANCHO_M, PANEL_ALTO_M } from './sembrador.js';
 
@@ -853,10 +853,6 @@ $('archivoAutoSembrado').addEventListener('change', async (e) => {
     const foto = await archivoAImagenComprimida(file, { maxAncho: 1600, calidad: 0.85 });
     proyectoActual.sembradorAuto = {
       imagenDataUrl: foto.dataUrl, anchoImg: foto.ancho, altoImg: foto.alto,
-      // ppmConocido/direccionFormateada: solo se llenan cuando la captura viene de "Buscar en
-      // Google Maps" (la escala ya se sabe del zoom real, no hace falta marcarla a mano).
-      // Subiendo una foto propia aqui, SI hace falta marcar la escala (ver btnMarcarEscala).
-      ppmConocido: null, direccionFormateada: null,
       cotaP1: null, cotaP2: null, cotaMetros: null, techoP1: null, techoP2: null, angulo: 0, paneles: [],
     };
     guardarProyecto(clienteActual, proyectoActual);
@@ -870,40 +866,16 @@ $('archivoAutoSembrado').addEventListener('change', async (e) => {
   }
 });
 
-// Busca la captura satelital directo por direccion, vía la Edge Function "captura-azotea"
-// (repo Supabase prchqgvwaepzmcohoehu) -- esa funcion es la UNICA que ve la llave de
-// Google Maps (secreto GOOGLE_MAPS_API_KEY de la funcion, nunca en este archivo ni en
-// el codigo que llega al navegador). Pedido explicito del usuario, 2026-11-02: "una vez
-// que se cargue el recibo el cotizador jala los datos y la direccion de ahi la tomas
-// para que funcione el sembrador y busque la captura en maps y la suba".
-$('btnBuscarMaps').addEventListener('click', async () => {
+// Abre Google Maps (la pagina normal, gratis, sin llave ni facturacion) con la direccion
+// del recibo ya puesta -- el usuario cambia a vista satelital con el boton de capas de
+// Maps y toma su propia captura de pantalla para subirla abajo. Decision explicita del
+// usuario, 2026-11-02: nada de API de pago, el sembrado se arma a partir de una captura
+// que el propio Isaac toma (igual que sembrar_paneles.py/planear_techo.py del repo
+// cotizador-fv-cfe, que reciben cualquier imagen + su escala, sin depender de Maps API).
+$('btnAbrirMaps').addEventListener('click', () => {
   const direccion = $('autoDireccionMaps').value.trim();
   if (!direccion) { alert('Escribe o confirma la dirección a buscar.'); return; }
-  $('btnBuscarMaps').disabled = true;
-  $('estadoBuscarMaps').textContent = 'Buscando en Google Maps…';
-  try {
-    const resp = await fetch(`${SUPABASE_URL}/functions/v1/captura-azotea`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-      body: JSON.stringify({ direccion }),
-    });
-    const datos = await resp.json();
-    if (!resp.ok || datos.error) throw new Error(datos.error || `Error ${resp.status}`);
-    proyectoActual.sembradorAuto = {
-      imagenDataUrl: datos.imagenDataUrl, anchoImg: null, altoImg: null,
-      ppmConocido: datos.ppm, direccionFormateada: datos.direccionFormateada,
-      cotaP1: null, cotaP2: null, cotaMetros: null, techoP1: null, techoP2: null, angulo: 0, paneles: [],
-    };
-    guardarProyecto(clienteActual, proyectoActual);
-    mostrarSembradorAuto(proyectoActual.sembradorAuto);
-    $('estadoBuscarMaps').textContent = `Encontrado: ${datos.direccionFormateada}. Escala ya calculada -- marca directo las esquinas del techo.`;
-  } catch (err) {
-    $('estadoBuscarMaps').textContent = '';
-    alert('No se pudo buscar la captura en Maps: ' + err.message);
-    console.error(err);
-  } finally {
-    $('btnBuscarMaps').disabled = false;
-  }
+  window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccion)}`, '_blank');
 });
 
 $('btnSembrarAuto').addEventListener('click', () => {
@@ -913,29 +885,18 @@ $('btnSembrarAuto').addEventListener('click', () => {
     alert('Calcula primero la cotización (botón "Calcular") para saber cuántos paneles sembrar.');
     return;
   }
-  // La escala puede venir de 2 lugares: marcada a mano (cotaP1/cotaP2/cotaMetros, para
-  // una foto subida por el usuario) o ya conocida (ppmConocido, cuando la captura vino
-  // de "Buscar en Google Maps" -- ahi no hace falta marcar nada, el zoom real ya la da).
-  // Si el usuario marco una escala a mano SOBRE una captura de Maps (para calibrar/
-  // corregir), esa marca manual gana sobre la de Maps.
   const cotaMetros = Number($('autoCotaMetros').value);
-  const hayEscalaManual = est.cotaP1 && est.cotaP2 && cotaMetros > 0;
-  if (!hayEscalaManual && !est.ppmConocido) {
-    alert('Falta la escala: marca 2 puntos y su distancia real en metros, o busca la captura en Google Maps (ya trae la escala).');
+  if (!est.cotaP1 || !est.cotaP2 || !(cotaMetros > 0)) {
+    alert('Falta marcar la escala (2 puntos) y su distancia real en metros.');
     return;
   }
   if (!est.techoP1 || !est.techoP2) {
     alert('Falta marcar las 2 esquinas del techo.');
     return;
   }
+  est.cotaMetros = cotaMetros;
   est.angulo = Number($('autoAngulo').value) || 0;
-  let ppm;
-  if (hayEscalaManual) {
-    est.cotaMetros = cotaMetros;
-    ppm = Math.hypot(est.cotaP2[0] - est.cotaP1[0], est.cotaP2[1] - est.cotaP1[1]) / est.cotaMetros;
-  } else {
-    ppm = est.ppmConocido;
-  }
+  const ppm = Math.hypot(est.cotaP2[0] - est.cotaP1[0], est.cotaP2[1] - est.cotaP1[1]) / est.cotaMetros;
   const panelWpx = PANEL_ANCHO_M * ppm, panelHpx = PANEL_ALTO_M * ppm;
   const gapPx = Math.max(1, panelWpx * 0.04);
   const { paneles, cabenTodos, colocados } = panelesEnRectangulo({
@@ -1011,10 +972,7 @@ function mostrarSembradorAuto(estado) {
   $('autoCotaMetros').value = estado.cotaMetros || '';
   $('autoAngulo').value = estado.angulo || 0;
   $('sembradorAutoN').textContent = ultimoResultado ? ultimoResultado.n : '--';
-  $('pasoEscalaTexto').textContent = estado.ppmConocido ? '① Marcar escala (opcional -- ya se sabe por Maps)' : '① Marcar escala';
-  if (!$('autoDireccionMaps').value) {
-    $('autoDireccionMaps').value = estado.direccionFormateada || $('domicilio').value || '';
-  }
+  if (!$('autoDireccionMaps').value) $('autoDireccionMaps').value = $('domicilio').value || '';
 }
 
 // ---------------- Recibo: leer + autollenar + auto-calcular ----------------
