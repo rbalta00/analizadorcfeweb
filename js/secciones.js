@@ -153,6 +153,8 @@ let _onToggleCalculoActual = () => {};
 let _globalesActuales = {};
 let _onGuardarGlobalActual = () => {};
 let _onQuitarGlobalActual = () => {};
+let _ocultosActuales = {};
+let _onOcultarTextoActual = () => {};
 
 function siguienteTextoId() {
   return `s${_seccionActual}-t${_contadorTexto++}`;
@@ -189,7 +191,8 @@ function subtituloChico(numero, clave, textoDefecto) {
 }
 
 function campoEditableConId(tag, cls, textoDefecto, id) {
-  const wrap = el('div', 'campo-editable');
+  const oculto = !!_ocultosActuales[id];
+  const wrap = el('div', 'campo-editable' + (oculto ? ' campo-oculto' : ''));
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   e.classList.add('texto-editable');
@@ -238,6 +241,13 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
     btnQuitar.addEventListener('click', () => _onQuitarGlobalActual(id, textoDefecto));
     wrap.append(btnQuitar);
   }
+  const btnOcultar = document.createElement('button');
+  btnOcultar.type = 'button';
+  btnOcultar.className = 'btn-ocultar-texto';
+  btnOcultar.textContent = oculto ? '👁 Mostrar este párrafo' : '🙈 Ocultar este párrafo';
+  btnOcultar.addEventListener('click', () => _onOcultarTextoActual(id, !oculto));
+  wrap.append(btnOcultar);
+  if (oculto) wrap.append(el('span', 'nota-texto-oculto', 'Oculto -- no aparece en la cotización final'));
   return wrap;
 }
 
@@ -1542,7 +1552,11 @@ export const TITULOS_SECCIONES = [
 // calculó" de una seccion -- independiente de onToggle (que apaga la seccion entera).
 // onGuardarGlobal(id, texto)/onQuitarGlobal(id): predeterminado GLOBAL para todas las
 // cotizaciones (actuales y futuras) -- ver textosGlobales.js.
-export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggleCalculo, onGuardarGlobal, onQuitarGlobal) {
+// onOcultarTexto(id, oculto): apaga/prende UN parrafo suelto sin borrar su texto --
+// mismo patron que onToggleCalculo pero a nivel de parrafo (ver textosOcultos en
+// clientes.js). El parrafo SIEMPRE se ve aqui en pantalla (atenuado si esta oculto),
+// el estado es lo que decide si queda incluido.
+export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggleCalculo, onGuardarGlobal, onQuitarGlobal, onOcultarTexto) {
   _overridesActuales = r.textosEditados || {};
   _onEditarTextoActual = onEditarTexto || (() => {});
   _calculosActivosActual = r.calculosActivos || [];
@@ -1550,6 +1564,8 @@ export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggl
   _globalesActuales = leerTextosGlobales();
   _onGuardarGlobalActual = onGuardarGlobal || (() => {});
   _onQuitarGlobalActual = onQuitarGlobal || (() => {});
+  _ocultosActuales = r.textosOcultos || {};
+  _onOcultarTextoActual = onOcultarTexto || (() => {});
   const fn = RENDERERS[numero - 1];
   return fn(r, leido, onToggle);
 }

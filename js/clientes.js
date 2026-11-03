@@ -36,6 +36,7 @@ function migrarClienteSiHaceFalta(c) {
     seccionesActivas: c.seccionesActivas || todosLosBloques(),
     calculosActivos: c.calculosActivos || todosLosBloques(),
     textosEditados: c.textosEditados || {},
+    textosOcultos: c.textosOcultos || {},
   };
   c.proyectos = c.formulario ? [proyecto] : [];
   delete c.formulario; delete c.campos; delete c.inmueble;
@@ -152,6 +153,12 @@ export function crearProyecto(cliente, { nombre } = {}) {
     // generar la cotizacion para el cliente.
     calculosActivos: todosLosBloques(),
     textosEditados: {},
+    // textosOcultos: id de parrafo -> true, mismo patron que textosEditados pero para
+    // apagar un parrafo suelto sin borrar su texto (pedido explicito del usuario,
+    // 2026-11-02) -- igual que seccionesActivas/calculosActivos, SIEMPRE se ve en
+    // pantalla (atenuado) para que Isaac pueda reactivarlo, el estado es lo que decide
+    // si queda incluido.
+    textosOcultos: {},
     fotoSembrado: null, // data URL JPEG comprimido (ver imagenes.js) de la distribucion de paneles sobre el techo
     archivosRecibo: null, // array de {nombre,tipo,url,ruta} -- archivos originales subidos a Supabase Storage (ver supabase.js)
     archivosVerificacion: null, // igual forma que archivosRecibo, para el documento de verificacion en sitio (evidencia adjunta, no se lee)

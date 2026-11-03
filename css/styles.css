@@ -384,6 +384,16 @@ input[type="file"] { padding: 6px 0; }
   font-weight: 600; cursor: pointer; padding: 2px 4px; margin-top: 2px; text-align: left;
 }
 .btn-guardar-global:hover { text-decoration: underline; }
+.btn-ocultar-texto {
+  display: block; background: none; border: none; color: var(--grey); font-size: 0.72rem;
+  font-weight: 600; cursor: pointer; padding: 2px 4px; margin-top: 2px; text-align: left;
+}
+.btn-ocultar-texto:hover { text-decoration: underline; }
+.campo-oculto > .texto-editable { opacity: 0.5; text-decoration: line-through; }
+.nota-texto-oculto {
+  display: block; font-size: 0.72rem; color: #b94a48; font-weight: 600; margin-top: 2px;
+}
+@media (prefers-color-scheme: dark) { .nota-texto-oculto { color: #e68a89; } }
 
 .detalle-calculo { margin: 10px 0; font-size: 0.85rem; }
 .detalle-calculo summary { cursor: pointer; color: var(--teal); font-weight: 600; }

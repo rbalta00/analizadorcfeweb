@@ -1105,6 +1105,7 @@ function calcularYRenderizar() {
   r.calculosActivos = proyectoActual.calculosActivos || todosLosBloques();
   r.ordenSecciones = proyectoActual.ordenSecciones || null;
   r.textosEditados = proyectoActual.textosEditados || {};
+  r.textosOcultos = proyectoActual.textosOcultos || {};
   r.fotoSembrado = proyectoActual.fotoSembrado || null;
   r.archivosRecibo = proyectoActual.archivosRecibo || null;
   r.archivosVerificacion = proyectoActual.archivosVerificacion || null;
@@ -1383,6 +1384,21 @@ function onQuitarTextoGlobal(id) {
   if (ultimoResultado) renderSecciones(ultimoResultado);
 }
 
+// Apagar/prender UN parrafo suelto sin borrar su texto -- mismo patron que
+// onToggleCalculo pero a nivel de parrafo (pedido explicito del usuario, 2026-11-02).
+// Override de ESTE proyecto/cliente nada mas (no hay version global de esto, a
+// diferencia del texto -- apagar un parrafo es una decision por cotizacion, no algo
+// que tenga sentido heredar a clientes futuros).
+function onOcultarTexto(id, oculto) {
+  proyectoActual.textosOcultos = proyectoActual.textosOcultos || {};
+  if (oculto) proyectoActual.textosOcultos[id] = true; else delete proyectoActual.textosOcultos[id];
+  guardarProyecto(clienteActual, proyectoActual);
+  if (ultimoResultado) {
+    ultimoResultado.textosOcultos = proyectoActual.textosOcultos;
+    renderSecciones(ultimoResultado);
+  }
+}
+
 // anteriorN/siguienteN: numero de la seccion REALMENTE renderizada antes/despues de
 // esta (no simplemente n-1/n+1) -- secciones sin datos (23/24/25 sin verificacion en
 // sitio, ver seccionTieneDatos en secciones.js) ni siquiera se renderizan, así que
@@ -1410,7 +1426,7 @@ function renderSecciones(r) {
   $('ayudaEdicion').hidden = false;
   const numeros = ordenSeccionesEfectivo(r).filter(n => seccionTieneDatos(n, r));
   numeros.forEach((n, i) => {
-    const art = renderSeccion(n, r, ultimoLeido, onToggleBloque, onEditarTexto, onToggleCalculo, onGuardarTextoGlobal, onQuitarTextoGlobal);
+    const art = renderSeccion(n, r, ultimoLeido, onToggleBloque, onEditarTexto, onToggleCalculo, onGuardarTextoGlobal, onQuitarTextoGlobal, onOcultarTexto);
     agregarNavegacionSeccion(art, numeros[i - 1] ?? null, numeros[i + 1] ?? null);
     cont.append(art);
   });
