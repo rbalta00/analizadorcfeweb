@@ -27,6 +27,24 @@ export function todosLosBloques() {
   return BLOQUES_COTIZACION.map(([clave]) => clave);
 }
 
+// Dos presets de bloques para las versiones "mas cortas" de la cotizacion completa
+// (mismo formato de 24/25 paginas, solo con menos bloques activos) -- pedido explicito
+// del usuario, 2026-11-03: "un poco mas cortas para que las entienda mas el cliente".
+// No reemplazan seccionesActivas del proyecto (eso lo sigue controlando el usuario a
+// mano en el indice); son generaciones puntuales aparte, para mandar algo mas digerible
+// sin tener que desactivar/reactivar bloques cada vez.
+//
+// 9 secciones: solo lo que decide la compra -- que se propone, cuanto ahorra, cuando
+// se paga solo, cuanto cuesta. (resumen=1 + consumo_sistema=2 + ahorro_pagos=2 +
+// presupuesto=2 + recuperacion=2 = 9 paginas)
+export const BLOQUES_SECCIONES_9 = ['resumen', 'consumo_sistema', 'ahorro_pagos', 'presupuesto', 'recuperacion'];
+
+// 14 secciones: lo anterior + como se lee SU recibo real (confianza/transparencia) y
+// que tan cerca llega al 100% de ahorro. (9 + recibo_cargos=3 + pagos_100=2 = 14 paginas)
+export const BLOQUES_SECCIONES_14 = [
+  'resumen', 'recibo_cargos', 'consumo_sistema', 'ahorro_pagos', 'presupuesto', 'recuperacion', 'pagos_100',
+];
+
 // Mapea 1..25 a la clave de bloque a la que pertenece esa pagina/seccion. Orden
 // narrativo (pedido explicito del usuario, 2026-11-01): resumen -> calculo ->
 // documentos/verificacion en sitio/comparativo -> cierre administrativo.

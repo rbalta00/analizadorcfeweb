@@ -14,7 +14,7 @@ import { generarResumenEjecutivo, generarGuiaPresentacion, generarAnexoIntercone
 import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida } from './imagenes.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
-import { todosLosBloques, bloqueDeSeccion } from './bloques.js';
+import { todosLosBloques, bloqueDeSeccion, BLOQUES_SECCIONES_9, BLOQUES_SECCIONES_14 } from './bloques.js';
 import { M, PCT } from './util.js';
 import {
   TARIFAS_SOPORTADAS, esDomestica, conectarEventosFormularioRecibo,
@@ -1825,6 +1825,26 @@ $('btnAnexoInterconexion').addEventListener('click', () => {
   if (!confirmarSiHayCambiosSinCalcular()) return;
   const doc = generarAnexoInterconexion(ultimoResultado);
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Anexo_interconexion_CFE'));
+});
+
+// Dos versiones mas cortas de la MISMA cotizacion completa (mismo formato de 24/25
+// secciones, no un resumen aparte) -- pedido explicito del usuario, 2026-11-03: "un
+// poco mas cortas para que las entienda mas el cliente". Usan el mismo generarPdf()
+// de la "Cotizacion completa", solo con un subconjunto fijo de bloques distinto al que
+// el usuario haya activado/desactivado a mano (BLOQUES_SECCIONES_9/14, ver bloques.js)
+// -- no tocan proyectoActual.seccionesActivas, son generaciones puntuales aparte.
+$('btnCotizacion9').addEventListener('click', () => {
+  if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  if (!confirmarSiHayCambiosSinCalcular()) return;
+  const doc = generarPdf(ultimoResultado, { secciones: BLOQUES_SECCIONES_9 });
+  mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion_corta_9_secciones'));
+});
+
+$('btnCotizacion14').addEventListener('click', () => {
+  if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  if (!confirmarSiHayCambiosSinCalcular()) return;
+  const doc = generarPdf(ultimoResultado, { secciones: BLOQUES_SECCIONES_14 });
+  mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion_media_14_secciones'));
 });
 
 // Marca esta cotizacion como guardada/confirmada para el cliente elegido en el
