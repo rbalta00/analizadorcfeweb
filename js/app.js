@@ -14,7 +14,7 @@ import { generarResumenEjecutivo, generarGuiaPresentacion, generarAnexoIntercone
 import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida } from './imagenes.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
-import { todosLosBloques, bloqueDeSeccion, BLOQUES_SECCIONES_9, BLOQUES_SECCIONES_14 } from './bloques.js';
+import { todosLosBloques, bloqueDeSeccion, seccionesDelBloque, BLOQUES_COTIZACION, BLOQUES_SECCIONES_9, BLOQUES_SECCIONES_14 } from './bloques.js';
 import { M, PCT } from './util.js';
 import {
   TARIFAS_SOPORTADAS, esDomestica, conectarEventosFormularioRecibo,
@@ -1415,12 +1415,19 @@ function calcularYRenderizar() {
   ultimoInputJSON = JSON.stringify(input);
   ocultarAvisoCambiosSinCalcular();
   // Persistir la migracion en proyectoActual (no solo en r) -- antes solo se escribia en r,
-  // asi que el PDF (generarPdf lee proyectoActual.seccionesActivas) y onToggleBloque (tambien
+  // asi que el PDF (generarPdf lee proyectoActual.seccionesActivas) y onToggleSeccion (tambien
   // lee de proyectoActual) seguian viendo la version SIN migrar: el indice en pantalla
   // mostraba "Documentos"/"Comparativo verificacion" como incluidas (leia r.seccionesActivas)
   // pero el PDF las excluia en silencio. Hallazgo real, 2026-11-02.
   proyectoActual.seccionesActivas = migrarSeccionesActivasBloquesNuevos(proyectoActual.seccionesActivas);
   r.seccionesActivas = proyectoActual.seccionesActivas;
+  // seccionesExcluidas (por seccion individual, numeros 1-25) y graficosExcluidos (por
+  // grafico/tabla visual dentro de cada seccion) -- mismo patron que seccionesActivas/
+  // calculosActivos: se guardan en proyectoActual (persisten por cliente/proyecto) y se
+  // copian aqui a `r` para que secciones.js y propuesta.js (pantalla y PDF) lean la misma
+  // fuente. Pedido explicito del usuario, 2026-11-05.
+  r.seccionesExcluidas = proyectoActual.seccionesExcluidas || [];
+  r.graficosExcluidos = proyectoActual.graficosExcluidos || [];
   r.calculosActivos = proyectoActual.calculosActivos || todosLosBloques();
   r.ordenSecciones = proyectoActual.ordenSecciones || null;
   r.textosEditados = proyectoActual.textosEditados || {};
@@ -1640,12 +1647,69 @@ $('btnAgregarNotaSeguimiento').addEventListener('click', () => {
 });
 
 // ---------------- 21 secciones: render + navegacion ----------------
-function onToggleBloque(bloque, activo) {
-  const set = new Set(proyectoActual.seccionesActivas);
-  if (activo) set.add(bloque); else set.delete(bloque);
-  proyectoActual.seccionesActivas = [...set];
+// Apaga/prende UNA seccion individual (numero 1-25), no el bloque completo -- pedido
+// explicito del usuario, 2026-11-05: "todo todo, secciones... se puedan apagar".
+// r.seccionesExcluidas guarda numeros de seccion excluidos DENTRO de un bloque que
+// sigue activo. Encender una seccion individual tambien enciende su bloque si estaba
+// apagado (si no, el checkbox se veria "prendido" sin que la seccion de verdad
+// aparezca) -- apagar una seccion individual NO toca el bloque, solo resta esa seccion.
+function onToggleSeccion(numero, activo) {
+  const bloque = bloqueDeSeccion(numero);
+  const excl = new Set(proyectoActual.seccionesExcluidas || []);
+  if (activo) {
+    excl.delete(numero);
+    const setBloques = new Set(proyectoActual.seccionesActivas);
+    setBloques.add(bloque);
+    proyectoActual.seccionesActivas = [...setBloques];
+  } else {
+    excl.add(numero);
+  }
+  proyectoActual.seccionesExcluidas = [...excl];
   guardarProyecto(clienteActual, proyectoActual);
-  if (ultimoResultado) { ultimoResultado.seccionesActivas = proyectoActual.seccionesActivas; renderSecciones(ultimoResultado); }
+  if (ultimoResultado) {
+    ultimoResultado.seccionesActivas = proyectoActual.seccionesActivas;
+    ultimoResultado.seccionesExcluidas = proyectoActual.seccionesExcluidas;
+    renderSecciones(ultimoResultado);
+  }
+}
+
+// Atajo de "bloques rapidos" del indice (ver renderIndice) -- prende/apaga TODAS las
+// secciones de un bloque de una sola vez, sin tener que entrar a cada una. Prender
+// limpia tambien las exclusiones individuales de esas secciones (si no, "prender todo
+// el bloque" podria parecer que no hizo nada si alguna seccion seguia excluida a
+// mano). Apagar el bloque no toca seccionesExcluidas -- ya basta con que el bloque
+// este apagado, y asi si se vuelve a prender el bloque despues, las exclusiones
+// individuales que el usuario puso a mano antes de apagar el bloque se conservan.
+function onToggleBloqueCompleto(bloque, activo) {
+  const setBloques = new Set(proyectoActual.seccionesActivas);
+  if (activo) {
+    setBloques.add(bloque);
+    const excl = new Set(proyectoActual.seccionesExcluidas || []);
+    seccionesDelBloque(bloque).forEach((n) => excl.delete(n));
+    proyectoActual.seccionesExcluidas = [...excl];
+  } else {
+    setBloques.delete(bloque);
+  }
+  proyectoActual.seccionesActivas = [...setBloques];
+  guardarProyecto(clienteActual, proyectoActual);
+  if (ultimoResultado) {
+    ultimoResultado.seccionesActivas = proyectoActual.seccionesActivas;
+    ultimoResultado.seccionesExcluidas = proyectoActual.seccionesExcluidas;
+    renderSecciones(ultimoResultado);
+  }
+}
+
+// Apaga/prende UN grafico o tabla visual dentro de una seccion (independiente del
+// toggle de la seccion completa y del de "Como se calculo") -- pedido explicito del
+// usuario, 2026-11-05. Mismo patron que onToggleCalculo. El mismo id se lee tambien
+// en propuesta.js (generarPdf), asi que apagar un grafico aqui lo quita del PDF
+// tambien, sin ningun paso extra.
+function onToggleGrafico(id, activo) {
+  const set = new Set(proyectoActual.graficosExcluidos || []);
+  if (activo) set.delete(id); else set.add(id);
+  proyectoActual.graficosExcluidos = [...set];
+  guardarProyecto(clienteActual, proyectoActual);
+  if (ultimoResultado) { ultimoResultado.graficosExcluidos = proyectoActual.graficosExcluidos; renderSecciones(ultimoResultado); }
 }
 
 // Reordenar secciones a mano -- pedido explicito del usuario ("permite arrastrar las
@@ -1668,7 +1732,7 @@ function onMoverSeccion(numero, direccion) {
 }
 
 // "Cómo se calculó" -- bloque de formulas/cargos/tarifa dentro de cada seccion,
-// independiente del toggle de "incluir esta seccion" (onToggleBloque arriba). Pedido
+// independiente del toggle de "incluir esta seccion" (onToggleSeccion arriba). Pedido
 // explicito del usuario: deben poder apagarse aparte, para que al generar la
 // cotizacion que se le manda al cliente solo entren las que el decida dejar
 // encendidas -- mismo patron que seccionesActivas, estado paralelo propio.
@@ -1750,7 +1814,7 @@ function renderSecciones(r) {
   $('ayudaEdicion').hidden = false;
   const numeros = ordenSeccionesEfectivo(r).filter(n => seccionTieneDatos(n, r));
   numeros.forEach((n, i) => {
-    const art = renderSeccion(n, r, ultimoLeido, onToggleBloque, onEditarTexto, onToggleCalculo, onGuardarTextoGlobal, onQuitarTextoGlobal, onOcultarTexto);
+    const art = renderSeccion(n, r, ultimoLeido, onToggleSeccion, onEditarTexto, onToggleCalculo, onGuardarTextoGlobal, onQuitarTextoGlobal, onOcultarTexto, onToggleGrafico);
     agregarNavegacionSeccion(art, numeros[i - 1] ?? null, numeros[i + 1] ?? null);
     cont.append(art);
   });
@@ -1762,9 +1826,38 @@ function renderSecciones(r) {
 // link para saltar a esa seccion) -- pedido explicito del usuario: poder apagar las
 // secciones que no va a presentar desde un solo lugar, sin tener que bajar hasta cada
 // seccion a buscar su propio toggle. El checkbox controla el MISMO estado
-// (seccionesActivas / bloqueDeSeccion) que el toggle de cada seccion individual
-// (toggleBloque en secciones.js) -- son dos controles para el mismo interruptor, no
-// un estado aparte, así que siempre quedan sincronizados.
+// (seccionesExcluidas, numero de seccion) que el toggle de cada seccion individual
+// (toggleSeccionIndividual en secciones.js) -- son dos controles para el mismo
+// interruptor, no un estado aparte, así que siempre quedan sincronizados.
+// Ademas de la lista por seccion, un control de "bloques rapidos" arriba permite
+// prender/apagar VARIAS secciones de un bloque de una sola vez (onToggleBloqueCompleto)
+// -- pedido explicito del usuario, 2026-11-05, para no tener que entrar una por una
+// cuando de verdad se quiere apagar un bloque completo.
+function renderBloquesRapidos(cont, r) {
+  const fila = document.createElement('div');
+  fila.className = 'indice-bloques-rapidos';
+  const select = document.createElement('select');
+  select.className = 'select-bloque-rapido';
+  BLOQUES_COTIZACION.filter(([clave]) => clave !== 'resumen').forEach(([clave, etiqueta]) => {
+    const opt = document.createElement('option');
+    opt.value = clave;
+    opt.textContent = etiqueta;
+    select.append(opt);
+  });
+  const btnApagar = document.createElement('button');
+  btnApagar.type = 'button';
+  btnApagar.className = 'btn-bloque-rapido';
+  btnApagar.textContent = 'Apagar bloque completo';
+  btnApagar.addEventListener('click', () => onToggleBloqueCompleto(select.value, false));
+  const btnPrender = document.createElement('button');
+  btnPrender.type = 'button';
+  btnPrender.className = 'btn-bloque-rapido';
+  btnPrender.textContent = 'Prender bloque completo';
+  btnPrender.addEventListener('click', () => onToggleBloqueCompleto(select.value, true));
+  fila.append(select, btnPrender, btnApagar);
+  cont.append(fila);
+}
+
 function renderIndice(r) {
   const cont = $('indiceLista');
   cont.innerHTML = '';
@@ -1772,21 +1865,29 @@ function renderIndice(r) {
     cont.innerHTML = '<p class="nota">Calcula primero (sección "Datos y recibo") para ver el índice de secciones.</p>';
     return;
   }
+  renderBloquesRapidos(cont, r);
   const activos = seccionesActivasEnOrden(r);
   const orden = ordenSeccionesEfectivo(r).filter(n => seccionTieneDatos(n, r));
   orden.forEach((n, i) => {
     const titulo = TITULOS_SECCIONES[n - 1];
     const bloque = bloqueDeSeccion(n);
+    const bloqueEtiqueta = (BLOQUES_COTIZACION.find(([clave]) => clave === bloque) || [, bloque])[1];
     const pos = activos.indexOf(n) + 1;
     const activo = pos > 0;
     const fila = document.createElement('div');
     fila.className = 'indice-fila' + (activo ? '' : ' indice-item-apagado');
     const check = document.createElement('input');
     check.type = 'checkbox';
-    check.checked = r.seccionesActivas.includes(bloque);
+    // Reflejar el estado REAL (bloque activo Y no excluida individualmente), no solo
+    // el override individual -- si no, un bloque apagado via "bloques rapidos" dejaba
+    // el checkbox de cada seccion marcado pese a decir "(desactivada)" al lado,
+    // confuso visualmente (encontrado probando en navegador, 2026-11-05). Clic en un
+    // checkbox desmarcado-por-bloque-apagado prende esa seccion Y su bloque (ver
+    // onToggleSeccion); clic en uno marcado la excluye sin tocar el bloque.
+    check.checked = activo;
     check.disabled = bloque === 'resumen';
-    check.title = bloque === 'resumen' ? 'Siempre incluida' : 'Incluir en la cotización final (pantalla y PDF)';
-    check.addEventListener('change', () => onToggleBloque(bloque, check.checked));
+    check.title = bloque === 'resumen' ? 'Siempre incluida' : `Incluir en la cotización final (pantalla y PDF) — bloque: ${bloqueEtiqueta}`;
+    check.addEventListener('change', () => onToggleSeccion(n, check.checked));
     fila.append(check);
     // Botones de mover arriba/abajo -- pedido explicito del usuario ("permite
     // arrastrar las secciones"), implementado como flechas en vez de arrastre real
@@ -1905,7 +2006,7 @@ $('btnGenerarPdf').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
   if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
-  const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas });
+  const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas, seccionesExcluidas: proyectoActual.seccionesExcluidas });
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
 });
 

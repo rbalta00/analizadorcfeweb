@@ -155,6 +155,8 @@ let _onGuardarGlobalActual = () => {};
 let _onQuitarGlobalActual = () => {};
 let _ocultosActuales = {};
 let _onOcultarTextoActual = () => {};
+let _graficosExcluidosActual = [];
+let _onToggleGraficoActual = () => {};
 
 function siguienteTextoId() {
   return `s${_seccionActual}-t${_contadorTexto++}`;
@@ -303,6 +305,43 @@ function detalle(resumen, nodoOArray) {
   return d;
 }
 
+// Encabezado compartido para un GRUPO de graficos/tablas que explican casi lo mismo
+// (ej. la grafica de generacion vs. consumo real del historial, y la de generacion vs.
+// consumo extrapolado -- ver s07) -- pedido explicito del usuario, 2026-11-05: no solo
+// poder apagar cada uno por separado, sino que sea obvio en el panel que son
+// ALTERNATIVAS entre si, no una lista plana de checkboxes sin relacion. No se usan
+// radios (no son estrictamente excluyentes: a veces conviene mostrar ambos a un
+// cliente) -- son checkboxes independientes bajo un mismo titulo "elige cual mostrar".
+function grupoGraficosAlternativos(titulo) {
+  return el('div', 'grupo-graficos-alternativos-header', `🔀 ${titulo}`);
+}
+
+// Toggle individual de UN grafico/tabla visual dentro de una seccion -- independiente
+// del toggle de la seccion completa (toggleSeccionIndividual) y del de "Como se
+// calculo" (bloqueCalculo). Pedido explicito del usuario, 2026-11-05: "que todo todo,
+// secciones, graficos se puedan apagar, ocultar". `id` es un identificador ESTABLE
+// (no depende del texto) compartido con propuesta.js (el PDF lee el mismo
+// r.graficosExcluidos por el mismo id) -- asi apagar un grafico aqui tambien lo quita
+// del PDF, sin necesitar un segundo mecanismo aparte.
+function graficoToggle(id, etiqueta, nodo, { notaAlternativa } = {}) {
+  const excluido = _graficosExcluidosActual.includes(id);
+  const cont = el('div', 'grafico-togglable' + (excluido ? ' grafico-apagado' : ''));
+  const wrap = el('label', 'toggle-seccion toggle-grafico');
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = !excluido;
+  input.addEventListener('change', () => _onToggleGraficoActual(id, input.checked));
+  wrap.append(input, document.createTextNode(` Mostrar: ${etiqueta}`));
+  cont.append(wrap);
+  if (notaAlternativa) cont.append(el('p', 'nota-grafico-alternativo', notaAlternativa));
+  if (excluido) {
+    cont.append(el('p', 'nota', 'Oculto -- no se incluirá en la cotización final (pantalla y PDF).'));
+  } else {
+    cont.append(nodo);
+  }
+  return cont;
+}
+
 const ESTADOS = {
   comprobado: ['Comprobado', 'Respaldado por una fuente identificada (el recibo, un cálculo verificado).'],
   declarado: ['Declarado', 'Proporcionado por una persona, pendiente de verificar.'],
@@ -349,9 +388,10 @@ export function ordenSeccionesEfectivo(r) {
 // seccion + el indice) haga exactamente lo mismo. Tambien respeta el orden
 // personalizado de ordenSeccionesEfectivo, si existe.
 export function seccionesActivasEnOrden(r) {
+  const excluidas = new Set(r.seccionesExcluidas || []);
   const activos = [];
   for (const n of ordenSeccionesEfectivo(r)) {
-    if (seccionTieneDatos(n, r) && r.seccionesActivas.includes(bloqueDeSeccion(n))) activos.push(n);
+    if (seccionTieneDatos(n, r) && r.seccionesActivas.includes(bloqueDeSeccion(n)) && !excluidas.has(n)) activos.push(n);
   }
   return activos;
 }
@@ -368,17 +408,28 @@ function refSeccion(numero, r) {
   return pos > 0 ? String(pos) : '(no incluida en esta cotización)';
 }
 
-function toggleBloque(r, numero, onToggle) {
+// Toggle INDIVIDUAL por seccion (no por bloque completo) -- pedido explicito del
+// usuario, 2026-11-05: "quiero que todo todo, secciones... se puedan apagar, ocultar".
+// Antes este checkbox apagaba el BLOQUE entero (arrastrando a sus secciones hermanas,
+// ver seccionesDelBloque); ahora apaga/prende SOLO esta seccion, via r.seccionesExcluidas
+// (numeros de seccion, no claves de bloque). El bloque sigue existiendo como atajo para
+// apagar/prender VARIAS secciones de golpe (ver el control de "bloques rapidos" del
+// indice en app.js/renderIndice) -- son dos controles sobre estados distintos, no el
+// mismo interruptor: encender esta seccion individual tambien enciende su bloque si
+// estaba apagado (ver onToggleSeccion en app.js), para que el checkbox nunca se vea
+// "prendido" sin que la seccion de verdad aparezca.
+function toggleSeccionIndividual(r, numero, onToggle) {
   const bloque = bloqueDeSeccion(numero);
-  const activo = r.seccionesActivas.includes(bloque);
+  const excluida = (r.seccionesExcluidas || []).includes(numero);
+  const activo = !excluida;
   const wrap = el('label', 'toggle-seccion');
   const input = document.createElement('input');
   input.type = 'checkbox';
   input.checked = activo;
   input.disabled = bloque === 'resumen';
-  input.addEventListener('change', () => onToggle(bloque, input.checked));
+  input.addEventListener('change', () => onToggle(numero, input.checked));
   wrap.append(input, document.createTextNode(
-    bloque === 'resumen' ? ' Siempre incluida' : ' Incluir en la cotización final (pantalla y PDF)'));
+    bloque === 'resumen' ? ' Siempre incluida' : ' Incluir esta sección en la cotización final (pantalla y PDF)'));
   return wrap;
 }
 
@@ -432,7 +483,7 @@ function crearSeccion(numero, titulo, pregunta, r, onToggle) {
   header.append(el('div', 'seccion-numero' + (pos > 0 ? '' : ' seccion-numero-apagada'), etiquetaNumero));
   header.append(tituloEditable(numero, titulo));
   if (pregunta) header.append(el('p', 'seccion-pregunta', pregunta));
-  header.append(toggleBloque(r, numero, onToggle));
+  header.append(toggleSeccionIndividual(r, numero, onToggle));
   art.append(header);
   return art;
 }
@@ -882,10 +933,10 @@ function s04(r, _leido, onToggle) {
   art.append(p(`Tarifa ${r.tarifa}. ${razon}`));
   const montoReduc = r.meta.reducibles.reduce((s, k) => s + (r.cargos[k] || 0), 0);
   const montoNoReduc = r.meta.noReducibles.reduce((s, k) => s + (r.cargos[k] || 0), 0);
-  art.append(barraHorizontal([
+  art.append(graficoToggle('g04-reducibles', 'Gráfica de lo que sí baja vs. lo que no baja', barraHorizontal([
     ['Sí baja con los paneles', montoReduc, 'var(--cfe-teal,#21798b)'],
     ['No baja con los paneles', montoNoReduc, 'var(--cfe-navy,#163b4c)'],
-  ]));
+  ])));
   art.append(p(`Lo que SÍ baja: ${listaConceptos(r.meta.reducibles)}. Lo que NO baja: ${listaConceptos(r.meta.noReducibles)}.`));
   art.append(p(`Por eso, aunque se instalaran más paneles de los que se necesitan, el pago de un período no ` +
     `bajaría de ${M(r.pisoPeriodo)} (ya con IVA y DAP) frente a los ${M(r.pagoRecurrentePeriodo)} actuales. El ` +
@@ -949,7 +1000,8 @@ function s05(r, _leido, onToggle) {
     const kwhNormalizado = r.consumosMensualesUsados;
     const kwhCrudo = historial.map(x => x.kwh);
     const prom = kwhNormalizado.reduce((a, b) => a + b, 0) / kwhNormalizado.length;
-    art.append(barraAgrupada(meses, 'Consumo normalizado a kWh/mes', kwhNormalizado, 'Promedio mensual', kwhNormalizado.map(() => prom)));
+    art.append(graficoToggle('g05-historial', 'Gráfica de consumo normalizado por período',
+      barraAgrupada(meses, 'Consumo normalizado a kWh/mes', kwhNormalizado, 'Promedio mensual', kwhNormalizado.map(() => prom))));
     art.append(tabla(['Período', 'Consumo facturado (real, tal como en el recibo)', 'Normalizado a kWh/mes'],
       historial.map((x, i) => [`${x.mes} ${x.anio}`, `${kwhCrudo[i].toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${kwhNormalizado[i].toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`]),
       { small: true }));
@@ -1147,12 +1199,14 @@ function s07(r, _leido, onToggle) {
     // cada mes. Se usa r.consumosMensualesUsados (ya normalizado a kWh/mes, mismo orden que
     // r.historial) para que ambas barras esten en la misma unidad -- mismo fix que en la
     // seccion 5.
+    art.append(grupoGraficosAlternativos('Elige cuál gráfica de generación vs. consumo dejar visible aquí -- las ' +
+      'dos explican algo muy similar (no hace falta repetir ambas para el mismo cliente):'));
     art.append(subtituloChico(7, 'generacion-vs-historial', 'Generación mensual estimada vs. su consumo real facturado'));
-    art.append(barraAgrupada(
+    art.append(graficoToggle('g07-historial', 'Generación vs. su consumo REAL del historial', barraAgrupada(
       r.historial.map(h => `${h.mes} ${h.anio}`),
       'Generación mensual estimada con los paneles propuestos', r.historial.map(() => genMensualEstimada),
       'Su consumo normalizado a kWh/mes ese período', r.consumosMensualesUsados,
-    ));
+    ), { notaAlternativa: 'Alternativa a la gráfica de abajo (generación vs. consumo EXTRAPOLADO) -- esta usa el consumo real de cada período de su historial.' }));
     art.append(p(`Cada barra de "consumo normalizado a kWh/mes" parte del dato real impreso en su propio recibo para ` +
       'ese período, convertido a su equivalente mensual (así un período bimestral no se compara contra una ' +
       'generación mensual como si fuera el mismo). La generación estimada es la misma para los ' +
@@ -1161,7 +1215,11 @@ function s07(r, _leido, onToggle) {
       'que ese período concreto consumió.'));
   }
   const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
-  art.append(barraAgrupada(mesesAbrev, 'Generación estimada', r.rows.map(x => x.generacionKwh), 'Consumo extrapolado', r.rows.map(x => x.consumoExtrapoladoKwh)));
+  art.append(graficoToggle('g07-extrapolado', 'Generación vs. consumo EXTRAPOLADO (los 12 meses)',
+    barraAgrupada(mesesAbrev, 'Generación estimada', r.rows.map(x => x.generacionKwh), 'Consumo extrapolado', r.rows.map(x => x.consumoExtrapoladoKwh)),
+    r.historial && r.historial.length >= 2
+      ? { notaAlternativa: 'Alternativa a la gráfica de arriba (generación vs. consumo real del historial) -- esta usa el consumo extrapolado de un año completo, no el historial real.' }
+      : {}));
   art.append(detalle('Ver detalle', tabla(['Mes', 'Generación estimada', 'Consumo extrapolado'],
     r.rows.map(x => [x.mes, `${x.generacionKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${x.consumoExtrapoladoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]), { small: true })));
   art.append(badgeEstado('supuesto'));
@@ -1229,10 +1287,10 @@ function s09(r, _leido, onToggle) {
 // ---------- 10: cuanto pagaria y ahorraria ----------
 function s10(r, _leido, onToggle) {
   const art = crearSeccion(10, 'Cuánto pagaría y cuánto ahorraría', 'Comparación directa: factura sin solar vs. con solar.', r, onToggle);
-  art.append(barraHorizontal([
+  art.append(graficoToggle('g10-anual', 'Gráfica anual: sin paneles vs. con paneles', barraHorizontal([
     ['Hoy, sin paneles (al año)', r.annualbefore, 'var(--cfe-navy,#163b4c)'],
     ['Con paneles (al año)', r.annualafter, 'var(--cfe-teal,#21798b)'],
-  ]));
+  ]), { notaAlternativa: `Alternativa más detallada: la misma comparación pero mes a mes, en la sección ${refSeccion(15, r)}.` }));
   art.append(tabla(['Concepto comparable', 'Sin sistema', 'Con sistema estimado'], [
     ['Gasto anual de referencia', M(r.annualbefore), M(r.annualafter)],
     ['Promedio mensual del año', M(r.annualbefore / 12), M(r.annualafter / 12)],
@@ -1269,7 +1327,8 @@ function s11(r, _leido, onToggle) {
     ['Subtotal', M(r.ventaSinIva)], ['IVA 16%', M(r.iva)], ['INVERSIÓN TOTAL ESTIMADA', M(r.investment)],
   ]));
   const cat = agruparPresupuesto(r.materiales);
-  art.append(barraHorizontal(cat.map(([g, v]) => [g, v, 'var(--cfe-navy,#163b4c)'])));
+  art.append(graficoToggle('g11-presupuesto', 'Gráfica del presupuesto agrupado por categoría',
+    barraHorizontal(cat.map(([g, v]) => [g, v, 'var(--cfe-navy,#163b4c)']))));
   art.append(p(`La inversión contempla los equipos y trabajos agrupados arriba (detalle completo en la sección ${refSeccion(12, r)}` +
     '): módulos, inversor presupuestado, estructura, conexión, protecciones, monitoreo, ingeniería, ' +
     'gestión, flete, montaje y pruebas dentro de las cantidades previstas.'));
@@ -1312,7 +1371,8 @@ function s13(r, _leido, onToggle) {
   const paybackTxt = r.payback ? `${r.payback.toFixed(1)} años` : 'no calculable con el ahorro actual';
   art.append(p(`Esta es la pregunta más importante de todo el estudio. Con este cálculo, la respuesta es ${paybackTxt}.`));
   if (r.flujo25Rows && r.flujo25Rows.length) {
-    art.append(curvaFlujo(r.flujo25Rows.map(x => [x.anio, x.acumuladoMxn]), r.recuperacionAcumulada));
+    art.append(graficoToggle('g13-curva', 'Curva de flujo acumulado a 25 años',
+      curvaFlujo(r.flujo25Rows.map(x => [x.anio, x.acumuladoMxn]), r.recuperacionAcumulada)));
   }
   const roi = r.investment ? r.ahorroAnual / r.investment : 0;
   const bc = beneficioCosto(r);
@@ -1409,7 +1469,9 @@ function s14(r, _leido, onToggle) {
 function s15(r, _leido, onToggle) {
   const art = crearSeccion(15, 'Pagos estimados por mes del año de referencia', '¿Cómo se ve el pago mes a mes, con y sin paneles?', r, onToggle);
   const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
-  art.append(barraAgrupada(mesesAbrev, 'Sin solar', r.rows.map(x => x.pagoSinSolarMxn), 'Con solar estimado', r.rows.map(x => x.pagoConSolarEstimadoMxn), { fmt: M }));
+  art.append(graficoToggle('g15-mensual', 'Gráfica mensual: sin solar vs. con solar',
+    barraAgrupada(mesesAbrev, 'Sin solar', r.rows.map(x => x.pagoSinSolarMxn), 'Con solar estimado', r.rows.map(x => x.pagoConSolarEstimadoMxn), { fmt: M }),
+    { notaAlternativa: `Alternativa más resumida: la misma comparación pero en total anual, en la sección ${refSeccion(10, r)}.` }));
   art.append(detalle('Ver tabla mes a mes', tabla(['Mes', 'Sin solar', 'Con solar estimado', 'Ahorro estimado'],
     r.rows.map(x => [x.mes, M(x.pagoSinSolarMxn), M(x.pagoConSolarEstimadoMxn), M(x.ahorroEstimadoMxn)]), { small: true })));
   art.append(p(`Total anual: ${M(r.annualbefore)} sin solar y ${M(r.annualafter)} con solar. Ahorro estimado: ${M(r.ahorroAnual)}.`));
@@ -1426,7 +1488,8 @@ function s15(r, _leido, onToggle) {
 // ---------- 16: que tan cerca del 100% ----------
 function s16(r, _leido, onToggle) {
   const art = crearSeccion(16, 'Qué tan cerca se puede llegar al 100% de ahorro', '¿Por qué la propuesta no llega al 100% de ahorro?', r, onToggle);
-  art.append(gauge(r.pctMaxPeriodo, 'Ahorro máximo posible de este recibo'));
+  art.append(graficoToggle('g16-gauge', 'Medidor de ahorro máximo posible',
+    gauge(r.pctMaxPeriodo, 'Ahorro máximo posible de este recibo')));
   art.append(p(`Para ahorrar el 100% de un pago recurrente de ${M(r.pagoRecurrentePeriodo)} por ${r.periodoDias || '?'} ` +
     'días, el pago residual tendría que ser $0.00. La generación anual por sí sola no demuestra ese resultado.'));
   art.append(p('La estimación comercial aquí presentada no llega a ese 100%, por DOS razones distintas e independientes entre sí:'));
@@ -1577,7 +1640,7 @@ export const TITULOS_SECCIONES = [
 // mismo patron que onToggleCalculo pero a nivel de parrafo (ver textosOcultos en
 // clientes.js). El parrafo SIEMPRE se ve aqui en pantalla (atenuado si esta oculto),
 // el estado es lo que decide si queda incluido.
-export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggleCalculo, onGuardarGlobal, onQuitarGlobal, onOcultarTexto) {
+export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggleCalculo, onGuardarGlobal, onQuitarGlobal, onOcultarTexto, onToggleGrafico) {
   _overridesActuales = r.textosEditados || {};
   _onEditarTextoActual = onEditarTexto || (() => {});
   _calculosActivosActual = r.calculosActivos || [];
@@ -1587,6 +1650,8 @@ export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggl
   _onQuitarGlobalActual = onQuitarGlobal || (() => {});
   _ocultosActuales = r.textosOcultos || {};
   _onOcultarTextoActual = onOcultarTexto || (() => {});
+  _graficosExcluidosActual = r.graficosExcluidos || [];
+  _onToggleGraficoActual = onToggleGrafico || (() => {});
   const fn = RENDERERS[numero - 1];
   return fn(r, leido, onToggle);
 }

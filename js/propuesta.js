@@ -22,6 +22,13 @@ import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 
+// Grafico/tabla visual incluido en el PDF? -- mismo id e idea que graficoToggle() en
+// secciones.js: el id es compartido entre pantalla y PDF, asi que apagar un grafico en
+// pantalla (r.graficosExcluidos) tambien lo quita del PDF sin un segundo mecanismo
+// aparte. Pedido explicito del usuario, 2026-11-05: "que todo todo, secciones,
+// graficos se puedan apagar, ocultar... solo dime [lo que sea mejor]".
+function graficoIncluido(r, id) { return !(r.graficosExcluidos || []).includes(id); }
+
 function encabezado(doc, numero, titulo, titular) {
   let y = headX(doc, CONTENT_TOP, `${pad2(numero)} | ${titulo}`);
   y = subX(doc, y, titular);
@@ -154,11 +161,13 @@ function pagina04(doc, r, numero) {
   y = spacer(y, 8);
   const montoReduc = r.meta.reducibles.reduce((s, k) => s + (r.cargos[k] || 0), 0);
   const montoNoReduc = r.meta.noReducibles.reduce((s, k) => s + (r.cargos[k] || 0), 0);
-  y = horizontalBarChart(doc, y, [
-    ['Sí baja con los paneles', montoReduc, '#21798b'],
-    ['No baja con los paneles', montoNoReduc, '#163b4c'],
-  ], { height: 70 });
-  y = spacer(y, 4);
+  if (graficoIncluido(r, 'g04-reducibles')) {
+    y = horizontalBarChart(doc, y, [
+      ['Sí baja con los paneles', montoReduc, '#21798b'],
+      ['No baja con los paneles', montoNoReduc, '#163b4c'],
+    ], { height: 70 });
+    y = spacer(y, 4);
+  }
   y = bodyX(doc, y, `Lo que SÍ baja: ${listaConceptos(r.meta.reducibles)}. Lo que NO baja: ${listaConceptos(r.meta.noReducibles)}.`);
   y = spacer(y, 10);
   y = bodyX(doc, y, `Por eso, aunque se instalaran más paneles de los que se necesitan, el pago de un período no ` +
@@ -180,8 +189,10 @@ function pagina05(doc, r, numero) {
     const meses = historial.map(x => `${x.mes}${x.anio}`);
     const kwh = historial.map(x => x.kwh);
     const prom = kwh.reduce((a, b) => a + b, 0) / kwh.length;
-    y = groupedBarChart(doc, y, meses, 'Consumo real facturado', kwh, 'Promedio del historial', kwh.map(() => prom), { height: 150 });
-    y = spacer(y, 10);
+    if (graficoIncluido(r, 'g05-historial')) {
+      y = groupedBarChart(doc, y, meses, 'Consumo real facturado', kwh, 'Promedio del historial', kwh.map(() => prom), { height: 150 });
+      y = spacer(y, 10);
+    }
     y = table(doc, y, ['Período', 'Consumo facturado'], historial.map(x => [`${x.mes} ${x.anio}`, `${x.kwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]),
       { widths: [CONTENT_W * 0.5, CONTENT_W * 0.5], small: true });
     y = spacer(y, 10);
@@ -291,8 +302,10 @@ function pagina07(doc, r, numero) {
     'sale prácticamente igual sin importar el predio o el tamaño del sistema.');
   y = spacer(y, 8);
   const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
-  y = groupedBarChart(doc, y, mesesAbrev, 'Generación estimada', r.rows.map(x => x.generacionKwh), 'Consumo extrapolado', r.rows.map(x => x.consumoExtrapoladoKwh));
-  y = spacer(y, 10);
+  if (graficoIncluido(r, 'g07-extrapolado')) {
+    y = groupedBarChart(doc, y, mesesAbrev, 'Generación estimada', r.rows.map(x => x.generacionKwh), 'Consumo extrapolado', r.rows.map(x => x.consumoExtrapoladoKwh));
+    y = spacer(y, 10);
+  }
   y = table(doc, y, ['Mes', 'Generación estimada', 'Consumo extrapolado'],
     r.rows.map(x => [x.mes, `${x.generacionKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${x.consumoExtrapoladoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]),
     { widths: [CONTENT_W * 0.34, CONTENT_W * 0.33, CONTENT_W * 0.33], small: true });
@@ -340,11 +353,13 @@ function pagina09(doc, r, numero) {
 // ---------- Pagina 10: cuanto pagaria y ahorraria ----------
 function pagina10(doc, r, numero) {
   let y = encabezado(doc, numero, 'Cuánto pagaría y cuánto ahorraría', r.titular);
-  y = horizontalBarChart(doc, y, [
-    ['Hoy, sin paneles (al año)', r.annualbefore, '#163b4c'],
-    ['Con paneles (al año)', r.annualafter, '#21798b'],
-  ], { height: 70 });
-  y = spacer(y, 10);
+  if (graficoIncluido(r, 'g10-anual')) {
+    y = horizontalBarChart(doc, y, [
+      ['Hoy, sin paneles (al año)', r.annualbefore, '#163b4c'],
+      ['Con paneles (al año)', r.annualafter, '#21798b'],
+    ], { height: 70 });
+    y = spacer(y, 10);
+  }
   y = table(doc, y, ['Concepto comparable', 'Sin sistema', 'Con sistema estimado'], [
     ['Gasto anual de referencia', M(r.annualbefore), M(r.annualafter)],
     ['Promedio mensual del año', M(r.annualbefore / 12), M(r.annualafter / 12)],
@@ -367,8 +382,10 @@ function pagina11(doc, r, numero) {
   ], { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4] });
   y = spacer(y, 10);
   const cat = agruparPresupuesto(r.materiales);
-  y = horizontalBarChart(doc, y, cat.map(([g, v]) => [g, v, '#163b4c']), { height: cat.length * 24 + 10 });
-  y = spacer(y, 10);
+  if (graficoIncluido(r, 'g11-presupuesto')) {
+    y = horizontalBarChart(doc, y, cat.map(([g, v]) => [g, v, '#163b4c']), { height: cat.length * 24 + 10 });
+    y = spacer(y, 10);
+  }
   y = bodyX(doc, y, 'La inversión contempla los equipos y trabajos agrupados arriba (detalle completo en la ' +
     'página siguiente): módulos, inversor presupuestado, estructura, conexión, protecciones, monitoreo, ' +
     'ingeniería, gestión, flete, montaje y pruebas dentro de las cantidades previstas.');
@@ -395,7 +412,7 @@ function pagina13(doc, r, numero) {
   y = bodyX(doc, y, `Esta es la pregunta más importante de todo el estudio: ¿cuándo deja de deber la inversión ` +
     `y empieza a ganar? Con este cálculo, la respuesta es ${paybackTxt}.`);
   const flujo25 = r.flujo25Rows || [];
-  if (flujo25.length) {
+  if (flujo25.length && graficoIncluido(r, 'g13-curva')) {
     y = spacer(y, 6);
     y = curve(doc, y, flujo25.map(x => [x.anio, x.acumuladoMxn]), { recuperacionAnios: r.recuperacionAcumulada });
     y = spacer(y, 6);
@@ -446,8 +463,10 @@ function pagina14(doc, r, numero) {
 function pagina15(doc, r, numero) {
   let y = encabezado(doc, numero, 'Pagos estimados por mes del año de referencia', r.titular);
   const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
-  y = groupedBarChart(doc, y, mesesAbrev, 'Sin solar', r.rows.map(x => x.pagoSinSolarMxn), 'Con solar estimado', r.rows.map(x => x.pagoConSolarEstimadoMxn));
-  y = spacer(y, 10);
+  if (graficoIncluido(r, 'g15-mensual')) {
+    y = groupedBarChart(doc, y, mesesAbrev, 'Sin solar', r.rows.map(x => x.pagoSinSolarMxn), 'Con solar estimado', r.rows.map(x => x.pagoConSolarEstimadoMxn));
+    y = spacer(y, 10);
+  }
   y = table(doc, y, ['Mes', 'Sin solar', 'Con solar estimado', 'Ahorro estimado'],
     r.rows.map(x => [x.mes, M(x.pagoSinSolarMxn), M(x.pagoConSolarEstimadoMxn), M(x.ahorroEstimadoMxn)]),
     { widths: [CONTENT_W * 0.2, CONTENT_W * 0.27, CONTENT_W * 0.27, CONTENT_W * 0.26], small: true });
@@ -460,8 +479,10 @@ function pagina15(doc, r, numero) {
 // ---------- Pagina 16: que tan cerca del 100% ----------
 function pagina16(doc, r, numero) {
   let y = encabezado(doc, numero, 'Qué tan cerca se puede llegar al 100% de ahorro', r.titular);
-  y = gauge(doc, y, r.pctMaxPeriodo, { label: 'Ahorro máximo posible de este recibo' });
-  y = spacer(y, 10);
+  if (graficoIncluido(r, 'g16-gauge')) {
+    y = gauge(doc, y, r.pctMaxPeriodo, { label: 'Ahorro máximo posible de este recibo' });
+    y = spacer(y, 10);
+  }
   y = bodyX(doc, y, `Para ahorrar el 100% de un pago recurrente de ${M(r.pagoRecurrentePeriodo)} por ${r.periodoDias || '?'} ` +
     'días, el pago residual tendría que ser $0.00. La generación anual por sí sola no demuestra ese resultado.');
   y = bodyX(doc, y, 'La estimación comercial aquí presentada no llega a ese 100%, por DOS razones distintas e independientes entre sí:');
@@ -572,26 +593,44 @@ function pagina21(doc, r, numero) {
 // incluye aunque su bloque este activo. La usan pagina06b (la foto del sembrado) y
 // pagina06c (fotos de condiciones del inmueble), que solo existen si el proyecto
 // tiene algo cargado.
+// Cuarto elemento: el numero de SECCION en pantalla (1-25, secciones.js/bloques.js)
+// que corresponde a esta pagina del PDF -- permite que un apagado INDIVIDUAL de una
+// seccion (r.seccionesExcluidas, no solo el bloque completo) tambien se refleje aqui.
+// pagina06b/06c no tienen seccion propia en pantalla (son contenido condicional
+// DENTRO de la seccion 6) -- comparten el numero 6: apagar la seccion 6 individual
+// tambien las quita a ellas. 'documentos'/'comparativo_verificacion' (secciones 17-20
+// en pantalla) no tienen pagina propia en este PDF todavia -- hueco preexistente, ver
+// CLAUDE.md -- asi que no aparecen en este mapa (nada que filtrar).
 const PAGINAS = [
-  ['resumen', pagina01], ['recibo_cargos', pagina02], ['recibo_cargos', pagina03], ['recibo_cargos', pagina04],
-  ['consumo_sistema', pagina05], ['consumo_sistema', pagina06],
-  ['consumo_sistema', pagina06b, (r) => !!r.fotoSembrado],
-  ['consumo_sistema', pagina06c, (r) => !!(r.fotosInmueble && r.fotosInmueble.length)],
-  ['produccion', pagina07], ['ambiental', pagina08],
-  ['ahorro_pagos', pagina09], ['ahorro_pagos', pagina10], ['presupuesto', pagina11], ['presupuesto', pagina12],
-  ['recuperacion', pagina13], ['recuperacion', pagina14], ['pagos_100', pagina15], ['pagos_100', pagina16],
-  ['pendientes', pagina17], ['pendientes', pagina17b], ['alcance', pagina18], ['alcance', pagina19],
-  ['glosario_fuentes', pagina20], ['glosario_fuentes', pagina21],
+  ['resumen', pagina01, null, 1],
+  ['recibo_cargos', pagina02, null, 2], ['recibo_cargos', pagina03, null, 3], ['recibo_cargos', pagina04, null, 4],
+  ['consumo_sistema', pagina05, null, 5], ['consumo_sistema', pagina06, null, 6],
+  ['consumo_sistema', pagina06b, (r) => !!r.fotoSembrado, 6],
+  ['consumo_sistema', pagina06c, (r) => !!(r.fotosInmueble && r.fotosInmueble.length), 6],
+  ['produccion', pagina07, null, 7], ['ambiental', pagina08, null, 8],
+  ['ahorro_pagos', pagina09, null, 9], ['ahorro_pagos', pagina10, null, 10],
+  ['presupuesto', pagina11, null, 11], ['presupuesto', pagina12, null, 12],
+  ['recuperacion', pagina13, null, 13], ['recuperacion', pagina14, null, 14],
+  ['pagos_100', pagina15, null, 15], ['pagos_100', pagina16, null, 16],
+  ['pendientes', pagina17, null, 21], ['pendientes', pagina17b, null, 21],
+  ['alcance', pagina18, null, 22], ['alcance', pagina19, null, 23],
+  ['glosario_fuentes', pagina20, null, 24], ['glosario_fuentes', pagina21, null, 25],
 ];
 
-// generarPdf(r, {secciones}) -- secciones: array de claves de BLOQUES_COTIZACION a
-// incluir (null/undefined = todas, el default). 'resumen' se incluye siempre aunque no
+// generarPdf(r, {secciones, seccionesExcluidas}) -- secciones: array de claves de
+// BLOQUES_COTIZACION a incluir (null/undefined = todas, el default). seccionesExcluidas:
+// numeros de seccion (1-25) excluidos INDIVIDUALMENTE aunque su bloque siga activo --
+// mismo estado que controla el indice en pantalla (ver onToggleSeccion en app.js),
+// pedido explicito del usuario, 2026-11-05, para que apagar una seccion suelta tambien
+// la quite del PDF, no solo de la pantalla. 'resumen' se incluye siempre aunque no
 // venga en la lista. Las paginas que sobreviven el filtro se renumeran de corrido (1,
 // 2, 3...) -- mismo criterio que generar_pdf() en Python.
-export function generarPdf(r, { secciones = null } = {}) {
+export function generarPdf(r, { secciones = null, seccionesExcluidas = null } = {}) {
   const activas = new Set(secciones != null ? secciones : BLOQUES_COTIZACION.map(([c]) => c));
   activas.add('resumen');
-  const paginasFiltradas = PAGINAS.filter(([clave, , condicion]) => activas.has(clave) && (!condicion || condicion(r)));
+  const excluidasIndividual = new Set(seccionesExcluidas || []);
+  const paginasFiltradas = PAGINAS.filter(([clave, , condicion, seccionNum]) =>
+    activas.has(clave) && !excluidasIndividual.has(seccionNum) && (!condicion || condicion(r)));
 
   const titulo = `ESTUDIO DEL SISTEMA SOLAR · ${r.titular}`;
   const subtitulo = `${r.tarifa} · servicio ${r.noServicio || ''} · ${r.fechaEstudio} · ${r.n} paneles de ${r.moduloWp} W`;

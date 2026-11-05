@@ -446,6 +446,31 @@ input[type="file"] { padding: 6px 0; }
 .calculo-detalle-cuerpo { margin-top: 6px; font-size: 0.85rem; }
 @media (prefers-color-scheme: dark) { .calculo-detalle { background: rgba(33, 121, 139, 0.12); } }
 
+/* ===================== Graficos/tablas individuales apagables (toggle propio, 2026-11-05) ===================== */
+.grafico-togglable {
+  margin: 14px 0 0; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 8px;
+  background: rgba(22, 59, 76, 0.04);
+}
+.grafico-apagado { opacity: 0.6; border-style: solid; }
+.toggle-grafico { display: block; font-size: 0.78rem; color: var(--grey); font-weight: 600; margin-bottom: 4px; }
+.nota-grafico-alternativo { font-size: 0.75rem; color: var(--teal); margin: 2px 0 6px; font-style: italic; }
+@media (prefers-color-scheme: dark) { .grafico-togglable { background: rgba(22, 59, 76, 0.18); } }
+
+/* Grupo de graficos/tablas que son alternativas entre si (explican algo muy similar) */
+.grupo-graficos-alternativos-header {
+  font-size: 0.82rem; font-weight: 600; color: var(--cfe-gold); margin: 14px 0 4px;
+  padding: 6px 10px; border-left: 3px solid var(--cfe-gold); background: rgba(200, 166, 84, 0.1);
+}
+
+/* ===================== Indice: bloques rapidos (prender/apagar varias secciones de un bloque) ===================== */
+.indice-bloques-rapidos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.select-bloque-rapido { flex: 1 1 100%; font-size: 0.78rem; padding: 4px; }
+.btn-bloque-rapido {
+  font-size: 0.75rem; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); cursor: pointer;
+}
+.btn-bloque-rapido:hover { background: var(--teal); color: #fff; }
+
 /* ===================== Documentos adjuntos (recibo + verificacion en sitio) ===================== */
 .documentos-verificacion { margin-top: 16px; }
 .documentos-grid { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 14px; }
