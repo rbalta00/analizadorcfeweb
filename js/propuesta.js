@@ -110,16 +110,18 @@ function pagina02(doc, r, numero) {
       `que se identifica este inmueble ("${r.titular}"). Verificar que ambos correspondan al mismo servicio antes de continuar.`);
   }
   y = spacer(y, 8);
-  const filasRecibo = [['Período', `${r.periodoDias || '?'} días`], ['Consumo del período', r.periodoKwh ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh` : 'por confirmar']];
-  if (r.demandaContratadaKw) filasRecibo.push(['Demanda contratada', `${r.demandaContratadaKw.toFixed(0)} kW`]);
-  y = table(doc, y, ['Dato verificado', 'Valor'], filasRecibo, { widths: [CONTENT_W * 0.45, CONTENT_W * 0.55] });
-  y = spacer(y, 10);
-  y = table(doc, y, ['Total del recibo', 'Importe'], [
-    ['Servicio con IVA', M(r.pagoRecurrentePeriodo - (r.dap || 0))],
-    ['Alumbrado público (DAP)', M(r.dap || 0)],
-    ['Pago recurrente del período', M(r.pagoRecurrentePeriodo)],
-  ], { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4] });
-  y = spacer(y, 10);
+  if (graficoIncluido(r, 'g02-datos-recibo')) {
+    const filasRecibo = [['Período', `${r.periodoDias || '?'} días`], ['Consumo del período', r.periodoKwh ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh` : 'por confirmar']];
+    if (r.demandaContratadaKw) filasRecibo.push(['Demanda contratada', `${r.demandaContratadaKw.toFixed(0)} kW`]);
+    y = table(doc, y, ['Dato verificado', 'Valor'], filasRecibo, { widths: [CONTENT_W * 0.45, CONTENT_W * 0.55] });
+    y = spacer(y, 10);
+    y = table(doc, y, ['Total del recibo', 'Importe'], [
+      ['Servicio con IVA', M(r.pagoRecurrentePeriodo - (r.dap || 0))],
+      ['Alumbrado público (DAP)', M(r.dap || 0)],
+      ['Pago recurrente del período', M(r.pagoRecurrentePeriodo)],
+    ], { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4] });
+    y = spacer(y, 10);
+  }
   notice(doc, y, 'Los datos de este recibo se usan como base de cálculo del estudio completo; cualquier ' +
     'corrección debe confirmarse contra el documento original de CFE.');
 }
@@ -134,8 +136,10 @@ function pagina03(doc, r, numero) {
   }
   const suma = Object.values(r.cargos).reduce((a, b) => a + b, 0);
   filasCargos.push(['Suma de componentes', M(suma)]);
-  y = table(doc, y, ['Componente del recibo', 'Importe'], filasCargos, { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4] });
-  y = spacer(y, 10);
+  if (graficoIncluido(r, 'g03-cargos')) {
+    y = table(doc, y, ['Componente del recibo', 'Importe'], filasCargos, { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4] });
+    y = spacer(y, 10);
+  }
   y = bodyX(doc, y, 'En palabras simples: "Suministro" es lo que cuesta que CFE le dé servicio, sin importar ' +
     'cuánto consuma. "Distribución" y "Transmisión" son el costo de llevar la electricidad desde la planta ' +
     'hasta su medidor. "CENACE" y "SCnMEM" son cargos que CFE traslada tal cual del operador del sistema ' +
@@ -193,17 +197,21 @@ function pagina05(doc, r, numero) {
       y = groupedBarChart(doc, y, meses, 'Consumo real facturado', kwh, 'Promedio del historial', kwh.map(() => prom), { height: 150 });
       y = spacer(y, 10);
     }
-    y = table(doc, y, ['Período', 'Consumo facturado'], historial.map(x => [`${x.mes} ${x.anio}`, `${x.kwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]),
-      { widths: [CONTENT_W * 0.5, CONTENT_W * 0.5], small: true });
+    if (graficoIncluido(r, 'g05-historial-tabla')) {
+      y = table(doc, y, ['Período', 'Consumo facturado'], historial.map(x => [`${x.mes} ${x.anio}`, `${x.kwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]),
+        { widths: [CONTENT_W * 0.5, CONTENT_W * 0.5], small: true });
+      y = spacer(y, 10);
+    }
+  }
+  if (graficoIncluido(r, 'g05-base-trabajo')) {
+    y = table(doc, y, ['Base de trabajo', 'Resultado'], [
+      ['Período observado', r.periodoKwh && r.periodoDias ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh en ${r.periodoDias} días` : 'por confirmar'],
+      ['Base usada para el consumo anual', r.basisConsumo],
+      ['Consumo anual de referencia', `${r.annualKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año`],
+      ['Gasto anual de referencia', M(r.annualbefore) + ' con IVA y 12 cuotas de DAP'],
+    ], { widths: [CONTENT_W * 0.45, CONTENT_W * 0.55] });
     y = spacer(y, 10);
   }
-  y = table(doc, y, ['Base de trabajo', 'Resultado'], [
-    ['Período observado', r.periodoKwh && r.periodoDias ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh en ${r.periodoDias} días` : 'por confirmar'],
-    ['Base usada para el consumo anual', r.basisConsumo],
-    ['Consumo anual de referencia', `${r.annualKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año`],
-    ['Gasto anual de referencia', M(r.annualbefore) + ' con IVA y 12 cuotas de DAP'],
-  ], { widths: [CONTENT_W * 0.45, CONTENT_W * 0.55] });
-  y = spacer(y, 10);
   if (historial && historial.length >= 6) {
     notice(doc, y, `Esta base usa el historial real de consumo del propio recibo (${historial.length} períodos), no una extrapolación de un solo mes.`);
   } else {
@@ -216,16 +224,18 @@ function pagina05(doc, r, numero) {
 function pagina06(doc, r, numero) {
   let y = encabezado(doc, numero, `Sistema propuesto: ${r.n} paneles de ${r.moduloWp} W`, r.titular);
   const acKw = r.kwp / 1.2;
-  y = table(doc, y, ['Parte del sistema', 'Cantidad y función'], [
-    ['Paneles', `${r.n} módulos de ${r.moduloWp} W: ${r.kwp.toFixed(2)} kWp de potencia nominal. Marca y modelo por confirmar.`],
-    ['Inversor', `${acKw.toFixed(2)} kW AC como capacidad de cálculo económico; equipo comercial por seleccionar.`],
-    ['Relación DC:AC', '1.2 — el inversor se dimensiona más chico que la suma de los paneles a propósito (práctica estándar de la industria, no un error de cálculo).'],
-    ['Estructura', 'Compatible con cubierta y panel. Anclajes, viento y cargas por calcular.'],
-    ['Conexiones y protecciones', 'Cables DC/AC, conectores, canalización, protecciones y puesta a tierra previstos.'],
-    ['Monitoreo', 'Consulta de producción, según solución y comunicaciones disponibles.'],
-    ['Espacio preliminar', `${(r.n * 4).toLocaleString('en-US')} m² con pasillos, como provisión de 4 m² por módulo; sujeto a levantamiento.`],
-  ], { widths: [CONTENT_W * 0.3, CONTENT_W * 0.7] });
-  y = spacer(y, 8);
+  if (graficoIncluido(r, 'g06-sistema')) {
+    y = table(doc, y, ['Parte del sistema', 'Cantidad y función'], [
+      ['Paneles', `${r.n} módulos de ${r.moduloWp} W: ${r.kwp.toFixed(2)} kWp de potencia nominal. Marca y modelo por confirmar.`],
+      ['Inversor', `${acKw.toFixed(2)} kW AC como capacidad de cálculo económico; equipo comercial por seleccionar.`],
+      ['Relación DC:AC', '1.2 — el inversor se dimensiona más chico que la suma de los paneles a propósito (práctica estándar de la industria, no un error de cálculo).'],
+      ['Estructura', 'Compatible con cubierta y panel. Anclajes, viento y cargas por calcular.'],
+      ['Conexiones y protecciones', 'Cables DC/AC, conectores, canalización, protecciones y puesta a tierra previstos.'],
+      ['Monitoreo', 'Consulta de producción, según solución y comunicaciones disponibles.'],
+      ['Espacio preliminar', `${(r.n * 4).toLocaleString('en-US')} m² con pasillos, como provisión de 4 m² por módulo; sujeto a levantamiento.`],
+    ], { widths: [CONTENT_W * 0.3, CONTENT_W * 0.7] });
+    y = spacer(y, 8);
+  }
   const resInm = resumenInmueble(r.inmueble);
   if (resInm) {
     y = bodyX(doc, y, 'Condiciones actuales del inmueble (declaradas, pendientes de levantamiento técnico): ' + resInm);
@@ -339,14 +349,16 @@ function pagina09(doc, r, numero) {
   let y = encabezado(doc, numero, 'Cómo se obtiene el ahorro que se presenta', r.titular);
   y = bodyX(doc, y, 'Se calcula mes a mes la energía neta facturable y la factura resultante. En palabras ' +
     'simples, el modelo sigue estas reglas:');
-  y = table(doc, y, ['Criterio', 'Aplicación'], [
-    ['Compensación', 'Medición neta: lo que generan los paneles se resta directo de su consumo del mes, en vez de vendérselo a CFE aparte. Requiere contrato y medidor autorizados.'],
-    ['Energía aplicada', 'Cada mes se compara cuánto consumió contra cuánto generaron los paneles ese mismo mes, y se usa el MENOR de los dos (se reserva además un 1% de margen de seguridad).'],
-    ['Excedentes entre meses', 'Si algún mes los paneles generan más de lo que consume, ese sobrante no se guarda para el siguiente mes ni se vende aparte.'],
-    [listaConceptos(r.meta.noReducibles), 'Se conserva su gasto de referencia proporcional a días, sin presupuestar ahorro adicional.'],
-    ['IVA y DAP', 'Se incluye IVA 16%. Se conserva el DAP observado en los pagos modelados.'],
-  ], { widths: [CONTENT_W * 0.3, CONTENT_W * 0.7] });
-  y = spacer(y, 8);
+  if (graficoIncluido(r, 'g09-criterios')) {
+    y = table(doc, y, ['Criterio', 'Aplicación'], [
+      ['Compensación', 'Medición neta: lo que generan los paneles se resta directo de su consumo del mes, en vez de vendérselo a CFE aparte. Requiere contrato y medidor autorizados.'],
+      ['Energía aplicada', 'Cada mes se compara cuánto consumió contra cuánto generaron los paneles ese mismo mes, y se usa el MENOR de los dos (se reserva además un 1% de margen de seguridad).'],
+      ['Excedentes entre meses', 'Si algún mes los paneles generan más de lo que consume, ese sobrante no se guarda para el siguiente mes ni se vende aparte.'],
+      [listaConceptos(r.meta.noReducibles), 'Se conserva su gasto de referencia proporcional a días, sin presupuestar ahorro adicional.'],
+      ['IVA y DAP', 'Se incluye IVA 16%. Se conserva el DAP observado en los pagos modelados.'],
+    ], { widths: [CONTENT_W * 0.3, CONTENT_W * 0.7] });
+    y = spacer(y, 8);
+  }
   notice(doc, y, 'Esta estimación no es una refacturación oficial de CFE ni una garantía mínima de ahorro.');
 }
 
@@ -360,16 +372,18 @@ function pagina10(doc, r, numero) {
     ], { height: 70 });
     y = spacer(y, 10);
   }
-  y = table(doc, y, ['Concepto comparable', 'Sin sistema', 'Con sistema estimado'], [
-    ['Gasto anual de referencia', M(r.annualbefore), M(r.annualafter)],
-    ['Promedio mensual del año', M(r.annualbefore / 12), M(r.annualafter / 12)],
-    ['Ahorro anual de factura', '—', M(r.ahorroAnual)],
-    ['Ahorro promedio mensual', '—', M(r.ahorroAnual / 12)],
-    ['Ahorro total anual', '—', PCT(r.pctAhorro)],
-    ['Mantenimiento del primer año', '—', M(r.om1)],
-    ['Ahorro neto del primer año', '—', M(r.ahorroAnual - r.om1)],
-  ], { widths: [CONTENT_W * 0.4, CONTENT_W * 0.3, CONTENT_W * 0.3] });
-  y = spacer(y, 8);
+  if (graficoIncluido(r, 'g10-tabla-comparativa')) {
+    y = table(doc, y, ['Concepto comparable', 'Sin sistema', 'Con sistema estimado'], [
+      ['Gasto anual de referencia', M(r.annualbefore), M(r.annualafter)],
+      ['Promedio mensual del año', M(r.annualbefore / 12), M(r.annualafter / 12)],
+      ['Ahorro anual de factura', '—', M(r.ahorroAnual)],
+      ['Ahorro promedio mensual', '—', M(r.ahorroAnual / 12)],
+      ['Ahorro total anual', '—', PCT(r.pctAhorro)],
+      ['Mantenimiento del primer año', '—', M(r.om1)],
+      ['Ahorro neto del primer año', '—', M(r.ahorroAnual - r.om1)],
+    ], { widths: [CONTENT_W * 0.4, CONTENT_W * 0.3, CONTENT_W * 0.3] });
+    y = spacer(y, 8);
+  }
   y = bodyX(doc, y, 'El ahorro de factura es la diferencia entre pagos de electricidad. El ahorro neto descuenta el mantenimiento; no son cifras que deban sumarse.');
   notice(doc, y, 'Son estimaciones con las bases descritas. El ahorro real se medirá después de operar, comparando recibos equivalentes y cambios de consumo.');
 }
@@ -377,10 +391,12 @@ function pagina10(doc, r, numero) {
 // ---------- Pagina 11: presupuesto resumen ----------
 function pagina11(doc, r, numero) {
   let y = encabezado(doc, numero, 'Presupuesto y alcance económico', r.titular);
-  y = table(doc, y, ['Resumen de venta', 'Importe'], [
-    ['Subtotal', M(r.ventaSinIva)], ['IVA 16%', M(r.iva)], ['INVERSIÓN TOTAL ESTIMADA', M(r.investment)],
-  ], { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4] });
-  y = spacer(y, 10);
+  if (graficoIncluido(r, 'g11-resumen-venta')) {
+    y = table(doc, y, ['Resumen de venta', 'Importe'], [
+      ['Subtotal', M(r.ventaSinIva)], ['IVA 16%', M(r.iva)], ['INVERSIÓN TOTAL ESTIMADA', M(r.investment)],
+    ], { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4] });
+    y = spacer(y, 10);
+  }
   const cat = agruparPresupuesto(r.materiales);
   if (graficoIncluido(r, 'g11-presupuesto')) {
     y = horizontalBarChart(doc, y, cat.map(([g, v]) => [g, v, '#163b4c']), { height: cat.length * 24 + 10 });
@@ -396,10 +412,12 @@ function pagina11(doc, r, numero) {
 // ---------- Pagina 12: detalle presupuesto ----------
 function pagina12(doc, r, numero) {
   let y = encabezado(doc, numero, 'Detalle del presupuesto', r.titular);
-  y = table(doc, y, ['Concepto', 'Cantidad prevista', 'Importe sin IVA'],
-    r.materiales.map(m => [m.partida, `${m.cantidad.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${m.unidad}`, M(m.importeMxn)]),
-    { widths: [CONTENT_W * 0.5, CONTENT_W * 0.25, CONTENT_W * 0.25], small: true });
-  y = spacer(y, 8);
+  if (graficoIncluido(r, 'g12-detalle-presupuesto')) {
+    y = table(doc, y, ['Concepto', 'Cantidad prevista', 'Importe sin IVA'],
+      r.materiales.map(m => [m.partida, `${m.cantidad.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${m.unidad}`, M(m.importeMxn)]),
+      { widths: [CONTENT_W * 0.5, CONTENT_W * 0.25, CONTENT_W * 0.25], small: true });
+    y = spacer(y, 8);
+  }
   y = bodyX(doc, y, `Subtotal: ${M(r.ventaSinIva)} · IVA: ${M(r.iva)} · Inversión con IVA: ${M(r.investment)}.`);
   notice(doc, y, 'Las capacidades, longitudes y accesorios son provisiones. El modelo de inversor, calibres y ' +
     'cantidades finales se ajustarán mediante ingeniería y cotización vigente antes de contratar.');
@@ -428,7 +446,9 @@ function pagina13(doc, r, numero) {
     ['VAN (valor actual neto) al 10%', `${M(r.van)}: cuánto más valen, en pesos de hoy, los ahorros futuros que lo que costó el sistema.`],
   ];
   if (bc != null) filasInd.push(['Beneficio/costo', `${bc.toFixed(2)}: por cada peso invertido (y gastado en mantenimiento), regresa ${bc.toFixed(2)} pesos actualizados en ahorros.`]);
-  y = table(doc, y, ['Indicador estimado', 'Resultado y explicación'], filasInd, { widths: [CONTENT_W * 0.3, CONTENT_W * 0.7], small: true });
+  if (graficoIncluido(r, 'g13-indicadores')) {
+    y = table(doc, y, ['Indicador estimado', 'Resultado y explicación'], filasInd, { widths: [CONTENT_W * 0.3, CONTENT_W * 0.7], small: true });
+  }
   y = spacer(y, 6);
   const escPct = r.escalamientoTarifaPct || 0;
   const escTxt = escPct
@@ -505,7 +525,9 @@ function pagina17(doc, r, numero) {
   y = bodyX(doc, y, 'Esta cotización se calculó únicamente con la información del recibo de CFE que se ' +
     'cargó o capturó — sin importar si ese recibo venía completo o no, esto SIEMPRE hace falta confirmar ' +
     'antes de poder ofrecer un presupuesto real y firme de este servicio:');
-  table(doc, y, ['Pendiente para un presupuesto real'], REQUISITOS_PRESUPUESTO_REAL.map(x => [x]), { small: true });
+  if (graficoIncluido(r, 'g21-pendientes')) {
+    table(doc, y, ['Pendiente para un presupuesto real'], REQUISITOS_PRESUPUESTO_REAL.map(x => [x]), { small: true });
+  }
 }
 
 // ---------- Pagina 17b: notas especificas de ESTE recibo ----------
@@ -527,9 +549,11 @@ function pagina18(doc, r, numero) {
   y = bodyX(doc, y, 'No incluye baterías, respaldo en apagones, refuerzo estructural, sustitución de cubierta, ' +
     'impermeabilización general, cambio de transformador, obra de media tensión ni rehabilitación eléctrica ' +
     'ajena al sistema. Cualquier necesidad adicional se cotizará y aceptará por escrito.');
-  y = table(doc, y, ['Condiciones de pago sugeridas', ''], COMERCIAL.pagos.map(pg => [`${Math.round(pg.porcentaje * 100)}%`, pg.hito]),
-    { widths: [CONTENT_W * 0.15, CONTENT_W * 0.85] });
-  y = spacer(y, 8);
+  if (graficoIncluido(r, 'g22-condiciones-pago')) {
+    y = table(doc, y, ['Condiciones de pago sugeridas', ''], COMERCIAL.pagos.map(pg => [`${Math.round(pg.porcentaje * 100)}%`, pg.hito]),
+      { widths: [CONTENT_W * 0.15, CONTENT_W * 0.85] });
+    y = spacer(y, 8);
+  }
   y = bodyX(doc, y, COMERCIAL.naturalezaCondiciones);
   y = table(doc, y, ['Etapa', 'Plazo estimado'], COMERCIAL.cronograma, { widths: [CONTENT_W * 0.4, CONTENT_W * 0.6], small: true });
   y = spacer(y, 6);
@@ -539,13 +563,15 @@ function pagina18(doc, r, numero) {
 // ---------- Pagina 19: entrega y mantenimiento ----------
 function pagina19(doc, r, numero) {
   let y = encabezado(doc, numero, 'Entrega, mantenimiento y comprobación del ahorro', r.titular);
-  y = table(doc, y, ['Momento', 'Entrega o comprobación'], [
-    ['Antes de obra', 'Plano, diagrama unifilar, memoria eléctrica, cálculo de estructura, modelos, protecciones, alcance y contrato.'],
-    ['Al terminar', 'Inventario y números de serie, pruebas, documentación de conexión, manuales y garantías, plano final, acceso al monitoreo y capacitación.'],
-    ['Durante operación', 'Registrar producción, importaciones, exportaciones, demanda, consumo y recibos. Revisar limpiezas, conexiones y alarmas.'],
-    ['Para medir ahorro', 'Comparar factura sin solar ajustada al consumo real con factura efectivamente pagada, en períodos equivalentes. Separar IVA, DAP, adeudos y cambios tarifarios.'],
-  ], { widths: [CONTENT_W * 0.25, CONTENT_W * 0.75] });
-  y = spacer(y, 8);
+  if (graficoIncluido(r, 'g23-entrega')) {
+    y = table(doc, y, ['Momento', 'Entrega o comprobación'], [
+      ['Antes de obra', 'Plano, diagrama unifilar, memoria eléctrica, cálculo de estructura, modelos, protecciones, alcance y contrato.'],
+      ['Al terminar', 'Inventario y números de serie, pruebas, documentación de conexión, manuales y garantías, plano final, acceso al monitoreo y capacitación.'],
+      ['Durante operación', 'Registrar producción, importaciones, exportaciones, demanda, consumo y recibos. Revisar limpiezas, conexiones y alarmas.'],
+      ['Para medir ahorro', 'Comparar factura sin solar ajustada al consumo real con factura efectivamente pagada, en períodos equivalentes. Separar IVA, DAP, adeudos y cambios tarifarios.'],
+    ], { widths: [CONTENT_W * 0.25, CONTENT_W * 0.75] });
+    y = spacer(y, 8);
+  }
   y = bodyX(doc, y, `El mantenimiento inicial modelado es ${M(r.om1)} al año. Es una provisión económica, no una ` +
     'póliza incluida gratuitamente ni un precio fijo para toda la vida del sistema.');
   y = notice(doc, y, COMERCIAL.garantiaInstalacion);
@@ -558,7 +584,7 @@ function pagina20(doc, r, numero) {
   let y = encabezado(doc, numero, 'Glosario: términos usados en este estudio', r.titular);
   y = bodyX(doc, y, 'Para consultar rápido el significado de los términos técnicos que aparecen en las páginas anteriores.');
   y = spacer(y, 8);
-  table(doc, y, ['Término', 'Qué significa'], [
+  if (graficoIncluido(r, 'g24-glosario')) table(doc, y, ['Término', 'Qué significa'], [
     ['kWh (kilowatt-hora)', 'La unidad en la que CFE cobra la electricidad: cuánta energía se consumió.'],
     ['kW / kWp', 'La potencia (velocidad del consumo/generación). "Pico" es la potencia máxima de los paneles en condiciones ideales.'],
     ['Demanda contratada', 'En tarifas de negocio/gobierno, la potencia máxima reservada por CFE; se paga por tenerla disponible.'],
