@@ -358,6 +358,11 @@ input[type="file"] { padding: 6px 0; }
 .seccion p, .aviso-cream, .nota {
   text-align: justify; overflow-wrap: break-word; hyphens: auto;
 }
+/* Seccion apagada (individual o por su bloque) -- se sigue mostrando completa en la
+   vista de edicion (vista admin de lo apagado, 2026-11-05), solo se atenua y marca
+   con borde punteado para que sea obvio sin tener que prenderla para recordar que
+   contenia. El PDF/cliente nunca la ven -- eso lo filtra generarPdf() aparte. */
+.seccion-apagada { opacity: 0.6; border-style: dashed; }
 .seccion-header { margin-bottom: 10px; }
 .seccion-numero { display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
   color: var(--cfe-gold); text-transform: uppercase; margin-bottom: 4px; }
@@ -470,6 +475,12 @@ input[type="file"] { padding: 6px 0; }
   background: var(--bg); cursor: pointer;
 }
 .btn-bloque-rapido:hover { background: var(--teal); color: #fff; }
+.btn-bloque-rapido:disabled { opacity: 0.4; cursor: default; }
+.btn-bloque-rapido:disabled:hover { background: var(--bg); color: inherit; }
+
+/* ===================== Plantilla final revisada por tarifa (2026-11-05) ===================== */
+.fila-plantilla-tarifa { padding: 4px 2px; }
+.fila-plantilla-tarifa-actual { background: rgba(200, 166, 84, 0.1); border-radius: 6px; font-weight: 600; }
 
 /* ===================== Celdas de tabla editables (etiquetas/encabezados, 2026-11-05) ===================== */
 .celda-editable { display: inline-block; min-width: 10px; outline: none; border-radius: 3px; padding: 0 2px; }

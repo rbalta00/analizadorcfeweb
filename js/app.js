@@ -7,7 +7,7 @@ import {
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
-import { guardarTextoGlobal, quitarTextoGlobal } from './textosGlobales.js';
+import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf } from './propuesta.js';
 import { generarResumenEjecutivo, generarGuiaPresentacion, generarAnexoInterconexion } from './resumen.js';
@@ -1819,8 +1819,72 @@ function renderSecciones(r) {
     cont.append(art);
   });
   renderIndice(r);
+  renderPlantillasTarifa(r);
   observarSecciones();
 }
+
+// Plantilla final revisada POR TARIFA (GDMTO/GDMTH/GDBT/PDBT/01/DAC) -- pedido
+// explicito del usuario, 2026-11-05: "al final poder guardar como formato final
+// revisado para ya así hacer todas las cotizaciones, aunque puede variar por
+// tarifa se va a ir guardando y corrigiendo y eliminando por tarifa". Guarda/
+// reemplaza TODO proyecto.textosEditados de la cotizacion abierta como el
+// snapshot completo de esa tarifa (ver nota de diseño en textosGlobales.js) --
+// solo se puede guardar/actualizar la plantilla de la MISMA tarifa del proyecto
+// que se esta viendo (no tendria sentido guardar texto de GDMTO como plantilla
+// de GDMTH). Las otras 5 tarifas se listan de solo lectura + boton de eliminar.
+function renderPlantillasTarifa(r) {
+  const cont = $('plantillasLista');
+  cont.innerHTML = '';
+  const resumen = resumenPlantillasPorTarifa();
+  const nEditados = Object.keys(proyectoActual.textosEditados || {}).length;
+  for (const tarifa of TARIFAS_PLANTILLA) {
+    const esTarifaActual = tarifa === r.tarifa;
+    const n = resumen[tarifa];
+    const fila = document.createElement('div');
+    fila.className = 'indice-fila fila-plantilla-tarifa' + (esTarifaActual ? ' fila-plantilla-tarifa-actual' : '');
+    const etiqueta = document.createElement('span');
+    etiqueta.className = 'indice-item';
+    etiqueta.textContent = `${esTarifaActual ? '➡ ' : ''}${tarifa}: ${n ? `${n} texto(s)/tabla(s) guardados` : 'sin plantilla todavía'}`;
+    fila.append(etiqueta);
+    if (esTarifaActual) {
+      const btnGuardar = document.createElement('button');
+      btnGuardar.type = 'button';
+      btnGuardar.className = 'btn-bloque-rapido';
+      btnGuardar.textContent = n ? '💾 Actualizar con este proyecto' : '💾 Guardar este proyecto como plantilla';
+      btnGuardar.disabled = nEditados === 0;
+      btnGuardar.title = nEditados === 0
+        ? 'Este proyecto todavía no tiene ningún texto/tabla editado -- edita lo que quieras corregir primero.'
+        : `Reemplaza la plantilla de ${tarifa} con los ${nEditados} texto(s)/tabla(s) editados de ESTE proyecto.`;
+      btnGuardar.addEventListener('click', () => onGuardarPlantillaTarifa(tarifa));
+      fila.append(btnGuardar);
+    }
+    if (n) {
+      const btnEliminar = document.createElement('button');
+      btnEliminar.type = 'button';
+      btnEliminar.className = 'btn-bloque-rapido';
+      btnEliminar.textContent = '🗑️ Eliminar plantilla';
+      btnEliminar.addEventListener('click', () => onEliminarPlantillaTarifa(tarifa));
+      fila.append(btnEliminar);
+    }
+    cont.append(fila);
+  }
+  const nota = document.createElement('p');
+  nota.className = 'nota';
+  nota.textContent = 'Una cotización nueva de una tarifa con plantilla guardada arranca con esos textos/tablas en vez de los de fábrica -- editar algo en un proyecto específico siempre gana sobre la plantilla.';
+  cont.append(nota);
+}
+
+function onGuardarPlantillaTarifa(tarifa) {
+  guardarPlantillaTarifa(tarifa, proyectoActual.textosEditados || {});
+  if (ultimoResultado) renderSecciones(ultimoResultado);
+}
+
+function onEliminarPlantillaTarifa(tarifa) {
+  eliminarPlantillaTarifa(tarifa);
+  if (ultimoResultado) renderSecciones(ultimoResultado);
+}
+
+$('btnTogglePlantillas').addEventListener('click', () => $('plantillasTarifa').classList.toggle('indice-abierto'));
 
 // Indice de las 21 secciones con un checkbox de "incluir" por cada una (ademas del
 // link para saltar a esa seccion) -- pedido explicito del usuario: poder apagar las

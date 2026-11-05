@@ -8,7 +8,7 @@ import { barraHorizontal, barraAgrupada, gauge, curvaFlujo } from './charts.js';
 import { bloqueDeSeccion, seccionesDelBloque } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
-import { leerTextosGlobales } from './textosGlobales.js';
+import { leerTextosGlobales, leerPlantillaTarifa } from './textosGlobales.js';
 
 // Razon real por la que un concepto NO reducible no baja con paneles solares -- NO es la
 // misma razon para todos. 'suministro' es un cargo fijo por tener contrato (no depende de
@@ -153,6 +153,7 @@ let _onToggleCalculoActual = () => {};
 let _globalesActuales = {};
 let _onGuardarGlobalActual = () => {};
 let _onQuitarGlobalActual = () => {};
+let _plantillaTarifaActual = {};
 let _ocultosActuales = {};
 let _onOcultarTextoActual = () => {};
 let _graficosExcluidosActual = [];
@@ -202,8 +203,14 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   e.spellcheck = false;
   e.dataset.textoId = id;
   const tieneProyecto = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
+  // Prioridad de que texto se usa como "base" cuando ESTE proyecto no tiene su propio
+  // override: plantilla revisada de la TARIFA de este proyecto (textosGlobales.js,
+  // guardarPlantillaTarifa) > predeterminado global para cualquier tarifa > texto fijo
+  // en el codigo. Pedido explicito del usuario, 2026-11-05 (fase de plantillas por
+  // tarifa): "cotizaciones nuevas de esa misma tarifa arranquen con esa plantilla".
+  const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id);
   const tieneGlobal = Object.prototype.hasOwnProperty.call(_globalesActuales, id);
-  const base = tieneGlobal ? _globalesActuales[id] : textoDefecto;
+  const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : (tieneGlobal ? _globalesActuales[id] : textoDefecto);
   e.textContent = tieneProyecto ? _overridesActuales[id] : base;
   e.addEventListener('paste', (ev) => {
     ev.preventDefault();
@@ -212,9 +219,10 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   });
   e.addEventListener('focusout', () => _onEditarTextoActual(id, e.textContent, base));
   wrap.append(e);
-  if (tieneGlobal) {
-    const nota = el('span', 'nota-texto-global', '🌐 Usa tu predeterminado global');
-    wrap.append(nota);
+  if (tienePlantillaTarifa && !tieneProyecto) {
+    wrap.append(el('span', 'nota-texto-global', '🏷️ Usa la plantilla revisada de esta tarifa'));
+  } else if (tieneGlobal && !tieneProyecto) {
+    wrap.append(el('span', 'nota-texto-global', '🌐 Usa tu predeterminado global'));
   }
   if (tieneProyecto) {
     wrap.classList.add('campo-editado');
@@ -279,10 +287,11 @@ function tarjetas(items) {
 // silencio como si fuera texto libre; solo etiquetas/encabezados/descripciones.
 function celdaEditable(id, textoDefecto) {
   const tieneProyecto = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
+  const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id);
   const tieneGlobal = Object.prototype.hasOwnProperty.call(_globalesActuales, id);
-  const base = tieneGlobal ? _globalesActuales[id] : textoDefecto;
+  const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : (tieneGlobal ? _globalesActuales[id] : textoDefecto);
   const span = document.createElement('span');
-  span.className = 'celda-editable' + (tieneProyecto ? ' celda-editada' : tieneGlobal ? ' celda-con-global' : '');
+  span.className = 'celda-editable' + (tieneProyecto ? ' celda-editada' : (tienePlantillaTarifa || tieneGlobal) ? ' celda-con-global' : '');
   span.contentEditable = 'true';
   span.spellcheck = false;
   span.dataset.textoId = id;
@@ -373,6 +382,13 @@ function grupoGraficosAlternativos(titulo) {
 // (no depende del texto) compartido con propuesta.js (el PDF lee el mismo
 // r.graficosExcluidos por el mismo id) -- asi apagar un grafico aqui tambien lo quita
 // del PDF, sin necesitar un segundo mecanismo aparte.
+// Pedido explicito del usuario, 2026-11-05 (vista admin de lo apagado): "que lo
+// que se marque como desconectado apagado o eliminado se pueda visualizar" -- el
+// contenido apagado NUNCA desaparece de la vista de edicion (solo del PDF y de lo
+// que recibiria un cliente), se queda atenuado con una etiqueta, igual que ya
+// hacia bloqueCalculo() con su "Apagado: no se incluira..." -- antes graficoToggle
+// hacia lo contrario (quitaba el contenido entero y lo sustituia por una nota),
+// inconsistente con ese otro patron y con lo que el usuario esperaba ver.
 function graficoToggle(id, etiqueta, nodo, { notaAlternativa } = {}) {
   const excluido = _graficosExcluidosActual.includes(id);
   const cont = el('div', 'grafico-togglable' + (excluido ? ' grafico-apagado' : ''));
@@ -384,13 +400,12 @@ function graficoToggle(id, etiqueta, nodo, { notaAlternativa } = {}) {
   wrap.append(input, document.createTextNode(` Mostrar: ${etiqueta}`));
   cont.append(wrap);
   if (notaAlternativa) cont.append(el('p', 'nota-grafico-alternativo', notaAlternativa));
-  if (excluido) {
-    cont.append(el('p', 'nota', 'Oculto -- no se incluirá en la cotización final (pantalla y PDF).'));
-  } else {
-    // nodo puede ser un solo elemento o un arreglo (ej. g02-datos-recibo agrupa 2
-    // tablas bajo un solo toggle) -- mismo patron que bloqueCalculo()/detalle().
-    for (const n of Array.isArray(nodo) ? nodo : [nodo]) cont.append(n);
-  }
+  if (excluido) cont.append(el('p', 'nota', '🚫 Apagado -- no se incluirá en el PDF ni en lo que vería el cliente. Se sigue mostrando aquí, atenuado, solo como referencia para ti.'));
+  // nodo puede ser un solo elemento o un arreglo (ej. g02-datos-recibo agrupa 2
+  // tablas bajo un solo toggle) -- mismo patron que bloqueCalculo()/detalle().
+  // Se agrega SIEMPRE, este apagado o no -- la clase .grafico-apagado (CSS) es la
+  // que lo atenua visualmente, el contenido real nunca se quita del DOM.
+  for (const n of Array.isArray(nodo) ? nodo : [nodo]) cont.append(n);
   return cont;
 }
 
@@ -523,19 +538,27 @@ function bloqueCalculo(numero, nodoOArray, r) {
   return cont;
 }
 
+// Vista admin de lo apagado (pedido explicito del usuario, 2026-11-05): una
+// seccion apagada (individual o porque su bloque completo esta apagado) NUNCA
+// desaparece de esta pantalla -- renderSecciones() en app.js ya la renderiza
+// igual (solo el PDF filtra de verdad), aqui solo se le agrega la clase
+// 'seccion-apagada' (atenuada + borde punteado, ver CSS) y una etiqueta visible
+// en el header, para que sea obvio de un vistazo cuales secciones quedaron fuera
+// sin tener que prenderlas para recordar que contenian.
 function crearSeccion(numero, titulo, pregunta, r, onToggle) {
   _seccionActual = numero;
   _contadorTexto = 0;
-  const art = el('article', 'seccion');
-  art.id = `seccion-${numero}`;
-  const header = el('div', 'seccion-header');
   const activos = seccionesActivasEnOrden(r);
   const pos = activos.indexOf(numero) + 1;
-  const etiquetaNumero = pos > 0 ? `${String(pos).padStart(2, '0')} de ${activos.length}` : 'Desactivada';
+  const art = el('article', 'seccion' + (pos > 0 ? '' : ' seccion-apagada'));
+  art.id = `seccion-${numero}`;
+  const header = el('div', 'seccion-header');
+  const etiquetaNumero = pos > 0 ? `${String(pos).padStart(2, '0')} de ${activos.length}` : '🚫 Apagada';
   header.append(el('div', 'seccion-numero' + (pos > 0 ? '' : ' seccion-numero-apagada'), etiquetaNumero));
   header.append(tituloEditable(numero, titulo));
   if (pregunta) header.append(el('p', 'seccion-pregunta', pregunta));
   header.append(toggleSeccionIndividual(r, numero, onToggle));
+  if (pos <= 0) header.append(el('p', 'nota', '🚫 Esta sección está apagada -- no se incluirá en el PDF ni en lo que vería el cliente. Se sigue mostrando aquí, atenuada, solo como referencia para ti.'));
   art.append(header);
   return art;
 }
@@ -1699,6 +1722,7 @@ export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggl
   _calculosActivosActual = r.calculosActivos || [];
   _onToggleCalculoActual = onToggleCalculo || (() => {});
   _globalesActuales = leerTextosGlobales();
+  _plantillaTarifaActual = leerPlantillaTarifa(r.tarifa);
   _onGuardarGlobalActual = onGuardarGlobal || (() => {});
   _onQuitarGlobalActual = onQuitarGlobal || (() => {});
   _ocultosActuales = r.textosOcultos || {};
