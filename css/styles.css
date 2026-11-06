@@ -424,6 +424,7 @@ input[type="file"] { padding: 6px 0; }
   font-weight: 600; cursor: pointer; padding: 2px 4px; margin-top: 2px; text-align: left;
 }
 .btn-guardar-global:hover { text-decoration: underline; }
+.btn-guardar-global.activo { color: #1a7a4c; }
 .btn-ocultar-texto {
   display: block; background: none; border: none; color: var(--grey); font-size: 0.72rem;
   font-weight: 600; cursor: pointer; padding: 2px 4px; margin-top: 2px; text-align: left;

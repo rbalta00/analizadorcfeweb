@@ -233,24 +233,24 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
     btn.addEventListener('click', () => _onEditarTextoActual(id, null, base));
     wrap.append(btn);
   }
-  if (tieneProyecto || !tieneGlobal) {
-    // Solo tiene sentido "guardar como predeterminado" si lo que se ve ahora mismo
-    // es distinto del predeterminado global actual (o no hay uno todavia).
-    const btnGlobal = document.createElement('button');
-    btnGlobal.type = 'button';
-    btnGlobal.className = 'btn-guardar-global';
-    btnGlobal.textContent = '🌐 Usar este texto en todas las cotizaciones nuevas';
-    btnGlobal.addEventListener('click', () => _onGuardarGlobalActual(id, e.textContent, textoDefecto));
-    wrap.append(btnGlobal);
-  }
-  if (tieneGlobal) {
-    const btnQuitar = document.createElement('button');
-    btnQuitar.type = 'button';
-    btnQuitar.className = 'btn-guardar-global';
-    btnQuitar.textContent = '🌐✕ Quitar predeterminado global (usar el texto original de la app)';
-    btnQuitar.addEventListener('click', () => _onQuitarGlobalActual(id, textoDefecto));
-    wrap.append(btnQuitar);
-  }
+  // UN SOLO interruptor en vez de 2 botones separados (pedido explicito del usuario,
+  // 2026-11-05 -- "esta medio enredado" con "Usar este texto en todas..." y "Quitar
+  // predeterminado global..." como botones distintos). Prendido = este texto es el
+  // predeterminado global; apagado = se quito. El clic SIEMPRE guarda o quita segun
+  // el estado actual, sin comparar contra textoDefecto -- antes, si no habias editado
+  // el parrafo, "Usar este texto..." no hacia nada porque el texto ya era igual al
+  // default y el codigo lo interpretaba como "nada que guardar" (bug real reportado).
+  const btnGlobalToggle = document.createElement('button');
+  btnGlobalToggle.type = 'button';
+  btnGlobalToggle.className = 'btn-guardar-global' + (tieneGlobal ? ' activo' : '');
+  btnGlobalToggle.textContent = tieneGlobal
+    ? '🌐✅ Aplicar a todas las cotizaciones (clic para desactivar)'
+    : '🌐 Aplicar este texto a todas las cotizaciones';
+  btnGlobalToggle.addEventListener('click', () => {
+    if (tieneGlobal) _onQuitarGlobalActual(id, textoDefecto);
+    else _onGuardarGlobalActual(id, e.textContent, textoDefecto);
+  });
+  wrap.append(btnGlobalToggle);
   const btnOcultar = document.createElement('button');
   btnOcultar.type = 'button';
   btnOcultar.className = 'btn-ocultar-texto';

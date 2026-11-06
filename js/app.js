@@ -1761,9 +1761,16 @@ function onEditarTexto(id, valor, textoDefecto) {
 // Predeterminado GLOBAL de un texto -- aplica a TODAS las cotizaciones, no solo a
 // este cliente (ver textosGlobales.js) -- pedido explicito del usuario: poder
 // cambiar la redaccion de la app el mismo, sin pedirmelo por codigo.
-function onGuardarTextoGlobal(id, texto, textoDefecto) {
+// Pedido explicito del usuario, 2026-11-05: el boton ahora es un interruptor
+// ON/OFF -- "aplicar a todas" SIEMPRE guarda cuando se activa, sin importar si el
+// texto coincide con textoDefecto. Antes se comparaba contra textoDefecto y, si
+// coincidian (parrafo sin editar), se interpretaba como "nada que guardar" y no
+// pasaba nada -- bug real reportado por el usuario ("le doy click y no me marca
+// nada"). `textoDefecto` se deja como parametro solo por compatibilidad de firma,
+// ya no se usa para decidir si guardar.
+function onGuardarTextoGlobal(id, texto, _textoDefecto) {
   const limpio = (texto || '').trim();
-  if (!limpio || limpio === (textoDefecto || '').trim()) { quitarTextoGlobal(id); } else { guardarTextoGlobal(id, texto); }
+  if (!limpio) { quitarTextoGlobal(id); } else { guardarTextoGlobal(id, texto); }
   if (ultimoResultado) renderSecciones(ultimoResultado);
 }
 
