@@ -831,7 +831,14 @@ function s02(r, leido, onToggle) {
   }
   const filasRecibo = [['Período', `${r.periodoDias || '?'} días`], ['Consumo del período', r.periodoKwh ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh` : 'por confirmar']];
   if (r.demandaContratadaKw) filasRecibo.push(['Demanda contratada', `${r.demandaContratadaKw.toFixed(0)} kW`]);
-  const tablaDatoVerificado = tabla(['Dato verificado', 'Valor'], filasRecibo, { id: 'g02-datos-recibo-a' });
+  // textCols:[1] -- bug real reportado por el usuario, 2026-11-05 continuacion 11: "el
+  // renglon 'periodo' si tiene palomita pero el dato '29 dias' no". Esta es una tabla de
+  // TRAZABILIDAD (confirmar lo que se leyo del recibo: dias, kWh, kW de demanda) -- no
+  // es un desglose financiero (a diferencia de g02-datos-recibo-b/g03-cargos, que si
+  // muestran montos reales del recibo y se quedan protegidas a proposito). "29 dias"/
+  // "2,400 kWh"/"50 kW" son datos capturados, no un resultado financiero calculado por
+  // el motor -- mismo criterio que se aplico a g02-calc-mapa.
+  const tablaDatoVerificado = tabla(['Dato verificado', 'Valor'], filasRecibo, { textCols: [1], id: 'g02-datos-recibo-a' });
   const tablaTotalRecibo = tabla(['Total del recibo', 'Importe'], [
     ['Servicio con IVA', M(r.pagoRecurrentePeriodo - (r.dap || 0))],
     ['Alumbrado público (DAP)', M(r.dap || 0)],
@@ -843,7 +850,15 @@ function s02(r, leido, onToggle) {
   const bloqueMapa = [
     p(`Qué dato alimenta qué cálculo, para la tarifa ${r.tarifa}${r.esDomestica ? ' (doméstica, volumétrica)' : ''} -- ` +
       'cada fila dice de dónde sale el dato y a qué sección va a parar:'),
-    graficoToggle('g02-calc-mapa', 'Tabla de qué dato alimenta qué cálculo', tabla(['Dato capturado', 'Para qué se usa (fórmula)', 'Valor en este caso'], mapaCamposCalculo(r), { small: true, textCols: [1], id: 'g02-calc-mapa' })),
+    // textCols:[1,2] -- la columna 2 ("Valor en este caso") tambien es de trazabilidad
+    // (ej. "GDMTO", "8,640 kWh en 29 dias", "12 periodo(s) capturados"), no un resultado
+    // financiero -- le faltaba a proposito (bug real reportado por el usuario). 2 de las
+    // ~10 filas si muestran un monto/porcentaje (DAP, "Inversion resultante: $X", BT/
+    // bonificacion) -- se dejan editables tambien porque la proteccion visual (marcado
+    // dorado al editar) ya es suficiente salvaguarda, pedido explicito del usuario, y
+    // porque el sistema de tabla() no soporta proteger una sola celda dentro de una
+    // columna editable.
+    graficoToggle('g02-calc-mapa', 'Tabla de qué dato alimenta qué cálculo', tabla(['Dato capturado', 'Para qué se usa (fórmula)', 'Valor en este caso'], mapaCamposCalculo(r), { small: true, textCols: [1, 2], id: 'g02-calc-mapa' })),
   ];
   if (leido) {
     bloqueMapa.push(
@@ -1258,18 +1273,27 @@ function s05(r, _leido, onToggle) {
     const prom = kwhNormalizado.reduce((a, b) => a + b, 0) / kwhNormalizado.length;
     art.append(graficoToggle('g05-historial', 'Gráfica de consumo normalizado por período',
       barraAgrupada(meses, textoChico('Consumo normalizado a kWh/mes'), kwhNormalizado, textoChico('Promedio mensual'), kwhNormalizado.map(() => prom))));
+    // textCols:[1,2] -- tabla de trazabilidad (kWh capturados del historial, no un
+    // monto en pesos ni un resultado financiero) -- mismo criterio/bug que g02-datos-
+    // recibo-a, reportado por el usuario, 2026-11-05 continuacion 11.
     art.append(graficoToggle('g05-historial-tabla', 'Tabla de consumo facturado por período', tabla(['Período', 'Consumo facturado (real, tal como en el recibo)', 'Normalizado a kWh/mes'],
       historial.map((x, i) => [`${x.mes} ${x.anio}`, `${kwhCrudo[i].toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${kwhNormalizado[i].toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`]),
-      { small: true, id: 'g05-historial-tabla' })));
+      { small: true, textCols: [1, 2], id: 'g05-historial-tabla' })));
   } else {
     art.append(badgeEstado('supuesto'));
   }
+  // textCols:[1] -- 3 de las 4 filas son datos capturados/derivados (periodo, criterio
+  // de base, consumo anual en kWh), no montos en pesos -- misma logica que g02-calc-
+  // mapa: se deja editable aunque la ultima fila ("Gasto anual de referencia") si
+  // muestre un monto, porque el marcado visual al editar ya es suficiente salvaguarda
+  // y tabla() no soporta proteger una sola celda dentro de una columna. Bug real
+  // reportado por el usuario, 2026-11-05 continuacion 11.
   art.append(graficoToggle('g05-base-trabajo', 'Tabla de base de trabajo y consumo anual de referencia', tabla(['Base de trabajo', 'Resultado'], [
     ['Período observado', r.periodoKwh && r.periodoDias ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh en ${r.periodoDias} días` : 'por confirmar'],
     ['Base usada para el consumo anual', r.basisConsumo],
     ['Consumo anual de referencia', `${r.annualKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año`],
     ['Gasto anual de referencia', M(r.annualbefore) + ' con IVA y 12 cuotas de DAP'],
-  ], { id: 'g05-base-trabajo' })));
+  ], { textCols: [1], id: 'g05-base-trabajo' })));
   if (historial && historial.length >= 6) {
     art.append(avisoCream(`El consumo anual se promedia con el historial real de consumo del propio recibo (${historial.length} períodos) -- no es una extrapolación de un solo mes.`));
   } else {
@@ -1285,10 +1309,12 @@ function s05(r, _leido, onToggle) {
         '12 para el consumo anual. Nunca se descarta ningún período real capturado, sea 1 solo o 12:'
       : 'Fórmula: sin historial capturado, se usa el único dato real disponible -- el período que se está ' +
         'facturando ahora, normalizado a kWh/mes y multiplicado por 12 para el consumo anual:'),
+    // textCols:[1] -- kWh capturado/derivado del historial, no un monto en pesos. Bug
+    // real reportado por el usuario, 2026-11-05 continuacion 11.
     graficoToggle('g05-calc-periodos', 'Tabla de períodos usados', tabla(['Período usado', 'kWh (normalizado a 30.5 días/mes)'], hayHistorialUsado
       ? r.consumosMensualesUsados.map((kwh, i) => [`Historial P${i + 1}`, `${kwh.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`])
       : [['Período facturado actual (sin historial)', `${r.periodoKwh.toLocaleString('en-US')} kWh ÷ ${r.periodoDias} días × 30.5 = ${r.consumosMensualesUsados[0].toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`]],
-      { small: true, id: 'g05-calc-periodos' })),
+      { small: true, textCols: [1], id: 'g05-calc-periodos' })),
     graficoToggle('g05-calc-formula', 'Tabla de fórmula del consumo anual', tabla(['Variable', 'Cómo se obtuvo', 'Valor'], [
       ['Suma de los períodos de arriba', r.consumosMensualesUsados.map(v => v.toFixed(1)).join(' + '), `${r.consumosMensualesUsados.reduce((a, b) => a + b, 0).toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh`],
       ['Consumo mensual normalizado', `Suma ÷ ${r.consumosMensualesUsados.length} período(s)`, `${(r.annualKwh / 12).toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`],
