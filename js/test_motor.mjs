@@ -114,13 +114,27 @@ cerca('flujo25.acumulado', fila25.acumuladoMxn, 1329829.75, 2.0);
 // prorratear, subvaluando la factura "sin solar" cerca de 8% y el ahorro ~9%.
 {
   const escalones = [[300, 1.0], [700, 1.3], [null, 3.7]]; // bimestre de 61 dias
-  const invoiceDom = construirInvoiceDomestica(escalones, 61, 50, 0.16);
+  const invoiceDom = construirInvoiceDomestica(escalones, 61, 50, 0, 0.16);
   const bimestre = invoiceDom(61, 900);
   // 300 kWh * 1.0 + 600 kWh * 1.3 = 1080 (900 kWh agota el tramo basico e intermedio
   // completos, calculado a mano para este escalones/kwh exactos).
   cerca('domestica.bimestre', bimestre.base, 1080, 0.1);
   const mes = invoiceDom(30.5, 450);
   cerca('domestica.mes_es_mitad', mes.base, bimestre.base / 2, 0.1);
+}
+
+// Regresion 2026-11-06 (auditoria, hallazgo 7): cargo fijo domestico opcional,
+// prorrateado por dias y sujeto a IVA (a diferencia del DAP). Con 0 (default) no debe
+// cambiar nada respecto al caso de arriba; con un monto real debe sumarse al base antes
+// de IVA y persistir aunque netEnergy sea 0 (no desaparece con paneles).
+{
+  const escalones = [[300, 1.0], [700, 1.3], [null, 3.7]];
+  const conCargoFijo = construirInvoiceDomestica(escalones, 61, 50, 122, 0.16);
+  const bimestre = conCargoFijo(61, 900);
+  cerca('domestica.cargoFijo.base', bimestre.base, 1080 + 122, 0.1);
+  cerca('domestica.cargoFijo.persisteSinConsumo', conCargoFijo(61, 0).base, 122, 0.1);
+  const sinCargoFijo = construirInvoiceDomestica(escalones, 61, 50);
+  cerca('domestica.sinCargoFijo.defaultEsCero', sinCargoFijo(61, 900).base, 1080, 0.1);
 }
 
 console.log('\n' + (fallos === 0 ? 'TODO OK' : `${fallos} FALLOS`));

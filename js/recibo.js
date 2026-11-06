@@ -64,6 +64,13 @@ function leerResumen(textoNorm) {
     cargo_fijo: /Cargo Fijo\(*\d?\)*\s+([\d,]+\.\d{2})/i,
     bt: /2%\s*Baja Tensi[o0]n\(*\d?\)*\s+([\d,]+\.\d{2})/i,
     bonus: /Bonificaci[o0]n Factor de Potencia\(*\d?\)*\s+(-?[\d,]+\.\d{2})/i,
+    // Hallazgo 6, auditoria 2026-11-06: antes solo se buscaba "Bonificacion Factor de
+    // Potencia" -- si el recibo trae un RECARGO (FP < 90%, Acuerdo SHCP 2000) en vez de
+    // una bonificacion (FP >= 90%), no habia ningun patron que lo reconociera. Campo
+    // separado a proposito (no reusar "bonus" con signo invertido): un recibo nunca
+    // trae los dos a la vez, pero mezclarlos en un solo campo obligaria a adivinar cual
+    // de los dos es segun el signo que haya capturado el OCR.
+    recargo_fp: /Recargo Factor de Potencia\(*\d?\)*\s+(-?[\d,]+\.\d{2})/i,
     subtotal: /(?<!\w)Subtotal\s+([\d,]+\.\d{2})/i,
     iva: /IVA\s*16%\s+([\d,]+\.\d{2})/i,
     facturacion_periodo: /Facturaci[o0]n del Periodo\s+([\d,]+\.\d{2})/i,
@@ -150,6 +157,27 @@ function leerHistorialConsumo(textoNorm) {
   return orden.length ? orden.map(c => filas[c]) : null;
 }
 
+// Hallazgo 13, auditoria 2026-11-06: el historial se promediaba tal cual sin verificar
+// que los periodos fueran consecutivos -- un hueco real (ej. el propio fixture
+// secfinanzas, que salta de SEP25 a NOV25 sin OCT25) se contaba igual como "historial
+// real de N periodos" sin ningun aviso. Esto NO bloquea el calculo (el promedio sigue
+// siendo razonable), solo avisa para que se revise contra el recibo si el hueco
+// importa (ej. un mes de consumo muy distinto a los demas).
+function detectarHuecosHistorial(historial) {
+  if (!historial || historial.length < 2) return null;
+  const indice = (h) => h.anio * 12 + MESES[h.mes];
+  const huecos = [];
+  for (let i = 1; i < historial.length; i++) {
+    const diff = indice(historial[i]) - indice(historial[i - 1]);
+    if (diff > 1) {
+      huecos.push(`entre ${historial[i - 1].mes}${String(historial[i - 1].anio).padStart(2, '0')} y ${historial[i].mes}${String(historial[i].anio).padStart(2, '0')}`);
+    }
+  }
+  if (!huecos.length) return null;
+  return `El historial impreso en el recibo tiene al menos un hueco (falta algún mes) ${huecos.join(', ')} -- ` +
+    'el promedio usado para dimensionar puede no ser representativo si esos meses faltantes tuvieron un consumo muy distinto. Revisar contra el recibo real.';
+}
+
 export function extraerCampos(texto, usoOcr = false) {
   const norm = quitarAcentos(texto);
 
@@ -162,7 +190,7 @@ export function extraerCampos(texto, usoOcr = false) {
     tarifa: null, no_servicio: null, no_medidor: null, multiplicador: null, titular: null, domicilio: null,
     demanda_contratada_kw: null, periodo_dias: null, periodo_kwh: null, periodo_label: null,
     suministro: null, distribucion: null, transmision: null, cenace: null, energia: null,
-    capacidad: null, scnmem: null, dap: null, bt_monto: null, bonus_monto: null,
+    capacidad: null, scnmem: null, dap: null, bt_monto: null, bonus_monto: null, recargo_fp_monto: null,
     rate_kw_detectado: null, historial: null, texto_crudo: texto,
   };
 
@@ -228,6 +256,7 @@ export function extraerCampos(texto, usoOcr = false) {
   if (campos.suministro === null && 'cargo_fijo' in resumen) campos.suministro = resumen.cargo_fijo;
   campos.bt_monto = resumen.bt ?? null;
   campos.bonus_monto = resumen.bonus ?? null;
+  campos.recargo_fp_monto = resumen.recargo_fp ?? null;
   campos.subtotal_resumen = resumen.subtotal ?? null;
   campos.iva_resumen = resumen.iva ?? null;
   campos.total_resumen = resumen.total ?? null;
@@ -269,10 +298,12 @@ export function extraerCampos(texto, usoOcr = false) {
   campos.historial = leerHistorialConsumo(norm);
   campos.historial_anual_kwh = null;
   campos.historial_meses_cubiertos = null;
+  campos.historial_advertencia_huecos = null;
   if (campos.historial) {
     const ultimos = campos.historial.slice(-12);
     campos.historial_meses_cubiertos = ultimos.length;
     campos.historial_anual_kwh = ultimos.reduce((s, x) => s + x.kwh, 0) * (12 / ultimos.length);
+    campos.historial_advertencia_huecos = detectarHuecosHistorial(campos.historial);
   }
 
   campos.rate_kw_advertencia = null;
@@ -301,14 +332,19 @@ export function extraerCampos(texto, usoOcr = false) {
   }
 
   // Reconciliacion aritmetica (ver app/leer_recibo.py para la razon completa): los
-  // conceptos de la tabla + 2% BT - bonificacion FP deben sumar EXACTO el Subtotal
-  // impreso. Detecta solo, sin revisar a mano, si algun concepto se leyo mal.
+  // conceptos de la tabla + 2% BT - bonificacion FP + recargo FP deben sumar EXACTO el
+  // Subtotal impreso. Detecta solo, sin revisar a mano, si algun concepto se leyo mal.
+  // `recargo_fp_monto` agregado (hallazgo 6, auditoria 2026-11-06): antes la
+  // reconciliacion no sabia de la existencia de un recargo por FP bajo, asi que un
+  // recibo con recargo (en vez de bonificacion) siempre hubiera disparado una falsa
+  // alarma de reconciliacion sin explicar la causa real.
   const cargosConceptos = ['suministro', 'distribucion', 'transmision', 'cenace', 'energia',
                             'energia_base', 'energia_intermedia', 'energia_punta', 'capacidad', 'scnmem'];
   const sumaCargos = cargosConceptos.reduce((s, k) => s + (campos[k] ?? 0), 0);
   const bt = campos.bt_monto ?? 0.0;
   const bonus = campos.bonus_monto ?? 0.0;
-  const reconciliado = sumaCargos + bt - Math.abs(bonus);
+  const recargoFp = campos.recargo_fp_monto ?? 0.0;
+  const reconciliado = sumaCargos + bt - Math.abs(bonus) + Math.abs(recargoFp);
   const subtotal = campos.subtotal_resumen;
   campos.reconciliacion_diff = null;
   campos.reconciliacion_advertencia = null;
@@ -318,10 +354,11 @@ export function extraerCampos(texto, usoOcr = false) {
     if (Math.abs(diff) >= 1.0) {
       campos.reconciliacion_advertencia =
         `Los cargos leidos del recibo (suministro+distribucion+...+SCnMEM, mas el 2% de baja ` +
-        `tension, menos la bonificacion por factor de potencia) suman ${M_(reconciliado)}, pero ` +
-        `el Subtotal impreso en el recibo es ${M_(subtotal)} -- una diferencia de ${M_(diff)}. ` +
-        'Esto normalmente significa que algun concepto no se leyo del recibo (o se leyo mal). ' +
-        'NO continuar sin corregir los montos a mano contra el PDF/foto original.';
+        `tension, menos la bonificacion por factor de potencia, mas el recargo por factor de ` +
+        `potencia si aplica) suman ${M_(reconciliado)}, pero el Subtotal impreso en el recibo es ` +
+        `${M_(subtotal)} -- una diferencia de ${M_(diff)}. Esto normalmente significa que algun ` +
+        'concepto no se leyo del recibo (o se leyo mal). NO continuar sin corregir los montos a ' +
+        'mano contra el PDF/foto original.';
     }
   }
   const ivaResumen = campos.iva_resumen;
@@ -351,8 +388,9 @@ export function extraerCampos(texto, usoOcr = false) {
 
   campos.uso_ocr = usoOcr;
   const ignorar = new Set(['texto_crudo', 'uso_ocr', 'rate_kw_detectado', 'rate_kw_advertencia', 'rate_kw_via_ocr',
-    'bt_monto', 'bonus_monto', 'subtotal_resumen', 'iva_resumen', 'total_resumen', 'periodo_label',
-    'historial', 'reconciliacion_diff', 'reconciliacion_advertencia', 'razon_social_cfdi', 'titular_domicilio_advertencia']);
+    'bt_monto', 'bonus_monto', 'recargo_fp_monto', 'subtotal_resumen', 'iva_resumen', 'total_resumen', 'periodo_label',
+    'historial', 'historial_advertencia_huecos', 'reconciliacion_diff', 'reconciliacion_advertencia',
+    'razon_social_cfdi', 'titular_domicilio_advertencia']);
   if (campos.energia === null && ['energia_base', 'energia_intermedia', 'energia_punta'].some(k => k in campos)) {
     ignorar.add('energia');
   }

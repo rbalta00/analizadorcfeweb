@@ -444,6 +444,7 @@ function formularioDesdeEnvio(envio) {
     rkCap: envio.rate_kw?.capacidad ? 'demanda' : 'mercado',
     traeBt: !!envio.bt_monto, btMonto: envio.bt_monto || 0,
     traeBonus: !!envio.bonus_monto, bonusMonto: envio.bonus_monto || 0,
+    traeRecargoFp: !!envio.recargo_fp_monto, recargoFpMonto: envio.recargo_fp_monto || 0,
     dBasicoKwh: esc.basicoKwh ?? 150, dBasicoRate: esc.basicoRate ?? 1.140,
     dInterKwh: esc.interKwh ?? 130, dInterRate: esc.interRate ?? 1.385,
     dExcedRate: esc.excedRate ?? 4.054,
@@ -1524,12 +1525,17 @@ function leerInputCalculo() {
       capacidad: document.querySelector('input[name="rkCap"]:checked').value === 'demanda' ? 1.0 : 0.0,
     };
     const baseAprox = Object.values(cargos).reduce((a, b) => a + b, 0) || 1.0;
-    const traeBt = $('traeBt').checked, traeBonus = $('traeBonus').checked;
-    const btMonto = Number($('btMonto').value), bonusMonto = Number($('bonusMonto').value);
+    const traeBt = $('traeBt').checked, traeBonus = $('traeBonus').checked, traeRecargoFp = $('traeRecargoFp').checked;
+    const btMonto = Number($('btMonto').value), bonusMonto = Number($('bonusMonto').value), recargoFpMonto = Number($('recargoFpMonto').value);
     const btPct = traeBt ? btMonto / baseAprox : 0.0;
     const fpBonusPct = traeBonus ? bonusMonto / (baseAprox + btMonto) : 0.0;
+    // Recargo por FP bajo (hallazgo 6, auditoria 2026-11-06): se suma al cobro en
+    // motor.js, nunca se resta -- independiente de fpBonusPct (un recibo real nunca
+    // trae los dos a la vez, pero si por algun motivo se marcaran ambos, el motor
+    // simplemente aplica los dos efectos, no se asume que son mutuamente excluyentes).
+    const recargoFpPct = traeRecargoFp ? recargoFpMonto / (baseAprox + btMonto) : 0.0;
     input = { titular, domicilio, noServicio, tarifa, esDomestica: false, periodoDias, periodoKwh, dap, cargos,
-      rateKw, btPct, fpBonusPct, moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
+      rateKw, btPct, fpBonusPct, recargoFpPct, moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
       aplicaIsr, tasaIsrPct, historialManual, vigenciaDias };
   } else {
     const periodoDias = Number($('d_periodoDias').value);
@@ -1540,7 +1546,8 @@ function leerInputCalculo() {
       [null, Number($('d_excedRate').value)],
     ];
     input = { titular, domicilio, noServicio, tarifa, esDomestica: true, periodoDias, periodoKwh, escalones,
-      dapDomestica: Number($('d_dap').value), moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
+      dapDomestica: Number($('d_dap').value), cargoFijoDomestica: Number($('d_cargoFijo').value),
+      moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
       aplicaIsr, tasaIsrPct, historialManual, vigenciaDias };
   }
   return input;
@@ -2289,10 +2296,26 @@ function confirmarSiHayTextoEditadoSinReflejarEnPdf() {
     'esas ediciones (sigue usando el texto original de la app). ¿Generar el PDF de todos modos?\n\n(Cancelar para revisar primero qué se editó)');
 }
 
+// Hallazgo 10, auditoria 2026-11-06: la reconciliacion aritmetica del recibo
+// (campos.reconciliacion_advertencia, ver recibo.js) solo se mostraba como aviso
+// dismissible -- se podia generar una propuesta/PDF completos con un recibo mal leido
+// (caso real: $128,429 de diferencia en el fixture secfinanzas) sin ningun freno. No se
+// bloquea por completo (una reconciliacion con falso positivo real es posible, ej. un
+// adeudo anterior o un concepto no modelado) -- se exige una confirmacion consciente,
+// mismo patron que confirmarSiHayCambiosSinCalcular/confirmarSiHayTextoEditadoSin...,
+// justo antes de generar el documento final que de verdad importa.
+function confirmarSiHayReconciliacionSinResolver() {
+  const adv = ultimoLeido && ultimoLeido.reconciliacion_advertencia;
+  if (!adv) return true;
+  return confirm('⚠ El recibo leído tiene una advertencia de reconciliación sin resolver:\n\n' + adv +
+    '\n\n¿Generar el documento de todos modos? (Cancelar para revisar los montos contra el recibo real primero)');
+}
+
 $('btnGenerarPdf').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
   if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
+  if (!confirmarSiHayReconciliacionSinResolver()) return;
   const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas, seccionesExcluidas: proyectoActual.seccionesExcluidas });
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
 });
@@ -2300,6 +2323,11 @@ $('btnGenerarPdf').addEventListener('click', () => {
 $('btnResumenEjecutivo').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
+  // Hallazgo 11, auditoria 2026-11-06: este aviso solo protegia a "Cotización
+  // completa" -- el Resumen Ejecutivo tampoco refleja textosEditados (propuesta.js
+  // nunca los lee, en ninguno de los 3 documentos), pero no avisaba nada.
+  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
+  if (!confirmarSiHayReconciliacionSinResolver()) return;
   const doc = generarResumenEjecutivo(ultimoResultado);
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Resumen_ejecutivo'));
 });
@@ -2307,6 +2335,9 @@ $('btnResumenEjecutivo').addEventListener('click', () => {
 $('btnAnexoInterconexion').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
+  // Mismo fix que btnResumenEjecutivo arriba (hallazgo 11, auditoria 2026-11-06).
+  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
+  if (!confirmarSiHayReconciliacionSinResolver()) return;
   const doc = generarAnexoInterconexion(ultimoResultado);
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Anexo_interconexion_CFE'));
 });

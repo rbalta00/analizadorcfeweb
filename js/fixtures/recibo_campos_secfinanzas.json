@@ -21,6 +21,7 @@
   "dap": 197.0,
   "bt_monto": null,
   "bonus_monto": -6384.16,
+  "recargo_fp_monto": null,
   "rate_kw_detectado": null,
   "historial": [
     {
@@ -66,9 +67,10 @@
   "total_resumen": 335.36,
   "historial_anual_kwh": 1049586.857142857,
   "historial_meses_cubiertos": 7,
+  "historial_advertencia_huecos": "El historial impreso en el recibo tiene al menos un hueco (falta algún mes) entre SEP25 y NOV25 -- el promedio usado para dimensionar puede no ser representativo si esos meses faltantes tuvieron un consumo muy distinto. Revisar contra el recibo real.",
   "rate_kw_advertencia": null,
   "reconciliacion_diff": -128429.29,
-  "reconciliacion_advertencia": "Los cargos leidos del recibo (suministro+distribucion+...+SCnMEM, mas el 2% de baja tension, menos la bonificacion por factor de potencia) suman $131,193.28, pero el Subtotal impreso en el recibo es $259,622.57 -- una diferencia de $-128,429.29. Esto normalmente significa que algun concepto no se leyo del recibo (o se leyo mal). NO continuar sin corregir los montos a mano contra el PDF/foto original.",
+  "reconciliacion_advertencia": "Los cargos leidos del recibo (suministro+distribucion+...+SCnMEM, mas el 2% de baja tension, menos la bonificacion por factor de potencia, mas el recargo por factor de potencia si aplica) suman $131,193.28, pero el Subtotal impreso en el recibo es $259,622.57 -- una diferencia de $-128,429.29. Esto normalmente significa que algun concepto no se leyo del recibo (o se leyo mal). NO continuar sin corregir los montos a mano contra el PDF/foto original.",
   "uso_ocr": true,
   "campos_no_encontrados": [
     "demanda_contratada_kw",

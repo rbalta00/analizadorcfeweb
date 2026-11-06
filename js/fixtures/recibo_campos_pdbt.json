@@ -21,6 +21,7 @@
   "dap": 197.0,
   "bt_monto": null,
   "bonus_monto": null,
+  "recargo_fp_monto": null,
   "rate_kw_detectado": {
     "distribucion": 0.0,
     "capacidad": 0.0
@@ -32,6 +33,7 @@
   "total_resumen": 21749.01,
   "historial_anual_kwh": null,
   "historial_meses_cubiertos": null,
+  "historial_advertencia_huecos": null,
   "rate_kw_advertencia": "El recibo declara 7 kW de demanda contratada, pero la columna \"$/kW\" leida dice que Distribucion/Capacidad no son por demanda. Verificar con cuidado.",
   "reconciliacion_diff": 0.0,
   "reconciliacion_advertencia": null,

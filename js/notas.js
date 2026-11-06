@@ -12,6 +12,16 @@ const ETIQUETAS_CAMPOS = {
 
 export function generarNotas(leido, r, esDomestica) {
   const notas = [];
+  // Hallazgo 7, auditoria 2026-11-06: el motor no asumia ningun cargo fijo de CFE para
+  // tarifas domesticas por default (ver motor.js construirInvoiceDomestica) -- fuentes
+  // periodisticas (no confirmadas con el acuerdo oficial) reportan que 01/DAC si suelen
+  // traer uno. Si no se capturo nada (campo "Cargo fijo de CFE" en 0), se avisa para que
+  // se revise el recibo real en vez de asumir que no aplica.
+  if (esDomestica && !(r && r.cargoFijoDomestica)) {
+    notas.push('Revisar si el recibo trae impreso un "Cargo Fijo" de CFE (distinto del DAP municipal) -- si lo ' +
+      'trae, capturarlo en el campo "Cargo fijo de CFE del período" del formulario; no se asume ningún monto por ' +
+      'default porque no hay una fuente oficial confirmada del monto vigente para esta auditoría.');
+  }
   if (!leido) {
     notas.push('No se subió ningún recibo: todos los datos se capturaron a mano. Pedir al cliente una ' +
       'foto o PDF del recibo real antes de la propuesta definitiva, para verificar que lo capturado ' +
@@ -21,6 +31,10 @@ export function generarNotas(leido, r, esDomestica) {
 
   if (leido.reconciliacion_advertencia) {
     notas.push('⚠ REVISAR ANTES DE CONTINUAR: ' + leido.reconciliacion_advertencia);
+  }
+
+  if (leido.historial_advertencia_huecos) {
+    notas.push('⚠ ' + leido.historial_advertencia_huecos);
   }
 
   if (leido.uso_ocr) {
@@ -66,20 +80,24 @@ export function generarNotas(leido, r, esDomestica) {
       'superior del recibo) para poder dar seguimiento y verificar identidad del inmueble.');
   }
 
-  const historialMeses = leido.historial_meses_cubiertos || 0;
-  if (historialMeses >= 6) {
-    notas.push(`El consumo anual se calculó con el historial real de ${historialMeses} períodos que ` +
-      'trae impreso el propio recibo, no con una extrapolación de un solo mes.');
-  } else if (leido.historial) {
-    notas.push(`El recibo solo trae ${leido.historial.length} períodos de historial impreso (menos de ` +
-      '6), así que el consumo anual se calculó extrapolando el último período. Pedir al cliente su ' +
-      'historial de consumo de los últimos 12 meses (app/portal de CFE) para una base más confiable, ' +
-      'sobre todo si el consumo varía mucho entre meses.');
+  // Corregido (auditoria 2026-11-06, hallazgo 8): antes esto leia `leido.historial`/
+  // `leido.historial_meses_cubiertos` -- el historial que trajo el OCR -- sin importar
+  // si el admin lo habia corregido o capturado a mano (historialManual). resultado.js
+  // ya calcula `r.basisConsumo`/`r.consumosMensualesUsados` reflejando la fuente
+  // REALMENTE usada para dimensionar el sistema -- usar esos en vez de releer `leido`
+  // directamente, para que la nota nunca describa una fuente distinta a la que de
+  // verdad se usó en el cálculo.
+  const periodosUsados = (r.consumosMensualesUsados || []).length;
+  if (periodosUsados >= 6) {
+    notas.push(`El consumo anual se calculó con ${r.basisConsumo}, no con una extrapolación de un solo mes.`);
+  } else if (periodosUsados > 1) {
+    notas.push(`El consumo anual se calculó con ${r.basisConsumo} (menos de 6 períodos). Pedir al cliente su ` +
+      'historial de consumo de los últimos 12 meses (app/portal de CFE) para una base más confiable, sobre ' +
+      'todo si el consumo varía mucho entre meses.');
   } else {
-    notas.push('Esta cotización se basa en UN SOLO período facturado, extrapolado a un año: el recibo ' +
-      'no trae impresa una tabla de historial de consumo. Pedir al cliente su historial de los últimos ' +
-      '12 meses (lo puede descargar de la app/portal de CFE) para una base más confiable, sobre todo si ' +
-      'el consumo varía mucho entre meses (clima, temporada, uso del inmueble).');
+    notas.push(`Esta cotización se basa en una ${r.basisConsumo}: pedir al cliente su historial de los ` +
+      'últimos 12 meses (lo puede descargar de la app/portal de CFE) para una base más confiable, sobre todo ' +
+      'si el consumo varía mucho entre meses (clima, temporada, uso del inmueble).');
   }
 
   notas.push('Pendiente de levantamiento en sitio antes de una oferta firme: área útil real del ' +

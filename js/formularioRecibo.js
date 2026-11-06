@@ -79,6 +79,13 @@ export function conectarEventosFormularioRecibo(onCambioTarifa) {
   });
   $('traeBt').addEventListener('change', () => { $('btMonto').disabled = !$('traeBt').checked; });
   $('traeBonus').addEventListener('change', () => { $('bonusMonto').disabled = !$('traeBonus').checked; });
+  // Recargo por factor de potencia (hallazgo 6, auditoria 2026-11-06): antes solo
+  // existia "bonificacion" -- CFE tambien aplica un RECARGO cuando el FP cae debajo de
+  // 90% (Acuerdo SHCP 2000), y no habia ningun campo pensado para capturarlo como un
+  // AUMENTO del cobro. Mismo patron checkbox+monto que traeBonus, pero en motor.js se
+  // SUMA en vez de restarse -- nunca se reusa el campo de bonificacion con signo
+  // invertido, para que quien captura a mano elija explicitamente cual de los dos es.
+  $('traeRecargoFp').addEventListener('change', () => { $('recargoFpMonto').disabled = !$('traeRecargoFp').checked; });
 }
 
 export function leerFormularioRecibo() {
@@ -94,9 +101,10 @@ export function leerFormularioRecibo() {
     rkCap: document.querySelector('input[name="rkCap"]:checked')?.value || 'demanda',
     traeBt: $('traeBt').checked, btMonto: $('btMonto').value,
     traeBonus: $('traeBonus').checked, bonusMonto: $('bonusMonto').value,
+    traeRecargoFp: $('traeRecargoFp').checked, recargoFpMonto: $('recargoFpMonto').value,
     dBasicoKwh: $('d_basicoKwh').value, dBasicoRate: $('d_basicoRate').value,
     dInterKwh: $('d_interKwh').value, dInterRate: $('d_interRate').value,
-    dExcedRate: $('d_excedRate').value, dDap: $('d_dap').value,
+    dExcedRate: $('d_excedRate').value, dDap: $('d_dap').value, dCargoFijo: $('d_cargoFijo').value,
     dPeriodoDias: $('d_periodoDias').value, dPeriodoKwh: $('d_periodoKwh').value,
     historialNoDom: leerGridHistorial('hist_nd_', 12), historialDom: leerGridHistorial('hist_d_', 6),
   };
@@ -124,9 +132,11 @@ export function aplicarFormularioRecibo(f) {
   if (rkCapEl) rkCapEl.checked = true;
   $('traeBt').checked = !!f?.traeBt; $('btMonto').disabled = !f?.traeBt; $('btMonto').value = f?.btMonto ?? 0;
   $('traeBonus').checked = !!f?.traeBonus; $('bonusMonto').disabled = !f?.traeBonus; $('bonusMonto').value = f?.bonusMonto ?? 0;
+  $('traeRecargoFp').checked = !!f?.traeRecargoFp; $('recargoFpMonto').disabled = !f?.traeRecargoFp; $('recargoFpMonto').value = f?.recargoFpMonto ?? 0;
   $('d_basicoKwh').value = f?.dBasicoKwh ?? 150; $('d_basicoRate').value = f?.dBasicoRate ?? 1.140;
   $('d_interKwh').value = f?.dInterKwh ?? 130; $('d_interRate').value = f?.dInterRate ?? 1.385;
   $('d_excedRate').value = f?.dExcedRate ?? 4.054; $('d_dap').value = f?.dDap ?? 0;
+  $('d_cargoFijo').value = f?.dCargoFijo ?? 0;
   $('d_periodoDias').value = f?.dPeriodoDias ?? 60; $('d_periodoKwh').value = f?.dPeriodoKwh ?? 400;
   aplicarGridHistorial('hist_nd_', 12, f?.historialNoDom);
   aplicarGridHistorial('hist_d_', 6, f?.historialDom);
@@ -165,6 +175,7 @@ export function llenarFormularioDesdeReciboCampos(c) {
     }
     if (c.bt_monto) { $('traeBt').checked = true; $('btMonto').disabled = false; $('btMonto').value = c.bt_monto; }
     if (c.bonus_monto) { $('traeBonus').checked = true; $('bonusMonto').disabled = false; $('bonusMonto').value = Math.abs(c.bonus_monto); }
+    if (c.recargo_fp_monto) { $('traeRecargoFp').checked = true; $('recargoFpMonto').disabled = false; $('recargoFpMonto').value = Math.abs(c.recargo_fp_monto); }
   } else {
     if (c.periodo_dias != null) $('d_periodoDias').value = c.periodo_dias;
     if (c.periodo_kwh != null) $('d_periodoKwh').value = c.periodo_kwh;

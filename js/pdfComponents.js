@@ -297,11 +297,29 @@ export function buildPdf(titulo, subtitulo, aviso, paginas) {
   return doc;
 }
 
+// Hallazgo 5, auditoria 2026-11-06: el encabezado repetido en cada pagina se dibujaba
+// con doc.text() directo, sin splitTextToSize ni verificacion de ancho -- un nombre o
+// razon social largo (comun en dependencias de gobierno) se cortaba a media palabra
+// contra el borde derecho de la hoja, en las 22 paginas. El cuerpo de las paginas SI
+// envuelve bien (headX/subX/notice/table ya usan splitTextToSize) -- el problema era
+// solo este encabezado de una sola linea. No se envuelve a 2 lineas porque el titulo y
+// el subtitulo estan a solo 12pt de distancia (34 y 46) -- envolver chocaria con la
+// linea de abajo. Se trunca con "…" en vez de cortar a media palabra.
+function textoAcotado(doc, texto, maxWidth) {
+  const cadena = String(texto);
+  if (doc.getTextWidth(cadena) <= maxWidth) return cadena;
+  let acotado = cadena;
+  while (acotado.length > 1 && doc.getTextWidth(acotado + '…') > maxWidth) {
+    acotado = acotado.slice(0, -1);
+  }
+  return acotado + '…';
+}
+
 function dibujarHeaderFooter(doc, titulo, subtitulo, aviso, pagina, totalPaginas) {
   setFont(doc, 10.5, true, NAVY);
-  doc.text(titulo, MARGIN_L, 34);
+  doc.text(textoAcotado(doc, titulo, CONTENT_W), MARGIN_L, 34);
   setFont(doc, 7.8, false, GREY);
-  doc.text(subtitulo, MARGIN_L, 46);
+  doc.text(textoAcotado(doc, subtitulo, CONTENT_W), MARGIN_L, 46);
   doc.setDrawColor(GOLD);
   doc.setLineWidth(1.5);
   doc.line(MARGIN_L, 54, PAGE_W - MARGIN_R, 54);

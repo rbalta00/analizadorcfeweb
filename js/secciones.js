@@ -9,6 +9,7 @@ import { bloqueDeSeccion, seccionesDelBloque } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
 import { leerTextosGlobales, leerPlantillaTarifa } from './textosGlobales.js';
+import { beneficioCosto } from './motor.js';
 
 // Razon real por la que un concepto NO reducible no baja con paneles solares -- NO es la
 // misma razon para todos. 'suministro' es un cargo fijo por tener contrato (no depende de
@@ -761,6 +762,16 @@ function s01(r, _leido, onToggle) {
     [M(r.ahorroAnual - r.om1), 'Ahorro neto año 1, tras mantenimiento'],
     [PCT(r.pctAhorro), 'Porcentaje de la factura que ahorraría'],
   ]));
+  // Hallazgo 12, auditoria 2026-11-06: con consumo muy bajo, el mantenimiento (1% de la
+  // inversión) puede superar el ahorro bruto del primer año -- la tarjeta de arriba
+  // mostraba el numero negativo sin ningun aviso que explicara por que, facil de leer
+  // como un error de captura en vez de un resultado valido del modelo.
+  if (r.ahorroAnual - r.om1 < 0) {
+    art.append(avisoCream(`El "ahorro neto año 1" sale negativo (${M(r.ahorroAnual - r.om1)}): con el consumo ` +
+      'actual, el ahorro bruto que generarían los paneles no alcanza a cubrir ni el mantenimiento estimado del ' +
+      'primer año. Esto es un resultado válido del modelo con este consumo tan bajo, no un error de captura -- ' +
+      'revisar si el consumo del período/historial es representativo antes de presentar esta propuesta.'));
+  }
   art.append(subtitulo(1, 'que-se-propone', 'Qué se propone'));
   art.append(p(`Instalar un sistema conectado a red de ${r.n} paneles de ${r.moduloWp} W. Su producción regional ` +
     `de referencia es de ${r.gen.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año. Se plantea ` +
@@ -1002,7 +1013,7 @@ function s24(r, _leido, onToggle) {
       ['Potencia nominal', 'n × W por módulo ÷ 1000', `${ev.n} × ${r.moduloWp} W ÷ 1000 = ${ev.kwp.toFixed(2)} kWp`],
       ['Inversión total', `Mismo presupuesto de materiales (sección ${refSeccion(12, r)}) recalculado para este "n", con IVA`, M(ev.investment)],
       ['Ahorro anual', `Mismo cálculo mes a mes de la sección ${refSeccion(10, r)} (mismo recibo), recalculado con la generación de este "n" de paneles`, M(ev.ahorroAnual)],
-      ['Recuperación simple', 'Inversión ÷ ahorro neto del año 1 (ahorro − mantenimiento)', `${M(ev.investment)} ÷ ${M(ev.ahorroAnual - ev.om1)} = ${ev.payback ? ev.payback.toFixed(2) : '—'} años`],
+      ['Recuperación simple', 'Inversión ÷ ahorro BRUTO del año 1 (antes de mantenimiento)', `${M(ev.investment)} ÷ ${M(ev.ahorroAnual)} = ${ev.payback ? ev.payback.toFixed(2) : '—'} años`],
       ['VAN al 10% / TIR', `Mismo flujo a 25 años de la sección ${refSeccion(13, r)}/${refSeccion(14, r)}, recalculado con esta inversión y este ahorro`, `VAN ${M(ev.van)} / TIR ${ev.tir ? PCT(ev.tir) : 'no calculable'}`],
     ], { small: true, textCols: [1], id: 'g19-calc-formula' })),
     avisoCream(`El ahorro no necesariamente sube con más paneles: si el consumo real ya satura el piso de ahorro ` +
@@ -1115,6 +1126,7 @@ function calculoReciboConDemanda(r) {
   ];
   if (r.btPct) pasos.push([String(pasos.length + 1), '+ 2% de baja tensión', `${PCT(r.btPct)} × ${M(fd.base)}`, M(fd.bt)]);
   if (r.fpBonusPct) pasos.push([String(pasos.length + 1), '− Bonificación por factor de potencia', `${PCT(r.fpBonusPct)} × (cargo base + BT)`, '−' + M(fd.bonus)]);
+  if (r.recargoFpPct) pasos.push([String(pasos.length + 1), '+ Recargo por factor de potencia (FP bajo)', `${PCT(r.recargoFpPct)} × (cargo base + BT)`, '+' + M(fd.recargo)]);
   pasos.push([String(pasos.length + 1), 'Subtotal (antes de IVA)', 'Suma de los pasos anteriores', M(fd.subtotal)]);
   pasos.push([String(pasos.length + 1), '+ IVA (16%)', `16% × ${M(fd.subtotal)}`, M(fd.iva)]);
   pasos.push([String(pasos.length + 1), '+ DAP (alumbrado público, lo cobra el municipio, no CFE)', 'Importe fijo de este período', M(fd.dap)]);
@@ -1687,10 +1699,17 @@ function s13(r, _leido, onToggle) {
   const roi = r.investment ? r.ahorroAnual / r.investment : 0;
   const bc = beneficioCosto(r);
   const reposicionAnio = (r.flujo25Rows || []).find(x => x.reposicionMxn)?.anio;
+  // "Recuperación simple"/"ROI anual simple" NUNCA restan mantenimiento (r.payback =
+  // investment/ahorroAnual, roi = ahorroAnual/investment, ambos en resultado.js/arriba)
+  // -- son deliberadamente un atajo rapido, distinto de "Recuperación del flujo" (que
+  // SI incluye mantenimiento/reposicion/degradacion via flujo25Rows). Antes el texto
+  // decia "neto" sin que el numero lo fuera (auditoria 2026-11-06, hallazgo 2) -- ahora
+  // dice BRUTO explicitamente, en vez de cambiar el calculo (que es un atajo valido,
+  // solo estaba mal rotulado).
   const filasInd = [
-    ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años: inversión / ahorro neto del primer año.` : 'Sin recuperación con el ahorro neto del primer año.'],
+    ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años: inversión / ahorro BRUTO del primer año (antes de mantenimiento).` : 'Sin recuperación con el ahorro del primer año.'],
     ['Recuperación del flujo', r.recuperacionAcumulada ? `${r.recuperacionAcumulada.toFixed(1)} años, considerando degradación, mantenimiento creciente${reposicionAnio ? ` y reposición del inversor en el año ${reposicionAnio}.` : '.'}` : 'No se recupera dentro del horizonte de 25 años.'],
-    ['ROI anual simple', `${PCT(roi)}: ahorro neto del primer año / inversión.`],
+    ['ROI anual simple', `${PCT(roi)}: ahorro BRUTO del primer año (antes de mantenimiento) / inversión.`],
     ['TIR (tasa interna de retorno)', r.tir ? `${PCT(r.tir)} del flujo de 25 años: equivale a la ganancia anual de invertir ese dinero ahí en vez de en otra parte. No es una tasa garantizada.` : 'No calculable con un solo cambio de signo.'],
     ['VAN (valor actual neto) al 10%', `${M(r.van)}: cuánto más valen, en pesos de hoy, los ahorros futuros que lo que costó el sistema.`],
   ];
@@ -1705,8 +1724,8 @@ function s13(r, _leido, onToggle) {
     ? `Se supone que la tarifa de CFE sube ${escPct.toFixed(1)}% anual (criterio del estudio, no una cifra oficial de CFE) a partir del año 1.`
     : 'Los precios de electricidad se mantienen constantes como base económica del recibo (sin supuesto de incremento de tarifa).';
   art.append(badgeEstado('supuesto'));
-  art.append(avisoCream('Se consideran degradación de 0.5% anual, mantenimiento inicial de 1% de la venta sin ' +
-    'IVA que crece 3% anual' + (reposicionAnio ? `, y reposición del inversor en el año ${reposicionAnio}. ` : '. No se incluyó reposición de inversor en este cálculo. ') +
+  art.append(avisoCream('Se consideran degradación de 0.5% anual, mantenimiento inicial de 1% de la inversión ' +
+    'total (con IVA) que crece 3% anual' + (reposicionAnio ? `, y reposición del inversor en el año ${reposicionAnio}. ` : '. No se incluyó reposición de inversor en este cálculo. ') +
     escTxt + ' No se presentan rendimientos ni recuperación como garantías.'));
   if (r.aplicaIsr) {
     art.append(subtituloChico(13, 'deduccion-isr', 'Deducción fiscal (ISR) -- solo clientes privados/comerciales'));
@@ -1717,30 +1736,31 @@ function s13(r, _leido, onToggle) {
       ['VAN neto con ISR', r.vanNetoIsr != null ? M(r.vanNetoIsr) : 'no calculable'],
       ['TIR neta con ISR', r.tirNetoIsr != null ? PCT(r.tirNetoIsr) : 'no calculable'],
     ], { small: true, id: 'g13-isr' })));
-    art.append(avisoCream('Deducción 100% inmediata de equipo renovable (Art. 34 fracción XIII LISR). Es una ' +
-      'estimación general, no asesoría fiscal -- confirmar con el contador o fiscalista del cliente antes de ' +
-      'prometerlo en una oferta firme. No aplica a gobierno/instituciones públicas.'));
+    art.append(avisoCream('Deducción del 100% del costo (antes de IVA) en el ejercicio de la compra, de equipo ' +
+      'renovable (Art. 34 fracción XIII LISR) -- este cálculo trata ese beneficio como si se recibiera junto ' +
+      'con la inversión; en la práctica se recibe de forma escalonada durante el ejercicio fiscal (pagos ' +
+      'provisionales o declaración anual), no el día de la compra, y requiere que el equipo permanezca en ' +
+      'operación al menos 5 años (Art. 35 LISR). Es una estimación general, no asesoría fiscal -- confirmar ' +
+      'con el contador o fiscalista del cliente antes de prometerlo en una oferta firme. No aplica a ' +
+      'gobierno/instituciones públicas.'));
   }
   art.append(bloqueCalculo(13, [
     p('Fórmulas con los números reales de este estudio:'),
     graficoToggle('g13-calc-formula', 'Tabla de fórmulas de indicadores', tabla(['Indicador', 'Fórmula', 'Sustitución'], [
-      ['Recuperación simple', 'Inversión ÷ ahorro neto del año 1', `${M(r.investment)} ÷ ${M(r.ahorroAnual - r.om1)} = ${r.payback ? r.payback.toFixed(2) : '—'} años`],
-      ['ROI anual simple', 'Ahorro neto del año 1 ÷ inversión', `${M(r.ahorroAnual - r.om1)} ÷ ${M(r.investment)} = ${PCT(roi)}`],
+      ['Recuperación simple', 'Inversión ÷ ahorro BRUTO del año 1 (antes de mantenimiento)', `${M(r.investment)} ÷ ${M(r.ahorroAnual)} = ${r.payback ? r.payback.toFixed(2) : '—'} años`],
+      ['ROI anual simple', 'Ahorro BRUTO del año 1 (antes de mantenimiento) ÷ inversión', `${M(r.ahorroAnual)} ÷ ${M(r.investment)} = ${PCT(roi)}`],
       ['VAN al 10%', 'Σ (flujo neto del año / 1.10^año) − inversión inicial, a 25 años', `${M(r.van)} (ver la curva de flujo arriba)`],
       ['TIR', 'Tasa de descuento que hace VAN = 0 del mismo flujo de 25 años', r.tir ? PCT(r.tir) : 'no calculable (el flujo no cambia de signo una sola vez)'],
     ], { small: true, textCols: [1], id: 'g13-calc-formula' })),
     p('El ahorro de cada año no es el mismo que el del año 1: se degrada 0.5% anual (paneles producen un poco ' +
-      `menos con el tiempo)${escPct ? ` y la tarifa de CFE se supone que sube ${escPct.toFixed(1)}% anual` : ''}. El mantenimiento sí crece cada año (3% anual sobre 1% de la venta sin IVA del primer año).`),
+      `menos con el tiempo)${escPct ? ` y la tarifa de CFE se supone que sube ${escPct.toFixed(1)}% anual` : ''}. El mantenimiento sí crece cada año (3% anual sobre 1% de la inversión total con IVA del primer año).`),
   ], r));
   return art;
 }
-function beneficioCosto(r) {
-  const flujo25 = r.flujo25Rows || [];
-  if (!flujo25.length) return null;
-  const beneficioDesc = flujo25.filter(x => x.anio > 0).reduce((s, x) => s + x.ahorroMxn / Math.pow(1.10, x.anio), 0);
-  const costoDesc = r.investment + flujo25.filter(x => x.anio > 0).reduce((s, x) => s + (x.omMxn + (x.reposicionMxn || 0)) / Math.pow(1.10, x.anio), 0);
-  return costoDesc ? beneficioDesc / costoDesc : null;
-}
+// beneficioCosto() ahora vive en motor.js (importado arriba) -- auditoria 2026-11-06,
+// hallazgo 1: esta copia local y la de propuesta.js se habian desincronizado (esta SI
+// incluia la reposicion del inversor en el costo, propuesta.js no), dando un indicador
+// mas favorable en el PDF que en pantalla para el mismo estudio. Una sola fuente ahora.
 
 // ---------- 14: flujo 25 años ----------
 function s14(r, _leido, onToggle) {

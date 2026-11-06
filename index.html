@@ -271,6 +271,8 @@
           <label>Monto del 2% (MXN)<input id="btMonto" type="number" value="0" min="0" step="0.01" disabled /></label>
           <label><input type="checkbox" id="traeBonus" /> Trae bonificación por factor de potencia</label>
           <label>Monto de la bonificación (MXN, positivo)<input id="bonusMonto" type="number" value="0" min="0" step="0.01" disabled /></label>
+          <label><input type="checkbox" id="traeRecargoFp" /> Trae recargo por factor de potencia (FP &lt; 90%)</label>
+          <label>Monto del recargo (MXN, positivo)<input id="recargoFpMonto" type="number" value="0" min="0" step="0.01" disabled /></label>
         </div>
       </section>
 
@@ -287,6 +289,9 @@
         <div class="fila">
           <label>Tarifa Excedente ($/kWh)<input id="d_excedRate" type="number" value="4.054" step="0.001" /></label>
           <label>DAP del período (MXN)<input id="d_dap" type="number" value="0" step="0.01" /></label>
+        </div>
+        <div class="fila">
+          <label title="Hallazgo 7, auditoría 2026-11-06: antes el motor no tenía forma de capturar un cargo fijo de CFE para tarifas domésticas/DAC. Déjalo en 0 si el recibo no trae ninguno -- no se asume un monto por default, se captura solo si el recibo real lo trae impreso.">Cargo fijo de CFE del período, si lo trae el recibo (MXN, no confundir con el DAP municipal)<input id="d_cargoFijo" type="number" value="0" min="0" step="0.01" /></label>
         </div>
         <div class="fila">
           <label>Días del período<input id="d_periodoDias" type="number" value="60" /></label>

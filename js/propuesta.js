@@ -18,6 +18,13 @@ import {
 import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA } from './util.js';
 import { BLOQUES_COTIZACION } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
+// beneficioCosto importado desde motor.js (auditoria 2026-11-06, hallazgo 1): antes
+// esta copia local omitia la reposicion del inversor del costo descontado, mientras
+// que secciones.js (pantalla) SI la incluia -- el PDF mostraba un indicador mas
+// favorable que la pantalla para el mismo estudio. Se re-exporta tambien (abajo) porque
+// resumen.js sigue importando `beneficioCosto` de este archivo.
+import { beneficioCosto } from './motor.js';
+export { beneficioCosto };
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
 
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -52,15 +59,6 @@ function encabezado(doc, numero, titulo, titular) {
   let y = headX(doc, CONTENT_TOP, `${pad2(numero)} | ${titulo}`);
   y = subX(doc, y, titular);
   return y;
-}
-
-// Beneficio/costo del flujo a 25 anios -- mismo calculo que beneficio_costo() en Python.
-export function beneficioCosto(r) {
-  const flujo25 = r.flujo25Rows || [];
-  if (!flujo25.length) return null;
-  const beneficioDesc = flujo25.filter(x => x.anio > 0).reduce((s, x) => s + x.ahorroMxn / Math.pow(1.10, x.anio), 0);
-  const costoDesc = r.investment + flujo25.filter(x => x.anio > 0).reduce((s, x) => s + x.omMxn / Math.pow(1.10, x.anio), 0);
-  return costoDesc ? beneficioDesc / costoDesc : null;
 }
 
 function resumenInmueble(inm) {
@@ -457,14 +455,17 @@ function pagina13(doc, r, numero) {
   const roi = r.investment ? r.ahorroAnual / r.investment : 0;
   const bc = beneficioCosto(r);
   const reposicionAnio = flujo25.find(x => x.reposicionMxn)?.anio;
+  // "Recuperación simple"/"ROI anual simple" NUNCA restan mantenimiento (mismo r.payback/
+  // roi que secciones.js) -- texto corregido a BRUTO en vez de "neto" (auditoria
+  // 2026-11-06, hallazgo 2), misma correccion aplicada en secciones.js.
   const filasInd = [
-    ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años: inversión / ahorro neto del primer año.` : 'Sin recuperación con el ahorro neto del primer año.'],
+    ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años: inversión / ahorro BRUTO del primer año (antes de mantenimiento).` : 'Sin recuperación con el ahorro del primer año.'],
     ['Recuperación del flujo', r.recuperacionAcumulada ? `${r.recuperacionAcumulada.toFixed(1)} años, considerando degradación, mantenimiento creciente${reposicionAnio ? ` y reposición del inversor en el año ${reposicionAnio}.` : '.'}` : 'No se recupera dentro del horizonte de 25 años.'],
-    ['ROI anual simple', `${PCT(roi)}: ahorro neto del primer año / inversión.`],
+    ['ROI anual simple', `${PCT(roi)}: ahorro BRUTO del primer año (antes de mantenimiento) / inversión.`],
     ['TIR (tasa interna de retorno)', r.tir ? `${PCT(r.tir)} del flujo de 25 años: equivale a la ganancia anual de invertir ese dinero ahí en vez de en otra parte. No es una tasa garantizada.` : 'No calculable con un solo cambio de signo.'],
     ['VAN (valor actual neto) al 10%', `${M(r.van)}: cuánto más valen, en pesos de hoy, los ahorros futuros que lo que costó el sistema.`],
   ];
-  if (bc != null) filasInd.push(['Beneficio/costo', `${bc.toFixed(2)}: por cada peso invertido (y gastado en mantenimiento), regresa ${bc.toFixed(2)} pesos actualizados en ahorros.`]);
+  if (bc != null) filasInd.push(['Beneficio/costo', `${bc.toFixed(2)}: por cada peso invertido (y gastado en mantenimiento${reposicionAnio ? ' y reposición del inversor' : ''}), regresa ${bc.toFixed(2)} pesos actualizados en ahorros.`]);
   if (graficoIncluido(r, 'g13-indicadores')) {
     y = tablaF(doc, y, 'g13-indicadores', r, ['Indicador estimado', 'Resultado y explicación'], filasInd, { widths: [CONTENT_W * 0.3, CONTENT_W * 0.7], small: true });
   }
@@ -473,8 +474,8 @@ function pagina13(doc, r, numero) {
   const escTxt = escPct
     ? `Se supone que la tarifa de CFE sube ${escPct.toFixed(1)}% anual (criterio del estudio, no una cifra oficial de CFE) a partir del año 1.`
     : 'Los precios de electricidad se mantienen constantes como base económica del recibo (sin supuesto de incremento de tarifa).';
-  notice(doc, y, 'Se consideran degradación de 0.5% anual, mantenimiento inicial de 1% de la venta sin IVA que ' +
-    'crece 3% anual' + (reposicionAnio ? `, y reposición del inversor en el año ${reposicionAnio}. ` : '. No se incluyó reposición de inversor en este cálculo. ') + escTxt);
+  notice(doc, y, 'Se consideran degradación de 0.5% anual, mantenimiento inicial de 1% de la inversión total ' +
+    '(con IVA) que crece 3% anual' + (reposicionAnio ? `, y reposición del inversor en el año ${reposicionAnio}. ` : '. No se incluyó reposición de inversor en este cálculo. ') + escTxt);
 }
 
 // ---------- Pagina 14: flujo 25 años ----------

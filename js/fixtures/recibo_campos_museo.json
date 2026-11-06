@@ -21,6 +21,7 @@
   "dap": 197.0,
   "bt_monto": 267.67,
   "bonus_monto": -341.28,
+  "recargo_fp_monto": null,
   "rate_kw_detectado": {
     "distribucion": 1.0,
     "capacidad": 1.0
@@ -101,6 +102,7 @@
   "total_resumen": 15636.62,
   "historial_anual_kwh": 58476.0,
   "historial_meses_cubiertos": 12,
+  "historial_advertencia_huecos": null,
   "rate_kw_advertencia": null,
   "reconciliacion_diff": -0.0,
   "reconciliacion_advertencia": null,

@@ -71,7 +71,7 @@ export function verificarClasificacion(tariff, rateKw) {
 // Construye la funcion invoice(dias, netEnergy, solar) -- igual forma que en Python.
 // cargos: objeto con llaves de _CONCEPTOS_ENERGIA + CONCEPTOS_DEMANDA + 'suministro'.
 export function construirInvoice(tariff, periodoDias, periodoKwh, cargos, rateKw,
-                                  dapMensual, btPct, fpBonusPct, ivaPct = 0.16) {
+                                  dapMensual, btPct, fpBonusPct, recargoFpPct = 0, ivaPct = 0.16) {
   const tieneDemanda = verificarClasificacion(tariff, rateKw);
   if (periodoKwh <= 0) throw new Error('periodoKwh debe ser > 0');
   // periodoDias llega aqui ya validado si vino de un recibo leido por OCR (recibo.js acota
@@ -105,11 +105,18 @@ export function construirInvoice(tariff, periodoDias, periodoKwh, cargos, rateKw
     // Ver motor_tarifas.py para la razon de excluir el bono de factor de potencia en
     // el escenario solar: el bono depende de la razon reactiva/activa del medidor, y
     // con menos energia activa neta tomada de la red esa razon empeora -- se excluye
-    // por prudencia, no se asume que se mantiene igual.
+    // por prudencia, no se asume que se mantiene igual. Mismo criterio para el recargo
+    // por FP bajo (auditoria 2026-11-06, hallazgo 6: antes no existia ningun mecanismo
+    // para un RECARGO por factor de potencia, solo la bonificacion -- CFE aplica un
+    // recargo cuando el FP cae debajo de 90%, Acuerdo SHCP 2000, ademas de la
+    // bonificacion cuando es >=90%. recargoFpPct es independiente de fpBonusPct: un
+    // mismo recibo nunca trae los dos a la vez, pero el motor no lo asume, solo suma
+    // ambos efectos (el que no aplique llega en 0).
     const bonus = solar ? 0 : R((base + bt) * fpBonusPct);
-    const pre = R(base + bt - bonus);
+    const recargo = solar ? 0 : R((base + bt) * recargoFpPct);
+    const pre = R(base + bt - bonus + recargo);
     const vat = R(pre * ivaPct);
-    return { base: R(base), bt, bonus, subtotal: pre, iva: vat, dap: dapMensual, total: R(pre + vat + dapMensual) };
+    return { base: R(base), bt, bonus, recargo, subtotal: pre, iva: vat, dap: dapMensual, total: R(pre + vat + dapMensual) };
   }
 
   const meta = { tieneDemandaContratada: tieneDemanda, reducibles, noReducibles, reducible, noReducible, energyRate, monthlyFixed };
@@ -167,7 +174,15 @@ export function flujoMensualAnual(invoiceFn, consumoDiarioKwh, generacionMensual
 
 // Tarifa domestica (01/DAC): volumetrica por escalones, sin cargo de demanda.
 // escalones: lista de [limiteKwhONull, tarifaMxnKwh], el ultimo con limite null.
-export function construirInvoiceDomestica(escalones, periodoDias, dapBimestral, ivaPct = 0.16) {
+// cargoFijoBimestral (hallazgo 7, auditoria 2026-11-06): antes no existia ningun
+// mecanismo para un cargo fijo de CFE en tarifas domesticas -- fuentes periodisticas
+// (no el acuerdo oficial directo) reportan que 01/DAC si traen uno, pero sin un monto
+// oficial confirmado no se asume ningun valor por default (0). Se captura del recibo
+// real cuando el admin lo ve impreso, igual que el resto de los cargos del proyecto --
+// nunca se inventa una cifra. Se prorratea por dias igual que el DAP, y SI esta sujeto
+// a IVA (a diferencia del DAP, que es un derecho municipal aparte) porque es un cargo
+// de CFE como el resto de la factura.
+export function construirInvoiceDomestica(escalones, periodoDias, dapBimestral, cargoFijoBimestral = 0, ivaPct = 0.16) {
   if (!(periodoDias > 0)) throw new Error('periodoDias debe ser > 0');
   // Los limites de escalon (Basico/Intermedio) vienen calibrados al periodo completo
   // del recibo (periodoDias, bimestral ~61 dias). invoice() tambien se llama con un
@@ -189,10 +204,12 @@ export function construirInvoiceDomestica(escalones, periodoDias, dapBimestral, 
     return R(total);
   }
   function invoice(dias, netEnergy) {
-    const base = energia(netEnergy, dias);
+    const energiaMonto = energia(netEnergy, dias);
+    const cargoFijo = R(cargoFijoBimestral * dias / periodoDias);
+    const base = R(energiaMonto + cargoFijo);
     const vat = R(base * ivaPct);
     const dap = R(dapBimestral * dias / periodoDias);
-    return { base, bt: 0.0, bonus: 0.0, subtotal: base, iva: vat, dap, total: R(base + vat + dap) };
+    return { base, bt: 0.0, bonus: 0.0, cargoFijo, subtotal: base, iva: vat, dap, total: R(base + vat + dap) };
   }
   return invoice;
 }
@@ -324,6 +341,14 @@ export function costoInversor(materiales) {
 // dimensionamiento.recalcular_desde_materiales().
 export function recalcularDesdeMateriales(materiales, ahorroAnual, escalamientoTarifaPct = 0,
                                            aplicaIsr = false, tasaIsrPct = 0, iva = 0.16) {
+  // Hallazgo 15, auditoria 2026-11-06: al editar importeMxn a mano (editor de precios),
+  // unitarioMxn se quedaba con el valor viejo (nunca se recalculaba aqui) -- hoy no se
+  // muestra en ninguna tabla de pantalla/PDF asi que no era visible, pero es dato
+  // interno inconsistente (unitarioMxn * cantidad ya no cuadraba con importeMxn). Se
+  // recalcula para que los datos internos sigan siendo correctos.
+  materiales.forEach((m) => {
+    m.unitarioMxn = m.cantidad ? Math.round((m.importeMxn / m.cantidad) * 10000) / 10000 : m.importeMxn;
+  });
   const ventaSinIva = R(materiales.reduce((s, m) => s + m.importeMxn, 0));
   const ivaMonto = R(ventaSinIva * iva);
   const investment = R(ventaSinIva + ivaMonto);
@@ -340,8 +365,10 @@ export function recalcularDesdeMateriales(materiales, ahorroAnual, escalamientoT
   if (aplicaIsr) {
     const ahorroFiscalIsr = R(ventaSinIva * (tasaIsrPct / 100));
     const inversionNetaIsr = R(investment - ahorroFiscalIsr);
+    // omBaseInvestment = investment (la real, no la neta de ISR) -- mismo fix que en
+    // resultado.js, hallazgo 4: el mantenimiento real no depende del beneficio fiscal.
     const flujo25Isr = flujo25Anios(inversionNetaIsr, ahorroAnual, 0.10, 25, (escalamientoTarifaPct || 0) / 100,
-                                     0.01, 0.03, 0.005, costoInv);
+                                     0.01, 0.03, 0.005, costoInv, 13, investment);
     const paybackNetoIsr = ahorroAnual > 0 ? inversionNetaIsr / ahorroAnual : null;
     Object.assign(out, {
       ahorroFiscalIsr, inversionNetaIsr, vanNetoIsr: flujo25Isr.van, tirNetoIsr: flujo25Isr.tir, paybackNetoIsr,
@@ -387,10 +414,20 @@ function irr(flows) {
 // costoInversorHoy se deja en 0, el flujo NO incluye reposicion: quien llama esta
 // funcion debe pasar el costo real (ver costoInversor()) para que cualquier texto que
 // diga "se incluye reposicion del inversor" sea cierto.
+// omBaseInvestment: base SEPARADA para calcular el mantenimiento (om1), distinta de
+// `investment` (que sigue siendo el desembolso real del flujo/VAN/TIR). Por default es
+// la misma `investment` -- sin cambio de comportamiento para ningun llamador existente.
+// Se agrego (auditoria 2026-11-06, hallazgo 4) porque el escenario ISR volvia a llamar
+// esta funcion con `inversionNetaIsr` (la inversion YA reducida por el beneficio
+// fiscal) como `investment` -- eso hacia que el mantenimiento de ESE escenario saliera
+// mas chico solo porque hubo un beneficio fiscal, aunque el mantenimiento real del
+// sistema (limpieza, revision) no depende de cuanto ISR se ahorro. Quien llame con
+// ISR debe pasar la inversion REAL (bruta) en `omBaseInvestment`.
 export function flujo25Anios(investment, ahorroAnio1, descuento = 0.10, horizonte = 25,
                               escalamientoAhorro = 0.0, omFraccion = 0.01, escalamientoOm = 0.03,
-                              degradacion = 0.005, costoInversorHoy = 0.0, anioReposicionInversor = 13) {
-  const om1 = investment * omFraccion;
+                              degradacion = 0.005, costoInversorHoy = 0.0, anioReposicionInversor = 13,
+                              omBaseInvestment = null) {
+  const om1 = (omBaseInvestment ?? investment) * omFraccion;
   const flows = [-investment];
   const rows = [{ anio: 0, ahorroMxn: 0, omMxn: 0, reposicionMxn: 0, flujoMxn: -investment, acumuladoMxn: -investment }];
   let cum = -investment;
@@ -410,4 +447,19 @@ export function flujo25Anios(investment, ahorroAnio1, descuento = 0.10, horizont
     rows.push({ anio: year, ahorroMxn: R(ahorro), omMxn: R(om), reposicionMxn: reposicion, flujoMxn: R(net), acumuladoMxn: R(cum) });
   }
   return { flujo: rows, van: R(npv(descuento, flows)), tir: irr(flows), recuperacionAcumulada: recovered };
+}
+
+// Beneficio/costo del flujo a 25 anios -- fuente UNICA (auditoria 2026-11-06, hallazgo
+// 1): antes existian 2 copias de este calculo (secciones.js y propuesta.js) que se
+// habian desincronizado -- la de pantalla SI incluia la reposicion del inversor en el
+// costo descontado, la del PDF no, dando un indicador mas favorable en el PDF que en
+// pantalla para el mismo estudio. Ahora pantalla y PDF importan esta misma funcion.
+// `r`: el objeto resultado completo (usa r.flujo25Rows y r.investment).
+export function beneficioCosto(r) {
+  const flujo25 = r.flujo25Rows || [];
+  if (!flujo25.length) return null;
+  const flujoPos = flujo25.filter(x => x.anio > 0);
+  const beneficioDesc = flujoPos.reduce((s, x) => s + x.ahorroMxn / Math.pow(1.10, x.anio), 0);
+  const costoDesc = r.investment + flujoPos.reduce((s, x) => s + (x.omMxn + (x.reposicionMxn || 0)) / Math.pow(1.10, x.anio), 0);
+  return costoDesc ? beneficioDesc / costoDesc : null;
 }

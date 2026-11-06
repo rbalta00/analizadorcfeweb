@@ -14,15 +14,15 @@ import { fechaEstudioEs, fechaVigenciaEs } from './util.js';
 export function construirResultado(input) {
   const {
     titular, domicilio, noServicio, tarifa, esDomestica,
-    periodoDias, periodoKwh, dap, cargos, rateKw, btPct, fpBonusPct,
+    periodoDias, periodoKwh, dap, cargos, rateKw, btPct, fpBonusPct, recargoFpPct,
     moduloWp, cobertura, horasUtiles, costos, escalamientoPct,
-    escalones, dapDomestica,
+    escalones, dapDomestica, cargoFijoDomestica,
     leido, inmueble, aplicaIsr, tasaIsrPct, historialManual, vigenciaDias,
   } = input;
 
   let invoice, meta, pagoRecurrentePeriodo, piso, ahorroMax, pctMax, cargosFinal, facturaDetalle;
   if (!esDomestica) {
-    const construido = construirInvoice(tarifa, periodoDias, periodoKwh, cargos, rateKw, dap, btPct, fpBonusPct);
+    const construido = construirInvoice(tarifa, periodoDias, periodoKwh, cargos, rateKw, dap, btPct, fpBonusPct, recargoFpPct || 0);
     invoice = construido.invoice; meta = construido.meta;
     // facturaDetalle: el desglose REAL que ya calcula invoice() (base/bt/bonus/subtotal/
     // iva/dap/total) -- expuesto en `r` para que secciones.js pueda mostrar el paso a paso
@@ -37,7 +37,7 @@ export function construirResultado(input) {
     piso = pisoCalc.piso; ahorroMax = pisoCalc.ahorroMax; pctMax = pisoCalc.pct;
     cargosFinal = cargos;
   } else {
-    invoice = construirInvoiceDomestica(escalones, periodoDias, dapDomestica);
+    invoice = construirInvoiceDomestica(escalones, periodoDias, dapDomestica, cargoFijoDomestica || 0);
     facturaDetalle = invoice(periodoDias, periodoKwh, false);
     pagoRecurrentePeriodo = facturaDetalle.total;
     piso = invoice(periodoDias, 0, true).total;
@@ -140,7 +140,15 @@ export function construirResultado(input) {
   const flujo25 = flujo25Anios(pres.inversion, ahorroAnual, 0.10, 25, (escalamientoPct || 0) / 100, 0.01, 0.03, 0.005, costoInv);
   const payback = ahorroAnual > 0 ? pres.inversion / ahorroAnual : null;
   const om1 = pres.inversion * 0.01;
-  const annualKwh = consumoMensual * 12;
+  // Antes: consumoMensual * 12 -- consumoMensual esta normalizado con DIAS_MES_REF=30.5
+  // (30.5*12 = 366 dias exactos), mientras que `rows` (de donde salen annualbefore/
+  // annualafter de arriba) usa los dias REALES del año calendario vigente (365 en años
+  // no bisiestos). Las dos cifras se mostraban juntas en el mismo documento
+  // (Consumo anual de referencia vs. suma de la columna "Consumo extrapolado" de la
+  // tabla mensual) y no coincidian entre si (~0.27% de diferencia) -- auditoria
+  // 2026-11-06, hallazgo 9. Ahora "Consumo anual de referencia" usa la MISMA base de
+  // dias reales que ya usa el resto del documento, una sola fuente de verdad.
+  const annualKwh = Math.round(rows.reduce((s, x) => s + x.consumoExtrapoladoKwh, 0) * 100) / 100;
 
   // Escenario alterno: cuantos paneles sugiere la verificacion en sitio que hizo el
   // gobierno (dato manual, inmueble.panelesVerificacion) -- se recalcula TODO con el
@@ -177,7 +185,11 @@ export function construirResultado(input) {
   if (aplicaIsr) {
     ahorroFiscalIsr = R(pres.ventaSinIva * (tasaIsrPct / 100));
     inversionNetaIsr = R(pres.inversion - ahorroFiscalIsr);
-    const flujo25Isr = flujo25Anios(inversionNetaIsr, ahorroAnual, 0.10, 25, (escalamientoPct || 0) / 100, 0.01, 0.03, 0.005, costoInv);
+    // omBaseInvestment = pres.inversion (la inversion REAL, no la neta de ISR): el
+    // mantenimiento fisico del sistema (limpieza, revision) no depende de cuanto ISR se
+    // ahorro -- antes se calculaba sobre `inversionNetaIsr`, subestimandolo solo por el
+    // beneficio fiscal (auditoria 2026-11-06, hallazgo 4).
+    const flujo25Isr = flujo25Anios(inversionNetaIsr, ahorroAnual, 0.10, 25, (escalamientoPct || 0) / 100, 0.01, 0.03, 0.005, costoInv, 13, pres.inversion);
     vanNetoIsr = flujo25Isr.van; tirNetoIsr = flujo25Isr.tir;
     paybackNetoIsr = ahorroAnual > 0 ? inversionNetaIsr / ahorroAnual : null;
   }
@@ -187,8 +199,8 @@ export function construirResultado(input) {
     noServicio, tarifa, fechaEstudio: fechaEstudioEs(),
     vigenciaDias: vigenciaDias || 15, fechaVigencia: fechaVigenciaEs(vigenciaDias || 15),
     periodoDias, periodoKwh, dap: esDomestica ? (dapDomestica || 0) : dap, cargos: cargosFinal, meta,
-    btPct: btPct || 0, fpBonusPct: fpBonusPct || 0, esDomestica: !!esDomestica,
-    escalones: esDomestica ? escalones : null,
+    btPct: btPct || 0, fpBonusPct: fpBonusPct || 0, recargoFpPct: recargoFpPct || 0, esDomestica: !!esDomestica,
+    escalones: esDomestica ? escalones : null, cargoFijoDomestica: esDomestica ? (cargoFijoDomestica || 0) : null,
     demandaContratadaKw: leido ? leido.demanda_contratada_kw : null,
     pagoRecurrentePeriodo, pisoPeriodo: piso, ahorroMaxPeriodo: ahorroMax, pctMaxPeriodo: pctMax, facturaDetalle,
     n, kwp, moduloWp, cobertura, horasUtiles, gen: genAnual, annualKwh, metodoGeneracion,
@@ -205,10 +217,22 @@ export function construirResultado(input) {
   r.notas = generarNotas(leido || null, r, esDomestica);
   if (aplicaIsr) {
     const paybackTxt = paybackNetoIsr ? `${paybackNetoIsr.toFixed(2)} años` : 'no calculable';
+    // Texto corregido (auditoria 2026-11-06, hallazgo 4): "100% inmediata" se presta a
+    // leerse como "efectivo en el momento de la compra". El Art. 34 fraccion XIII LISR
+    // SI permite deducir el 100% en el ejercicio de la erogacion, pero el beneficio real
+    // (menor ISR a pagar) se recibe de forma escalonada durante ese ejercicio fiscal --
+    // en los pagos provisionales o hasta la declaracion anual, no el dia de la compra --
+    // y solo si el cliente causa suficiente ISR contra el cual aplicarlo. Este calculo
+    // SI modela el beneficio como si llegara junto con la inversion (año 0), por
+    // simplicidad -- se advierte aqui en vez de dejarlo implicito.
     r.notas.push(
-      `Se estimó una deducción fiscal 100% inmediata (Art. 34 fracción XIII LISR) de $${ahorroFiscalIsr.toLocaleString('en-US', { minimumFractionDigits: 2 })} ` +
-      `(${tasaIsrPct.toFixed(0)}% de ISR sobre el costo antes de IVA, $${pres.ventaSinIva.toLocaleString('en-US', { minimumFractionDigits: 2 })}). ` +
-      `Esto reduciría la inversión neta efectiva a $${inversionNetaIsr.toLocaleString('en-US', { minimumFractionDigits: 2 })} y el payback simple a ${paybackTxt}. ` +
+      `Se estimó una deducción fiscal del 100% del costo antes de IVA en el ejercicio de la compra (Art. 34 fracción XIII LISR), ` +
+      `por $${ahorroFiscalIsr.toLocaleString('en-US', { minimumFractionDigits: 2 })} ` +
+      `(${tasaIsrPct.toFixed(0)}% de ISR sobre $${pres.ventaSinIva.toLocaleString('en-US', { minimumFractionDigits: 2 })}). ` +
+      `Este cálculo trata ese beneficio como si se recibiera al mismo tiempo que la inversión (reduciendo la inversión neta efectiva a ` +
+      `$${inversionNetaIsr.toLocaleString('en-US', { minimumFractionDigits: 2 })} y el payback simple a ${paybackTxt}) -- en la realidad, el beneficio ` +
+      'se recibe de forma escalonada durante el ejercicio fiscal (pagos provisionales o declaración anual), no el día de la compra, y solo aplica si el ' +
+      'cliente causa suficiente ISR. Además requiere que el equipo permanezca en operación al menos 5 años (Art. 35 LISR) o se debe pagar la diferencia. ' +
       'Es una estimación general, no asesoría fiscal -- confirmar con el contador o fiscalista del cliente antes de prometerlo en una oferta firme.'
     );
   }
