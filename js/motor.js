@@ -125,15 +125,30 @@ export function pisoDeAhorro(periodoDias, pagoRecurrentePeriodo, invoiceFn) {
 
 const NOMBRES_MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto',
                         'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-const DIAS_POR_MES_2026 = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]; // 2026 no es bisiesto
+
+// Antes era una constante fija DIAS_POR_MES_2026 = [31,28,...] ("2026 no es bisiesto") --
+// bug real reportado por el usuario, 2026-11-05 (auditoria de scripts): esta herramienta
+// se sigue usando año tras año, y un año bisiesto (2028, 2032, ...) habria calculado
+// febrero con 28 dias en vez de 29, descuadrando ligeramente produccion/consumo/ahorro
+// de ese mes en la seccion 7. `diasPorMes(anioCalendario)` calcula los dias reales de
+// cada mes de CUALQUIER año con el truco estandar de JS (dia 0 del mes siguiente = ultimo
+// dia del mes actual, que ya maneja bisiestos solo). Por default usa el año calendario
+// real de hoy -- esta funcion no recibe (ni tiene por que recibir) un año de referencia
+// propio: `anio` en su firma es el año de DEGRADACION del sistema (año 1, año 2... del
+// horizonte de 25 años), un concepto distinto, no el año calendario.
+function diasPorMes(anioCalendario) {
+  return Array.from({ length: 12 }, (_, m) => new Date(anioCalendario, m + 1, 0).getDate());
+}
 
 export function flujoMensualAnual(invoiceFn, consumoDiarioKwh, generacionMensualKwhPorKwp, kwp,
-                                   anio = 1, reservaPct = 0.01, degradacion = 0.005, nombresMeses = null) {
+                                   anio = 1, reservaPct = 0.01, degradacion = 0.005, nombresMeses = null,
+                                   anioCalendario = new Date().getFullYear()) {
   nombresMeses = nombresMeses || NOMBRES_MESES;
+  const diasDelAnio = diasPorMes(anioCalendario);
   const rows = [];
   for (let i = 0; i < generacionMensualKwhPorKwp.length; i++) {
     const eM = generacionMensualKwhPorKwp[i];
-    const dias = DIAS_POR_MES_2026[i];
+    const dias = diasDelAnio[i];
     const load = consumoDiarioKwh * dias;
     const produccion = eM * kwp * Math.pow(1 - degradacion, anio - 1);
     const disponible = produccion * (1 - reservaPct);

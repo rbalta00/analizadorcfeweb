@@ -273,6 +273,11 @@ a.btn-secundario { display: inline-flex; align-items: center; text-decoration: n
 @media (prefers-color-scheme: dark) {
   .aviso-flotante-cambios { background: #3a1613; color: #ffb4a8; border-color: #6e2b22; }
 }
+/* Aviso de guardado fallido -- mas arriba en la pila (z-index) que el de "cambios sin
+   calcular" porque es mas grave (datos en riesgo real de perderse, no solo un calculo
+   desactualizado) y debe ganarle si ambos estuvieran visibles a la vez. */
+.aviso-flotante-error { z-index: 510; background: #fde0e0; border-color: #e09a9a; }
+@media (prefers-color-scheme: dark) { .aviso-flotante-error { background: #4a1414; border-color: #7a2b2b; } }
 .btn-link-flotante {
   background: none; border: none; color: inherit; font-weight: 700; text-decoration: underline;
   cursor: pointer; font-size: inherit; padding: 0; margin-left: 4px;
@@ -303,6 +308,10 @@ input[type="file"] { padding: 6px 0; }
 .chip-etapa-ganado { background: #d6f0db; color: #1f6b35; }
 .chip-etapa-perdido { background: #f8d7da; color: #7a1f27; }
 .chip-etapa-instalado { background: #d8e8f3; color: #16425a; }
+
+/* ===================== Dashboard de todos los clientes (2026-11-05) ===================== */
+.dashboard-etapas { display: flex; flex-wrap: wrap; gap: 8px; }
+.dashboard-etapa-chip { font-size: 0.85rem; padding: 6px 14px; margin-left: 0; }
 .chip-definitiva { font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; margin-left: 6px; background: #1a7a4c; color: #fff; }
 .lista-notas-seguimiento { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .nota-seguimiento { font-size: 0.82rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }

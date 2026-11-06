@@ -3,8 +3,8 @@
 // secciones navegables -> exportar PDF / WhatsApp. Toda la logica de calculo vive en
 // resultado.js/motor.js; este archivo solo lee/escribe el DOM y el almacenamiento.
 import {
-  obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo,
-  listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto,
+  obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo, listarClientes,
+  listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
 import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
@@ -30,6 +30,32 @@ const $ = (id) => document.getElementById(id);
 // Numero de WhatsApp al que apunta "Enviar por WhatsApp" (dado por el usuario). 52 =
 // Mexico; WhatsApp no permite adjuntar archivos desde un enlace wa.me, solo texto.
 const WHATSAPP_NUMERO = '522218367792';
+
+// Aviso visible de guardado fallido -- UN SOLO hook (alGuardar, clientes.js) que se
+// entera del resultado de CADA guardado real a localStorage, venga de donde venga
+// (guardarCliente/guardarProyecto, pero tambien crearCliente/crearProyecto/
+// eliminarCliente/eliminarProyecto, que escriben directo) -- asi no hace falta que
+// cada uno de los 36+ call sites de este archivo revise el valor de retorno por su
+// cuenta, y el aviso se oculta solo en cuanto CUALQUIER guardado posterior tenga
+// exito, sin importar por que funcion haya pasado. Bug real reportado por el usuario,
+// 2026-11-05 (de una auditoria de scripts aparte): antes un guardado fallido solo
+// quedaba en consola (console.error dentro de guardarTodos) -- el admin podia editar
+// toda una cotizacion, creer que el autoguardado de cada calculo funciono, y perderlo
+// todo sin ver jamas un error. Tambien afectaba "Guardar copia en la nube" (nube.js),
+// que sube lo que haya en localStorage en ese momento -- si el guardado local ya habia
+// fallado en silencio, el respaldo en la nube salia incompleto sin que nadie se
+// enterara. No se resuelve el limite real de 5-10MB de localStorage (eso es una
+// limitacion del navegador, no de esta app) -- solo que el fallo deje de ser silencioso
+// y el admin pueda actuar (borrar fotos/archivos viejos).
+function mostrarAvisoErrorGuardado() {
+  const el = $('avisoErrorGuardado');
+  if (el) el.hidden = false;
+}
+function ocultarAvisoErrorGuardado() {
+  const el = $('avisoErrorGuardado');
+  if (el) el.hidden = true;
+}
+alGuardar((ok) => (ok ? ocultarAvisoErrorGuardado() : mostrarAvisoErrorGuardado()));
 
 let clienteActual = null;
 let proyectoActual = null;
@@ -121,6 +147,7 @@ $('btnEnviarFormularioWhatsapp').addEventListener('click', () => {
 function mostrarPantallaClientes() {
   $('pantallaClientes').hidden = false;
   $('pantallaEnvios').hidden = true;
+  $('pantallaDashboard').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
@@ -210,6 +237,132 @@ function mostrarPantallaEnvios() {
 $('btnAbrirEnvios').addEventListener('click', mostrarPantallaEnvios);
 $('btnVolverClientesDesdeEnvios').addEventListener('click', mostrarPantallaClientes);
 $('btnRefrescarEnvios').addEventListener('click', renderListaEnvios);
+
+// =====================================================================
+// Pantalla: Dashboard (agregado de TODOS los clientes) -- pedido explicito del
+// usuario, 2026-11-05 (auditoria de scripts): "no existe ningun dashboard agregado
+// entre todos los clientes". Mismo espiritu que el dashboard de "Ingresos" de
+// administradorinvitamx (otro proyecto del usuario) -- total cotizado, conteo por
+// etapa, exportar CSV -- adaptado a lo que ya existe aqui (no hay pagos/abonos en
+// este proyecto, solo proyecto.etapa y los totales cacheados en calcularYRenderizar,
+// ver ultimaInversionTotal/ultimoAhorroAnual).
+function datosDashboard() {
+  const filas = [];
+  for (const c of listarClientes()) {
+    for (const p of (c.proyectos || [])) filas.push({ cliente: c, proyecto: p });
+  }
+  return filas;
+}
+
+function renderDashboardTotales(filas) {
+  const totalInversion = filas.reduce((s, f) => s + (f.proyecto.ultimaInversionTotal || 0), 0);
+  const totalAhorro = filas.reduce((s, f) => s + (f.proyecto.ultimoAhorroAnual || 0), 0);
+  const nCalculadas = filas.filter(f => f.proyecto.ultimaInversionTotal != null).length;
+  const cont = $('dashboardTotales');
+  cont.innerHTML = '';
+  const metricas = [
+    [M(totalInversion), `Total cotizado (${nCalculadas} de ${filas.length} ya calculadas)`],
+    [M(totalAhorro), 'Ahorro anual proyectado (suma de todas)'],
+    [String(listarClientes().length), 'Clientes'],
+    [String(filas.length), 'Cotizaciones'],
+  ];
+  for (const [valor, etiqueta] of metricas) {
+    const m = document.createElement('div');
+    m.className = 'metrica';
+    m.innerHTML = `<div class="valor">${valor}</div><div class="etiqueta">${etiqueta}</div>`;
+    cont.append(m);
+  }
+}
+
+function renderDashboardEtapas(filas) {
+  const cont = $('dashboardEtapas');
+  cont.innerHTML = '';
+  for (const etapa of Object.keys(ETAPAS_PROYECTO)) {
+    const n = filas.filter(f => (f.proyecto.etapa || 'cotizado') === etapa).length;
+    const chip = document.createElement('div');
+    chip.className = `chip-etapa chip-etapa-${etapa} dashboard-etapa-chip`;
+    chip.textContent = `${ETAPAS_PROYECTO[etapa]}: ${n}`;
+    cont.append(chip);
+  }
+}
+
+function renderDashboardTabla(filas) {
+  const cont = $('dashboardTabla');
+  cont.innerHTML = '';
+  if (!filas.length) {
+    cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: 'Sin clientes/cotizaciones todavía.' }));
+    return;
+  }
+  const wrap = document.createElement('div');
+  wrap.className = 'tabla-wrap';
+  const t = document.createElement('table');
+  t.className = 'tabla-seccion tabla-chica';
+  const thead = document.createElement('thead');
+  thead.innerHTML = '<tr><th>Cliente</th><th>Tipo</th><th>Cotización</th><th>Etapa</th><th>Tarifa</th>' +
+    '<th class="num">Inversión</th><th class="num">Ahorro anual</th><th>Actualizado</th></tr>';
+  t.append(thead);
+  const tbody = document.createElement('tbody');
+  for (const { cliente, proyecto } of filas) {
+    const etapa = proyecto.etapa || 'cotizado';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${escapeHtml(cliente.nombre)}</td><td>${cliente.tipo === 'gobierno' ? 'Gobierno' : 'Particular'}</td>` +
+      `<td>${escapeHtml(proyecto.nombre)}</td><td>${ETAPAS_PROYECTO[etapa]}</td><td>${escapeHtml(proyecto.formulario?.tarifa || '—')}</td>` +
+      `<td class="num">${proyecto.ultimaInversionTotal != null ? M(proyecto.ultimaInversionTotal) : '—'}</td>` +
+      `<td class="num">${proyecto.ultimoAhorroAnual != null ? M(proyecto.ultimoAhorroAnual) : '—'}</td>` +
+      `<td>${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</td>`;
+    tbody.append(tr);
+  }
+  t.append(tbody);
+  wrap.append(t);
+  cont.append(wrap);
+}
+
+function renderDashboard() {
+  const filas = datosDashboard();
+  renderDashboardTotales(filas);
+  renderDashboardEtapas(filas);
+  renderDashboardTabla(filas);
+}
+
+function csvEscape(v) {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function exportarDashboardCsv() {
+  const filas = datosDashboard();
+  const lineas = [['Cliente', 'Tipo', 'Cotización', 'Etapa', 'Tarifa', 'Inversión', 'Ahorro anual', 'Actualizado'].join(',')];
+  for (const { cliente, proyecto } of filas) {
+    const etapa = proyecto.etapa || 'cotizado';
+    lineas.push([
+      csvEscape(cliente.nombre), csvEscape(cliente.tipo), csvEscape(proyecto.nombre), csvEscape(ETAPAS_PROYECTO[etapa]),
+      csvEscape(proyecto.formulario?.tarifa || ''), proyecto.ultimaInversionTotal ?? '', proyecto.ultimoAhorroAnual ?? '',
+      csvEscape(new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')),
+    ].join(','));
+  }
+  // BOM al inicio para que Excel detecte UTF-8 solo (sin esto, acentos/ñ salen mal al
+  // abrir el CSV directo en Excel en Windows).
+  const blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `cotizaciones_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function mostrarPantallaDashboard() {
+  $('pantallaClientes').hidden = true;
+  $('pantallaEnvios').hidden = true;
+  $('pantallaProyectos').hidden = true;
+  $('pantallaCliente').hidden = true;
+  $('pantallaDashboard').hidden = false;
+  renderDashboard();
+}
+$('btnAbrirDashboard').addEventListener('click', mostrarPantallaDashboard);
+$('btnVolverClientesDesdeDashboard').addEventListener('click', mostrarPantallaClientes);
+$('btnRefrescarDashboard').addEventListener('click', renderDashboard);
+$('btnExportarDashboardCsv').addEventListener('click', exportarDashboardCsv);
 
 function tarjetaEnvio(envio) {
   const div = document.createElement('div');
@@ -398,6 +551,7 @@ function mostrarPantallaProyectos(clienteId) {
   archivosReciboAcumulados = []; // empieza limpio -- no arrastrar fotos de otro cliente/proyecto
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
+  $('pantallaDashboard').hidden = true;
   $('pantallaProyectos').hidden = false;
   $('pantallaCliente').hidden = true;
   $('clienteNombreBarraProyectos').textContent = clienteActual.nombre;
@@ -496,6 +650,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   if (!clienteActual || !proyectoActual) { mostrarPantallaProyectos(clienteId); return; }
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
+  $('pantallaDashboard').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = false;
   $('clienteNombreBarra').textContent = clienteActual.nombre;
@@ -1412,6 +1567,7 @@ function ocultarAvisoCambiosSinCalcular() {
 $('tabCaptura').addEventListener('input', () => { if (hayCambiosSinCalcular()) mostrarAvisoCambiosSinCalcular(); });
 $('tabCaptura').addEventListener('change', () => { if (hayCambiosSinCalcular()) mostrarAvisoCambiosSinCalcular(); });
 $('btnIrACalcular').addEventListener('click', () => $('btnCalcular').scrollIntoView({ behavior: 'smooth', block: 'center' }));
+$('btnCerrarAvisoErrorGuardado').addEventListener('click', ocultarAvisoErrorGuardado);
 
 function calcularYRenderizar() {
   const input = leerInputCalculo();
@@ -1489,6 +1645,16 @@ function calcularYRenderizar() {
   // usuario, 2026-11-01 ("no aparece el indice" se repetia sesion tras sesion).
   proyectoActual.campos = sincronizarCamposConfirmados(ultimoLeido);
   proyectoActual.inmueble = inmueble;
+  // Cache del ultimo resultado calculado -- SOLO para el dashboard agregado de todos
+  // los clientes (ver renderDashboard()). r.investment/r.ahorroAnual son transitorios
+  // (viven en ultimoResultado, en memoria), no se guardaban antes en el proyecto; sin
+  // esto, sumar "total cotizado" de TODOS los clientes habria requerido re-correr
+  // construirResultado() para cada proyecto de cada cliente solo para abrir el
+  // dashboard -- mas lento y mas fragil (depende de que el formulario guardado siga
+  // teniendo exactamente la forma que espera el motor). Pedido explicito del usuario,
+  // 2026-11-05 (auditoria de scripts): dashboard agregado entre todos los clientes.
+  proyectoActual.ultimaInversionTotal = r.investment;
+  proyectoActual.ultimoAhorroAnual = r.ahorroAnual;
   guardarProyecto(clienteActual, proyectoActual);
 
   renderSecciones(r);

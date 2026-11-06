@@ -38,6 +38,7 @@
       </div>
       <div class="acciones acciones-pdf">
         <button id="btnCrearCliente" class="btn-primario">+ Nuevo cliente</button>
+        <button id="btnAbrirDashboard" class="btn-secundario">📊 Dashboard de todos los clientes</button>
         <button id="btnAbrirEnvios" class="btn-secundario">📥 Envíos de clientes <span id="contadorEnvios"></span></button>
         <button id="btnEnviarFormularioWhatsapp" class="btn-whatsapp">💬 Enviar formulario por WhatsApp</button>
         <a href="cliente.html" target="_blank" id="btnAbrirFormulario" class="btn-secundario">📄 Abrir formulario</a>
@@ -76,6 +77,34 @@
     </section>
     <section class="tarjeta">
       <div id="listaEnvios" class="lista-clientes"></div>
+    </section>
+  </main>
+
+  <!-- ================= PANTALLA: DASHBOARD (agregado de TODOS los clientes) =================
+       Pedido explicito del usuario, 2026-11-05 (auditoria de scripts): "no existe ningun
+       dashboard agregado entre todos los clientes" -- mismo espiritu que el dashboard de
+       "Ingresos" de administradorinvitamx (otro proyecto del usuario), adaptado a lo que ya
+       existe aqui (no hay pagos/abonos en este proyecto, solo cotizaciones con una etapa). -->
+  <main id="pantallaDashboard" hidden>
+    <div class="cliente-barra">
+      <button id="btnVolverClientesDesdeDashboard" class="btn-link">← Clientes</button>
+      <strong>Dashboard de todos los clientes</strong>
+    </div>
+    <section class="tarjeta">
+      <div id="dashboardTotales" class="tarjetas-metricas"></div>
+      <p class="nota">"Total cotizado"/"Ahorro anual proyectado" suman la ÚLTIMA inversión/ahorro que se calculó en
+        cada cotización -- si una cotización nunca se calculó, no cuenta todavía.</p>
+    </section>
+    <section class="tarjeta">
+      <h3>Cotizaciones por etapa</h3>
+      <div id="dashboardEtapas" class="dashboard-etapas"></div>
+    </section>
+    <section class="tarjeta">
+      <div class="acciones">
+        <button id="btnExportarDashboardCsv" class="btn-secundario">⬇️ Exportar todo a CSV</button>
+        <button id="btnRefrescarDashboard" class="btn-secundario">↻ Refrescar</button>
+      </div>
+      <div id="dashboardTabla"></div>
     </section>
   </main>
 
@@ -403,6 +432,18 @@
     <div id="avisoCambiosSinCalcular" class="aviso-flotante-cambios" hidden role="status">
       ⚠️ Hay cambios en el formulario que no se han calculado -- lo que ves aquí (y el PDF) sigue siendo de
       antes de esos cambios. <button type="button" id="btnIrACalcular" class="btn-link-flotante">Ir a Calcular ↑</button>
+    </div>
+
+    <!-- Aviso de guardado fallido (localStorage lleno u otro error) -- pedido explicito del
+         usuario, 2026-11-05: antes un guardado fallido solo quedaba en la consola, el admin
+         podia perder cambios sin enterarse. Fijo (no depende del scroll) igual que
+         avisoCambiosSinCalcular, para que se note sin importar en que parte de la pantalla
+         este trabajando. -->
+    <div id="avisoErrorGuardado" class="aviso-flotante-cambios aviso-flotante-error" hidden role="alert">
+      ⚠️ <strong>No se pudo guardar</strong> -- probablemente la memoria del navegador para esta app está llena.
+      Los últimos cambios NO se guardaron. Borra fotos/archivos viejos de alguna cotización (Datos y recibo →
+      Verificación en sitio/fotos) o usa "Guardar copia en la nube" después de liberar espacio.
+      <button type="button" id="btnCerrarAvisoErrorGuardado" class="btn-link-flotante">Entendido ✕</button>
     </div>
 
     <!-- Las 21 secciones se insertan aquí dinámicamente tras calcular -->

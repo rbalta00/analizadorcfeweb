@@ -14,6 +14,21 @@ import { todosLosBloques } from './bloques.js';
 
 const CLAVE_STORAGE = 'cfe_clientes_v1';
 
+// Hook UNICO para que app.js se entere del resultado de CADA intento de guardado, sin
+// importar por cual funcion de este archivo se llego ahi (guardarCliente/guardarProyecto,
+// crearCliente, crearProyecto, eliminarCliente, eliminarProyecto -- TODAS pasan por
+// guardarTodos() internamente, es el unico lugar real donde se escribe a localStorage).
+// Arreglo de raiz pedido por el usuario, 2026-11-05: un guardado fallido (tipicamente
+// cuota de localStorage llena) antes solo quedaba en consola, sin aviso visible.
+// Se llama con `ok` en AMBOS casos (true o false), no solo en el fallo -- la primera
+// version de este fix solo avisaba en el fallo y nunca quitaba el aviso cuando un
+// guardado posterior SI tenia exito por un camino que no fuera guardarProyecto/
+// guardarCliente (ej. crearProyecto llamado directo desde "+ Cotizacion en blanco"),
+// dejando el aviso pegado en pantalla aunque el guardado ya funcionara bien de nuevo --
+// bug real encontrado probando en navegador antes de dar el fix por terminado.
+let _onResultadoGuardado = null;
+export function alGuardar(cb) { _onResultadoGuardado = cb; }
+
 function uuid() {
   if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
   return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
@@ -65,9 +80,11 @@ function leerTodos() {
 function guardarTodos(lista) {
   try {
     localStorage.setItem(CLAVE_STORAGE, JSON.stringify(lista));
+    if (_onResultadoGuardado) _onResultadoGuardado(true);
     return true;
   } catch (e) {
     console.error('No se pudo guardar en localStorage (¿cuota llena?):', e);
+    if (_onResultadoGuardado) _onResultadoGuardado(false, e);
     return false;
   }
 }
