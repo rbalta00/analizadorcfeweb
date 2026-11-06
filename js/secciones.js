@@ -1127,6 +1127,15 @@ function calculoReciboConDemanda(r) {
     ...(esGdmth ? [
       p('Esta tarifa (GDMTH) factura la Energía en 3 franjas horarias con su propio precio cada una, impresas tal ' +
         'cual en el recibo como "Generación Base/Intermedia/Punta" — no es un solo precio por kWh:'),
+      // textCols: col4 ("Ahorro máximo") solo se agrega cuando coberturaCompleta --
+      // filaAhorroConcepto() (linea ~79) regresa un MONTO normalmente ("$X (100%)"),
+      // pero cuando la cobertura ya es 100% regresa una ORACION explicativa completa
+      // ("Igual que a la izquierda -- ..."), nunca ambas cosas en el mismo render (la
+      // cobertura es una propiedad de TODO el resultado r, no de cada fila/concepto).
+      // Bug real reportado por el usuario, 2026-11-05 continuacion 12: esta columna
+      // estaba bloqueada SIEMPRE, perdiendo la oportunidad de editar esa oracion
+      // cuando si es texto. Col3 ("Ahorro con el sistema propuesto") nunca es oracion
+      // -- se queda protegida siempre.
       graficoToggle('g03-calc-franjas', 'Tabla de franjas horarias (GDMTH)', tabla(['Franja horaria', 'Importe en este recibo', '¿Baja con los paneles? ¿Cómo/por qué?', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'], [
         ['Base', M(r.cargos.energia_base || 0), `Sí — ${razonSiReducible('energia_base', r)}`,
           ...filaAhorroConcepto(true, r.cargos.energia_base || 0, r)],
@@ -1134,7 +1143,7 @@ function calculoReciboConDemanda(r) {
           ...filaAhorroConcepto(true, r.cargos.energia_intermedia || 0, r)],
         ['Punta', M(r.cargos.energia_punta || 0), `No — ${razonNoReducible('energia_punta')}`,
           ...filaAhorroConcepto(false, r.cargos.energia_punta || 0, r)],
-      ], { small: true, textCols: [2], id: 'g03-calc-franjas' })),
+      ], { small: true, textCols: coberturaRealizadaPct(r) >= 1 ? [2, 4] : [2], id: 'g03-calc-franjas' })),
       avisoCream('Importante y específico de GDMTH: "Energía Punta" se agrupa en el Paso 1 (cargo fijo) de la tabla ' +
         'de abajo, pero NO es porque sea un cargo fijo como Suministro/Distribución/Capacidad — sí depende de ' +
         'cuánto consume. La razón real es de horario: los paneles solares generan con luz de sol, y la franja ' +
@@ -1220,10 +1229,14 @@ function s04(r, _leido, onToggle) {
       'que se facture por kW. Todo el cargo de energía se factura por kWh consumido (por tramos en la tarifa 01, ' +
       'a precio único en DAC), así que la energía solar sustituye kWh comprados a CFE prácticamente 1 a 1, sin el ' +
       'piso de cargos fijos de demanda que sí tienen GDMTO/GDMTH/GDBT.'),
+    // textCols: col1 ("Clasificación", ej. "Sí baja") es etiqueta corta descriptiva, no
+    // un monto -- bug real reportado por el usuario, 2026-11-05 continuacion 12, mismo
+    // criterio que "29 días" (entrada anterior). col4 ("Ahorro máximo") solo se agrega
+    // cuando coberturaCompleta -- ver nota igual en g03-calc-franjas arriba.
     graficoToggle('g04-calc-clasificacion', 'Tabla de clasificación de conceptos', tabla(['Concepto', 'Clasificación', 'Por qué', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'], [
       ['Energía (todos los tramos)', 'Sí baja', 'Se factura por kWh -- la energía solar sustituye kWh comprados a CFE.',
         ...filaAhorroConcepto(true, r.cargos.energia || 0, r)],
-    ], { small: true, textCols: [2], id: 'g04-calc-clasificacion' })),
+    ], { small: true, textCols: coberturaRealizadaPct(r) >= 1 ? [1, 2, 4] : [1, 2], id: 'g04-calc-clasificacion' })),
     avisoCream('El único piso que queda es el IVA y el DAP, que no dependen del consumo -- por eso el % máximo de ' +
       'ahorro de una tarifa doméstica suele ser más alto que el de una tarifa con demanda contratada.'),
   ] : [
@@ -1237,12 +1250,14 @@ function s04(r, _leido, onToggle) {
       'contra kWh consumidos, pero no modifica por sí sola el cargo por demanda contratada -- ese cargo depende ' +
       'de la potencia máxima que el inmueble le exige a la red, no de cuánta energía neta se le compra a CFE en ' +
       'el mes. Sin una medición de la demanda real después de instalar, no hay base para prometer que ese cargo baje.'),
+    // Mismos 2 fixes que la rama domestica de arriba: col1 ("Clasificación") editable
+    // siempre, col4 ("Ahorro máximo") editable solo cuando coberturaCompleta.
     graficoToggle('g04-calc-clasificacion', 'Tabla de clasificación de conceptos', tabla(['Concepto', 'Clasificación', 'Cómo se abate (o por qué no) con el SFV propuesto', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'], [
       ...r.meta.reducibles.map(k => [listaConceptos([k]), 'Sí baja', razonSiReducible(k, r),
         ...filaAhorroConcepto(true, r.cargos[k] || 0, r)]),
       ...r.meta.noReducibles.map(k => [listaConceptos([k]), 'No baja', razonNoReducible(k),
         ...filaAhorroConcepto(false, r.cargos[k] || 0, r)]),
-    ], { small: true, textCols: [2], id: 'g04-calc-clasificacion' })),
+    ], { small: true, textCols: coberturaRealizadaPct(r) >= 1 ? [1, 2, 4] : [1, 2], id: 'g04-calc-clasificacion' })),
     avisoCream('Esta clasificación es la misma para cualquier recibo con la misma tarifa y el mismo patrón en la ' +
       'columna "$/kW" -- no es un supuesto por tarifa, se lee directo del recibo de cada cliente.'),
   ], r));
