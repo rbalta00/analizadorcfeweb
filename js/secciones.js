@@ -244,12 +244,20 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   // el estado actual, sin comparar contra textoDefecto -- antes, si no habias editado
   // el parrafo, "Usar este texto..." no hacia nada porque el texto ya era igual al
   // default y el codigo lo interpretaba como "nada que guardar" (bug real reportado).
+  // Icono en vez de texto largo (pedido explicito del usuario, 2026-11-05 continuacion
+  // 7 -- "✓" para aplicar a todas, "✕" para quitar), mismo lenguaje visual compacto que
+  // ✕/↺ de ocultar fila/columna. Aqui no hay colision posible con ningun otro icono de
+  // este mismo campo-editable (↺ de "Restaurar a predeterminado" es un boton DISTINTO,
+  // y 👁/🙈 tambien son emoji distintos) -- a diferencia de celdaEditable() mas abajo,
+  // donde este mismo "✕" si choca con el de ocultar columna.
   const btnGlobalToggle = document.createElement('button');
   btnGlobalToggle.type = 'button';
-  btnGlobalToggle.className = 'btn-guardar-global' + (tieneGlobal ? ' activo' : '');
-  btnGlobalToggle.textContent = tieneGlobal
-    ? '🌐✅ Aplicar a todas las cotizaciones (clic para desactivar)'
-    : '🌐 Aplicar este texto a todas las cotizaciones';
+  btnGlobalToggle.className = 'btn-icono-global' + (tieneGlobal ? ' activo' : '');
+  btnGlobalToggle.textContent = tieneGlobal ? '✕' : '✓';
+  btnGlobalToggle.title = tieneGlobal
+    ? 'Quitar de todas las cotizaciones -- vuelve al texto original de la app.'
+    : 'Guardar esta edición para todas las cotizaciones (también afecta a otros clientes).';
+  btnGlobalToggle.setAttribute('aria-label', btnGlobalToggle.title);
   btnGlobalToggle.addEventListener('click', () => {
     if (tieneGlobal) _onQuitarGlobalActual(id, textoDefecto);
     else _onGuardarGlobalActual(id, e.textContent, textoDefecto);
@@ -309,7 +317,33 @@ function celdaEditable(id, textoDefecto) {
     document.execCommand('insertText', false, texto);
   });
   span.addEventListener('focusout', () => _onEditarTextoActual(id, span.textContent, base));
-  return span;
+  const frag = document.createDocumentFragment();
+  frag.append(span);
+  // Boton de aplicar/quitar "a todas las cotizaciones" -- hasta 2026-11-05 (continuacion
+  // 7) las celdas de tabla SOLO heredaban pasivamente el predeterminado global/plantilla
+  // de tarifa (via `base` arriba), sin ningun control aqui para activarlo o quitarlo;
+  // solo los parrafos sueltos (campoEditableConId) tenian el boton. Pedido explicito del
+  // usuario: agregar el mismo control, mismo mecanismo (_onGuardarGlobalActual/
+  // _onQuitarGlobalActual), a las celdas tambien.
+  // Iconos distintos de campoEditableConId a proposito: un "✕" suelto aqui chocaria con
+  // el "✕" de botonOcultarColFila (ocultar la columna/fila completa), que vive en el
+  // mismo <th>/junto a esta misma celda -- dos iconos identicos para acciones distintas
+  // en el mismo campo, justo lo que el usuario pidio evitar. "🌐✕" es inconfundible.
+  const btnGlobal = document.createElement('button');
+  btnGlobal.type = 'button';
+  btnGlobal.className = 'btn-icono-global btn-icono-global-celda' + (tieneGlobal ? ' activo' : '');
+  btnGlobal.textContent = tieneGlobal ? '🌐✕' : '✓';
+  btnGlobal.title = tieneGlobal
+    ? 'Quitar de todas las cotizaciones -- vuelve al texto original de la app.'
+    : 'Guardar esta edición para todas las cotizaciones (también afecta a otros clientes).';
+  btnGlobal.setAttribute('aria-label', btnGlobal.title);
+  btnGlobal.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    if (tieneGlobal) _onQuitarGlobalActual(id, textoDefecto);
+    else _onGuardarGlobalActual(id, span.textContent, textoDefecto);
+  });
+  frag.append(btnGlobal);
+  return frag;
 }
 
 // textCols: indices de columnas que llevan texto explicativo largo (no un numero/monto) --
