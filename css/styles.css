@@ -496,7 +496,12 @@ input[type="file"] { padding: 6px 0; }
 /* ===================== Celdas de tabla editables (etiquetas/encabezados, 2026-11-05) ===================== */
 .celda-editable { display: inline-block; min-width: 10px; outline: none; border-radius: 3px; padding: 0 2px; }
 .celda-editable:hover, .celda-editable:focus { background: rgba(15, 139, 141, 0.12); }
-.celda-editada { outline: 1px solid var(--cfe-gold); background: #fffaf0; }
+/* color explicito (no heredado) -- bug real encontrado en verificacion, 2026-11-06:
+   dentro de un <th> (fondo navy, texto blanco por .tabla-seccion th) esta celda
+   quedaba con fondo crema claro pero texto blanco heredado, invisible. Los <td>
+   normales no lo mostraban (fondo claro, texto oscuro por defecto), por eso paso
+   desapercibido en la primera prueba. */
+.celda-editada { outline: 1px solid var(--cfe-gold); background: #fffaf0; color: #3a2f00; }
 .celda-con-global { text-decoration: underline dotted var(--teal); text-underline-offset: 3px; }
 
 /* ===================== Ocultar columnas/filas de una tabla (2026-11-05) ===================== */
