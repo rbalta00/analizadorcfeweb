@@ -124,7 +124,23 @@
         (ej. anverso y reverso), selecciónalas todas juntas.</p>
       <input type="file" id="archivoReciboNuevoProyecto" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
       <p class="nota" id="estadoReciboNuevoProyecto"></p>
-      <div class="acciones"><button id="btnNuevoProyectoBlanco" class="btn-secundario">+ Cotización en blanco</button></div>
+      <div class="acciones">
+        <button id="btnNuevoProyectoBlanco" class="btn-secundario">+ Cotización en blanco</button>
+        <button id="btnNuevoProyectoPlantilla" class="btn-secundario">📋 Desde cotización ya validada</button>
+      </div>
+    </section>
+
+    <section class="tarjeta" id="panelPlantillas" hidden>
+      <h3>📋 Elegir cotización ya validada como punto de partida</h3>
+      <p class="nota">Copia la tarifa, cargos, escalones y configuración de la cotización que elijas. El titular,
+        domicilio, número de servicio, período/kWh e historial de este cliente nuevo SIEMPRE quedan en blanco --
+        hay que capturarlos del recibo real de este cliente antes de calcular.</p>
+      <div class="fila">
+        <label><input type="checkbox" id="chkSoloDefinitivasPlantilla" checked> Mostrar solo las marcadas como ✅ Definitiva</label>
+        <select id="filtroTarifaPlantilla"></select>
+      </div>
+      <div id="listaPlantillas" class="lista-clientes"></div>
+      <div class="acciones"><button id="btnCancelarPlantilla" class="btn-secundario">Cancelar</button></div>
     </section>
 
     <section class="tarjeta">
@@ -141,6 +157,14 @@
       <span id="clienteTipoBarra" class="chip-tipo"></span>
       <span class="chip-proyecto">· <span id="proyectoNombreBarra"></span></span>
     </div>
+
+    <section class="tarjeta" id="avisoPlantillaOrigen" hidden>
+      <p class="nota aviso">🛑 <strong>Esta cotización se creó a partir de otra ya guardada</strong> (<span id="txtPlantillaOrigen"></span>) --
+        la tarifa, cargos y escalones son de ESE recibo, no del cliente actual. Captura el titular, domicilio, número de
+        servicio y período/kWh reales de este cliente (sube su recibo o edítalos a mano) y confirma que los cargos
+        siguen aplicando antes de generar cualquier documento.</p>
+      <button id="btnMarcarPlantillaVerificada" class="btn-secundario">✅ Ya verifiqué estos datos contra el recibo real</button>
+    </section>
 
     <section class="tarjeta" id="tabSeguimiento">
       <div class="seccion-header">

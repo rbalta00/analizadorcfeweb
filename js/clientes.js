@@ -232,6 +232,41 @@ export function eliminarProyecto(cliente, proyectoId) {
   return guardarCliente(cliente);
 }
 
+// Crea un proyecto nuevo CLONANDO los datos de tarifa/cargos de un proyecto YA
+// GUARDADO (de este cliente o de cualquier otro) -- pedido explicito del usuario,
+// 2026-11-06: "cuando haga un proyecto o cotizacion nueva... usar la tarifa ya
+// validada o la cotizacion ya validada". Copia TODO el formulario (tarifa, cargos,
+// escalones domesticos, clasificacion $/kW, BT/factor de potencia, modulo/cobertura/
+// horas-sol/costos/ISR) como punto de partida -- pero limpia los campos que son
+// especificos de CADA cliente real (identidad + consumo del periodo + historial), que
+// SIEMPRE tienen que venir del recibo real de este cliente nuevo, nunca clonarse.
+// `plantillaOrigen` se guarda para poder avisar en la UI que estos datos vienen de
+// otra cotizacion y no se han verificado todavia contra el recibo real de ESTE
+// cliente -- mismo criterio de transparencia que el resto del proyecto (reconciliacion,
+// avisos de OCR, etc.): nunca dejar que un dato sin verificar se vea identico a uno ya
+// confirmado.
+export function crearProyectoDesdeOrigen(cliente, origen, { nombre } = {}) {
+  const f = origen.proyecto.formulario ? JSON.parse(JSON.stringify(origen.proyecto.formulario)) : null;
+  if (f) {
+    f.titular = ''; f.domicilio = ''; f.noServicio = '';
+    f.periodoDias = ''; f.periodoKwh = '';
+    f.dPeriodoDias = ''; f.dPeriodoKwh = '';
+    f.historialNoDom = Array(12).fill(null);
+    f.historialDom = Array(6).fill(null);
+  }
+  const proyecto = crearProyecto(cliente, { nombre });
+  proyecto.formulario = f;
+  proyecto.plantillaOrigen = {
+    clienteNombre: origen.cliente.nombre,
+    proyectoNombre: origen.proyecto.nombre,
+    tarifa: origen.proyecto.formulario?.tarifa || null,
+    fecha: new Date().toISOString(),
+  };
+  proyecto.plantillaVerificada = false;
+  guardarProyecto(cliente, proyecto);
+  return proyecto;
+}
+
 // Mueve una cotizacion de un cliente a otro (ej. se capturo bajo el cliente
 // equivocado, o se decide que en realidad corresponde a otro ya registrado). `proyecto`
 // se recibe completo (no se vuelve a leer de storage) para no perder cambios en

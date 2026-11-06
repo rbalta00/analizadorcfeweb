@@ -5,6 +5,7 @@
 import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo, listarClientes,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
+  crearProyectoDesdeOrigen,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
 import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
@@ -517,6 +518,7 @@ function tarjetaProyecto(p) {
   const etapa = p.etapa || 'cotizado';
   div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(p.nombre)}</strong>` +
     (p.definitiva ? `<span class="chip-definitiva">✅ Definitiva</span>` : '') +
+    (p.plantillaOrigen && !p.plantillaVerificada ? `<span class="chip-etapa chip-etapa-cotizado">📋 desde plantilla, sin verificar</span>` : '') +
     `<span class="chip-etapa chip-etapa-${etapa}">${ETAPAS_PROYECTO[etapa]}</span>` +
     `<span class="nota">${estado} · actualizado ${new Date(p.actualizadoEn).toLocaleDateString('es-MX')}</span></div>`;
   div.addEventListener('click', () => abrirProyecto(clienteActual.id, p.id));
@@ -570,6 +572,90 @@ $('btnNuevoProyectoBlanco').addEventListener('click', () => {
   const proyecto = crearProyecto(clienteActual, {});
   abrirProyecto(clienteActual.id, proyecto.id);
 });
+
+// ---------------- Nueva cotizacion desde una ya validada (pedido explicito del
+// usuario, 2026-11-06: "usar la tarifa ya validada o la cotizacion ya validada") ----------------
+// Lista TODOS los proyectos de TODOS los clientes (no solo los de clienteActual) --
+// el punto es poder reusar la tarifa de CUALQUIER cotizacion de confianza ya hecha
+// antes, no solo las de este cliente en particular.
+function candidatosPlantilla() {
+  const soloDefinitivas = $('chkSoloDefinitivasPlantilla').checked;
+  const tarifaFiltro = $('filtroTarifaPlantilla').value;
+  const filas = [];
+  for (const c of listarClientes()) {
+    for (const p of (c.proyectos || [])) {
+      if (!p.formulario || !p.formulario.tarifa) continue; // sin datos capturados, nada que clonar
+      if (soloDefinitivas && !p.definitiva) continue;
+      if (tarifaFiltro && p.formulario.tarifa !== tarifaFiltro) continue;
+      filas.push({ cliente: c, proyecto: p });
+    }
+  }
+  return filas.sort((a, b) => (b.proyecto.actualizadoEn || '').localeCompare(a.proyecto.actualizadoEn || ''));
+}
+
+function renderPanelPlantillas() {
+  const select = $('filtroTarifaPlantilla');
+  if (!select.dataset.listo) {
+    select.innerHTML = '<option value="">Todas las tarifas</option>' +
+      [...TARIFAS_SOPORTADAS].map(t => `<option value="${t}">${t}</option>`).join('');
+    select.dataset.listo = '1';
+  }
+  const cont = $('listaPlantillas');
+  const candidatos = candidatosPlantilla();
+  cont.innerHTML = '';
+  if (!candidatos.length) {
+    cont.append(Object.assign(document.createElement('p'), {
+      className: 'nota',
+      textContent: 'No hay ninguna cotización guardada que coincida con este filtro (prueba quitar "solo definitivas" o cambiar la tarifa).',
+    }));
+    return;
+  }
+  for (const { cliente, proyecto } of candidatos) {
+    const div = document.createElement('div');
+    div.className = 'tarjeta-cliente';
+    div.style.cursor = 'pointer';
+    div.innerHTML = `<strong>${escapeHtml(proyecto.nombre)}</strong> ${proyecto.definitiva ? '<span class="chip-definitiva">✅ Definitiva</span>' : ''}` +
+      `<div class="nota">Cliente: ${escapeHtml(cliente.nombre)} · Tarifa: ${escapeHtml(proyecto.formulario.tarifa)} · ` +
+      `${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</div>`;
+    div.addEventListener('click', () => {
+      const nuevo = crearProyectoDesdeOrigen(clienteActual, { cliente, proyecto }, {});
+      $('panelPlantillas').hidden = true;
+      abrirProyecto(clienteActual.id, nuevo.id);
+    });
+    cont.append(div);
+  }
+}
+
+function renderAvisoPlantillaOrigen() {
+  const o = proyectoActual.plantillaOrigen;
+  const avisoEl = $('avisoPlantillaOrigen');
+  if (!o || proyectoActual.plantillaVerificada) { avisoEl.hidden = true; return; }
+  avisoEl.hidden = false;
+  $('txtPlantillaOrigen').textContent = `${o.clienteNombre} — ${o.proyectoNombre}${o.tarifa ? ' (' + o.tarifa + ')' : ''}`;
+}
+$('btnMarcarPlantillaVerificada').addEventListener('click', () => {
+  proyectoActual.plantillaVerificada = true;
+  guardarProyecto(clienteActual, proyectoActual);
+  renderAvisoPlantillaOrigen();
+});
+// Mismo patron que confirmarSiHayReconciliacionSinResolver (hallazgo 10 de la
+// auditoria 2026-11-06): no bloquea generar el documento (podria ser un falso
+// positivo si el admin ya revisó y solo olvidó marcar el botón), pero exige una
+// confirmación consciente antes de entregarle al cliente una cotización cuyos cargos
+// siguen siendo literalmente los de OTRO cliente.
+function confirmarSiHayPlantillaSinVerificar() {
+  if (!proyectoActual.plantillaOrigen || proyectoActual.plantillaVerificada) return true;
+  return confirm('Esta cotización se creó desde otra ya guardada y todavía no marcaste que verificaste los datos ' +
+    'contra el recibo real de este cliente.\n\n¿Generar el documento de todos modos?\n\n(Cancelar para revisar primero)');
+}
+
+$('btnNuevoProyectoPlantilla').addEventListener('click', () => {
+  $('panelPlantillas').hidden = false;
+  renderPanelPlantillas();
+});
+$('btnCancelarPlantilla').addEventListener('click', () => { $('panelPlantillas').hidden = true; });
+$('chkSoloDefinitivasPlantilla').addEventListener('change', renderPanelPlantillas);
+$('filtroTarifaPlantilla').addEventListener('change', renderPanelPlantillas);
 
 // Subir un recibo aquí (antes de abrir ninguna cotización) crea una cotización nueva
 // con los datos ya detectados -- pedido explícito del usuario. Si en cambio se sube un
@@ -660,6 +746,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('clienteTipoBarra').className = `chip-tipo chip-tipo-${clienteActual.tipo}`;
   $('proyectoNombreBarra').textContent = proyectoActual.nombre;
   $('inputNombreProyecto').value = proyectoActual.nombre || '';
+  renderAvisoPlantillaOrigen();
   // Si se abre con camposIniciales, viene de subir una foto nueva (nuevo proyecto o
   // "nuevo proyecto en blanco" sin fotos) -- se conserva lo acumulado para poder seguir
   // agregando fotos del mismo recibo aqui dentro. Si se abre SIN camposIniciales (un
@@ -2316,6 +2403,7 @@ $('btnGenerarPdf').addEventListener('click', () => {
   if (!confirmarSiHayCambiosSinCalcular()) return;
   if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
   if (!confirmarSiHayReconciliacionSinResolver()) return;
+  if (!confirmarSiHayPlantillaSinVerificar()) return;
   const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas, seccionesExcluidas: proyectoActual.seccionesExcluidas });
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
 });
@@ -2328,6 +2416,7 @@ $('btnResumenEjecutivo').addEventListener('click', () => {
   // nunca los lee, en ninguno de los 3 documentos), pero no avisaba nada.
   if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
   if (!confirmarSiHayReconciliacionSinResolver()) return;
+  if (!confirmarSiHayPlantillaSinVerificar()) return;
   const doc = generarResumenEjecutivo(ultimoResultado);
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Resumen_ejecutivo'));
 });
@@ -2338,6 +2427,7 @@ $('btnAnexoInterconexion').addEventListener('click', () => {
   // Mismo fix que btnResumenEjecutivo arriba (hallazgo 11, auditoria 2026-11-06).
   if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
   if (!confirmarSiHayReconciliacionSinResolver()) return;
+  if (!confirmarSiHayPlantillaSinVerificar()) return;
   const doc = generarAnexoInterconexion(ultimoResultado);
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Anexo_interconexion_CFE'));
 });
