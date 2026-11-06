@@ -183,6 +183,17 @@ export function crearProyecto(cliente, { nombre } = {}) {
     // tiene sentido guardar varias -- pedido explicito del usuario, hueco declarado desde 2026-10-29 ("no se
     // capturan fotografias en esta version"). Tope de 6 fotos y compresion mas agresiva que fotoSembrado (ver
     // app.js) para no comerse la cuota de localStorage entre varias fotos + fotoSembrado del mismo proyecto.
+    // tablaColumnasOcultas / tablaFilasOcultas: { [tablaId]: [indices...] } -- pedido
+    // explicito del usuario, 2026-11-05: "permite eliminar columnas o renglones de las
+    // tablas". MISMO patron reversible que graficosExcluidos (secciones.js/app.js): nunca
+    // es un borrado real, solo se oculta -- la columna/fila sigue en pantalla atenuada
+    // (clase 'col-oculta-tabla'/'fila-oculta-tabla', ver tabla() en secciones.js) con su
+    // propio boton para reactivarla, y solo desaparece de verdad en el PDF (propuesta.js,
+    // ver tablaF()). `tablaId` es el mismo id que ya identifica la tabla para el toggle de
+    // apagado completo (graficoToggle) y para la edicion de celdas (celdaEditable) -- un
+    // tercer uso del mismo id, no uno nuevo.
+    tablaColumnasOcultas: {},
+    tablaFilasOcultas: {},
   };
   cliente.proyectos = cliente.proyectos || [];
   cliente.proyectos.push(proyecto);

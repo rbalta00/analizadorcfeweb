@@ -29,6 +29,25 @@ function pad2(n) { return String(n).padStart(2, '0'); }
 // graficos se puedan apagar, ocultar... solo dime [lo que sea mejor]".
 function graficoIncluido(r, id) { return !(r.graficosExcluidos || []).includes(id); }
 
+// Filas/columnas ocultas de UNA tabla -- pedido explicito del usuario, 2026-11-05:
+// "permite eliminar columnas o renglones de las tablas". Mismo patron reversible que
+// graficosExcluidos: nunca es un borrado real, solo se ocultan (r.tablaColumnasOcultas/
+// r.tablaFilasOcultas, ver secciones.js/clientes.js), y el PDF debe respetar EXACTAMENTE
+// lo mismo que la pantalla -- aqui se filtran encabezados/filas/anchos ANTES de llamar a
+// table() de pdfComponents.js (que no sabe nada de columnas/filas ocultas, solo dibuja lo
+// que se le da). `widths` se filtra igual que `headers` para no desalinear columnas
+// cuando a una tabla con anchos fijos le falta una columna.
+function tablaF(doc, y, id, r, headers, filas, opts = {}) {
+  const colsOcultas = new Set((r.tablaColumnasOcultas || {})[id] || []);
+  const filasOcultas = new Set((r.tablaFilasOcultas || {})[id] || []);
+  const idxVisibles = headers.map((_, i) => i).filter((i) => !colsOcultas.has(i));
+  const headersF = idxVisibles.map((i) => headers[i]);
+  const filasF = filas.filter((_, fi) => !filasOcultas.has(fi)).map((fila) => idxVisibles.map((i) => fila[i]));
+  const opts2 = { ...opts };
+  if (opts.widths) opts2.widths = idxVisibles.map((i) => opts.widths[i]);
+  return table(doc, y, headersF, filasF, opts2);
+}
+
 function encabezado(doc, numero, titulo, titular) {
   let y = headX(doc, CONTENT_TOP, `${pad2(numero)} | ${titulo}`);
   y = subX(doc, y, titular);
@@ -113,9 +132,9 @@ function pagina02(doc, r, numero) {
   if (graficoIncluido(r, 'g02-datos-recibo')) {
     const filasRecibo = [['Período', `${r.periodoDias || '?'} días`], ['Consumo del período', r.periodoKwh ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh` : 'por confirmar']];
     if (r.demandaContratadaKw) filasRecibo.push(['Demanda contratada', `${r.demandaContratadaKw.toFixed(0)} kW`]);
-    y = table(doc, y, ['Dato verificado', 'Valor'], filasRecibo, { widths: [CONTENT_W * 0.45, CONTENT_W * 0.55] });
+    y = tablaF(doc, y, 'g02-datos-recibo-a', r, ['Dato verificado', 'Valor'], filasRecibo, { widths: [CONTENT_W * 0.45, CONTENT_W * 0.55] });
     y = spacer(y, 10);
-    y = table(doc, y, ['Total del recibo', 'Importe'], [
+    y = tablaF(doc, y, 'g02-datos-recibo-b', r, ['Total del recibo', 'Importe'], [
       ['Servicio con IVA', M(r.pagoRecurrentePeriodo - (r.dap || 0))],
       ['Alumbrado público (DAP)', M(r.dap || 0)],
       ['Pago recurrente del período', M(r.pagoRecurrentePeriodo)],
@@ -137,7 +156,7 @@ function pagina03(doc, r, numero) {
   const suma = Object.values(r.cargos).reduce((a, b) => a + b, 0);
   filasCargos.push(['Suma de componentes', M(suma)]);
   if (graficoIncluido(r, 'g03-cargos')) {
-    y = table(doc, y, ['Componente del recibo', 'Importe'], filasCargos, { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4] });
+    y = tablaF(doc, y, 'g03-cargos', r, ['Componente del recibo', 'Importe'], filasCargos, { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4] });
     y = spacer(y, 10);
   }
   y = bodyX(doc, y, 'En palabras simples: "Suministro" es lo que cuesta que CFE le dé servicio, sin importar ' +
@@ -198,13 +217,13 @@ function pagina05(doc, r, numero) {
       y = spacer(y, 10);
     }
     if (graficoIncluido(r, 'g05-historial-tabla')) {
-      y = table(doc, y, ['Período', 'Consumo facturado'], historial.map(x => [`${x.mes} ${x.anio}`, `${x.kwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]),
+      y = tablaF(doc, y, 'g05-historial-tabla', r, ['Período', 'Consumo facturado'], historial.map(x => [`${x.mes} ${x.anio}`, `${x.kwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]),
         { widths: [CONTENT_W * 0.5, CONTENT_W * 0.5], small: true });
       y = spacer(y, 10);
     }
   }
   if (graficoIncluido(r, 'g05-base-trabajo')) {
-    y = table(doc, y, ['Base de trabajo', 'Resultado'], [
+    y = tablaF(doc, y, 'g05-base-trabajo', r, ['Base de trabajo', 'Resultado'], [
       ['Período observado', r.periodoKwh && r.periodoDias ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh en ${r.periodoDias} días` : 'por confirmar'],
       ['Base usada para el consumo anual', r.basisConsumo],
       ['Consumo anual de referencia', `${r.annualKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año`],
@@ -225,7 +244,7 @@ function pagina06(doc, r, numero) {
   let y = encabezado(doc, numero, `Sistema propuesto: ${r.n} paneles de ${r.moduloWp} W`, r.titular);
   const acKw = r.kwp / 1.2;
   if (graficoIncluido(r, 'g06-sistema')) {
-    y = table(doc, y, ['Parte del sistema', 'Cantidad y función'], [
+    y = tablaF(doc, y, 'g06-sistema', r, ['Parte del sistema', 'Cantidad y función'], [
       ['Paneles', `${r.n} módulos de ${r.moduloWp} W: ${r.kwp.toFixed(2)} kWp de potencia nominal. Marca y modelo por confirmar.`],
       ['Inversor', `${acKw.toFixed(2)} kW AC como capacidad de cálculo económico; equipo comercial por seleccionar.`],
       ['Relación DC:AC', '1.2 — el inversor se dimensiona más chico que la suma de los paneles a propósito (práctica estándar de la industria, no un error de cálculo).'],
@@ -316,7 +335,7 @@ function pagina07(doc, r, numero) {
     y = groupedBarChart(doc, y, mesesAbrev, 'Generación estimada', r.rows.map(x => x.generacionKwh), 'Consumo extrapolado', r.rows.map(x => x.consumoExtrapoladoKwh));
     y = spacer(y, 10);
   }
-  y = table(doc, y, ['Mes', 'Generación estimada', 'Consumo extrapolado'],
+  y = tablaF(doc, y, 'g07-detalle-mensual', r, ['Mes', 'Generación estimada', 'Consumo extrapolado'],
     r.rows.map(x => [x.mes, `${x.generacionKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${x.consumoExtrapoladoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]),
     { widths: [CONTENT_W * 0.34, CONTENT_W * 0.33, CONTENT_W * 0.33], small: true });
   y = spacer(y, 8);
@@ -350,7 +369,7 @@ function pagina09(doc, r, numero) {
   y = bodyX(doc, y, 'Se calcula mes a mes la energía neta facturable y la factura resultante. En palabras ' +
     'simples, el modelo sigue estas reglas:');
   if (graficoIncluido(r, 'g09-criterios')) {
-    y = table(doc, y, ['Criterio', 'Aplicación'], [
+    y = tablaF(doc, y, 'g09-criterios', r, ['Criterio', 'Aplicación'], [
       ['Compensación', 'Medición neta: lo que generan los paneles se resta directo de su consumo del mes, en vez de vendérselo a CFE aparte. Requiere contrato y medidor autorizados.'],
       ['Energía aplicada', 'Cada mes se compara cuánto consumió contra cuánto generaron los paneles ese mismo mes, y se usa el MENOR de los dos (se reserva además un 1% de margen de seguridad).'],
       ['Excedentes entre meses', 'Si algún mes los paneles generan más de lo que consume, ese sobrante no se guarda para el siguiente mes ni se vende aparte.'],
@@ -373,7 +392,7 @@ function pagina10(doc, r, numero) {
     y = spacer(y, 10);
   }
   if (graficoIncluido(r, 'g10-tabla-comparativa')) {
-    y = table(doc, y, ['Concepto comparable', 'Sin sistema', 'Con sistema estimado'], [
+    y = tablaF(doc, y, 'g10-tabla-comparativa', r, ['Concepto comparable', 'Sin sistema', 'Con sistema estimado'], [
       ['Gasto anual de referencia', M(r.annualbefore), M(r.annualafter)],
       ['Promedio mensual del año', M(r.annualbefore / 12), M(r.annualafter / 12)],
       ['Ahorro anual de factura', '—', M(r.ahorroAnual)],
@@ -392,7 +411,7 @@ function pagina10(doc, r, numero) {
 function pagina11(doc, r, numero) {
   let y = encabezado(doc, numero, 'Presupuesto y alcance económico', r.titular);
   if (graficoIncluido(r, 'g11-resumen-venta')) {
-    y = table(doc, y, ['Resumen de venta', 'Importe'], [
+    y = tablaF(doc, y, 'g11-resumen-venta', r, ['Resumen de venta', 'Importe'], [
       ['Subtotal', M(r.ventaSinIva)], ['IVA 16%', M(r.iva)], ['INVERSIÓN TOTAL ESTIMADA', M(r.investment)],
     ], { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4] });
     y = spacer(y, 10);
@@ -413,7 +432,7 @@ function pagina11(doc, r, numero) {
 function pagina12(doc, r, numero) {
   let y = encabezado(doc, numero, 'Detalle del presupuesto', r.titular);
   if (graficoIncluido(r, 'g12-detalle-presupuesto')) {
-    y = table(doc, y, ['Concepto', 'Cantidad prevista', 'Importe sin IVA'],
+    y = tablaF(doc, y, 'g12-detalle-presupuesto', r, ['Concepto', 'Cantidad prevista', 'Importe sin IVA'],
       r.materiales.map(m => [m.partida, `${m.cantidad.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${m.unidad}`, M(m.importeMxn)]),
       { widths: [CONTENT_W * 0.5, CONTENT_W * 0.25, CONTENT_W * 0.25], small: true });
     y = spacer(y, 8);
@@ -447,7 +466,7 @@ function pagina13(doc, r, numero) {
   ];
   if (bc != null) filasInd.push(['Beneficio/costo', `${bc.toFixed(2)}: por cada peso invertido (y gastado en mantenimiento), regresa ${bc.toFixed(2)} pesos actualizados en ahorros.`]);
   if (graficoIncluido(r, 'g13-indicadores')) {
-    y = table(doc, y, ['Indicador estimado', 'Resultado y explicación'], filasInd, { widths: [CONTENT_W * 0.3, CONTENT_W * 0.7], small: true });
+    y = tablaF(doc, y, 'g13-indicadores', r, ['Indicador estimado', 'Resultado y explicación'], filasInd, { widths: [CONTENT_W * 0.3, CONTENT_W * 0.7], small: true });
   }
   y = spacer(y, 6);
   const escPct = r.escalamientoTarifaPct || 0;
@@ -468,7 +487,7 @@ function pagina14(doc, r, numero) {
     y = bodyX(doc, y, `Año cero: inversión de ${M(r.investment)}. El flujo neto descuenta mantenimiento` +
       (reposicionAnio ? `, y en el año ${reposicionAnio}, ${M(montoReposicion)} de reposición del inversor.` : '. No se incluyó reposición de inversor en este cálculo.') + ' Importes en MXN.');
     const filasFlujo = flujo25.filter(x => x.anio > 0).map(x => [x.reposicionMxn ? `${x.anio} *` : x.anio, M(x.ahorroMxn), M(x.flujoMxn), M(x.acumuladoMxn)]);
-    y = table(doc, y, ['Año', 'Ahorro factura', 'Flujo neto', 'Acumulado'], filasFlujo,
+    y = tablaF(doc, y, 'g14-detalle-flujo', r, ['Año', 'Ahorro factura', 'Flujo neto', 'Acumulado'], filasFlujo,
       { widths: [CONTENT_W * 0.15, CONTENT_W * 0.28, CONTENT_W * 0.28, CONTENT_W * 0.29], small: true });
     if (reposicionAnio) { y = spacer(y, 4); y = bodyX(doc, y, '* Año con reposición de inversor incluida en el Flujo neto.'); }
   } else {
@@ -487,7 +506,7 @@ function pagina15(doc, r, numero) {
     y = groupedBarChart(doc, y, mesesAbrev, 'Sin solar', r.rows.map(x => x.pagoSinSolarMxn), 'Con solar estimado', r.rows.map(x => x.pagoConSolarEstimadoMxn));
     y = spacer(y, 10);
   }
-  y = table(doc, y, ['Mes', 'Sin solar', 'Con solar estimado', 'Ahorro estimado'],
+  y = tablaF(doc, y, 'g15-detalle-mensual', r, ['Mes', 'Sin solar', 'Con solar estimado', 'Ahorro estimado'],
     r.rows.map(x => [x.mes, M(x.pagoSinSolarMxn), M(x.pagoConSolarEstimadoMxn), M(x.ahorroEstimadoMxn)]),
     { widths: [CONTENT_W * 0.2, CONTENT_W * 0.27, CONTENT_W * 0.27, CONTENT_W * 0.26], small: true });
   y = spacer(y, 8);
@@ -526,7 +545,7 @@ function pagina17(doc, r, numero) {
     'cargó o capturó — sin importar si ese recibo venía completo o no, esto SIEMPRE hace falta confirmar ' +
     'antes de poder ofrecer un presupuesto real y firme de este servicio:');
   if (graficoIncluido(r, 'g21-pendientes')) {
-    table(doc, y, ['Pendiente para un presupuesto real'], REQUISITOS_PRESUPUESTO_REAL.map(x => [x]), { small: true });
+    tablaF(doc, y, 'g21-pendientes', r, ['Pendiente para un presupuesto real'], REQUISITOS_PRESUPUESTO_REAL.map(x => [x]), { small: true });
   }
 }
 
@@ -550,12 +569,12 @@ function pagina18(doc, r, numero) {
     'impermeabilización general, cambio de transformador, obra de media tensión ni rehabilitación eléctrica ' +
     'ajena al sistema. Cualquier necesidad adicional se cotizará y aceptará por escrito.');
   if (graficoIncluido(r, 'g22-condiciones-pago')) {
-    y = table(doc, y, ['Condiciones de pago sugeridas', ''], COMERCIAL.pagos.map(pg => [`${Math.round(pg.porcentaje * 100)}%`, pg.hito]),
+    y = tablaF(doc, y, 'g22-condiciones-pago', r, ['Condiciones de pago sugeridas', ''], COMERCIAL.pagos.map(pg => [`${Math.round(pg.porcentaje * 100)}%`, pg.hito]),
       { widths: [CONTENT_W * 0.15, CONTENT_W * 0.85] });
     y = spacer(y, 8);
   }
   y = bodyX(doc, y, COMERCIAL.naturalezaCondiciones);
-  y = table(doc, y, ['Etapa', 'Plazo estimado'], COMERCIAL.cronograma, { widths: [CONTENT_W * 0.4, CONTENT_W * 0.6], small: true });
+  y = tablaF(doc, y, 'g22-detalle-cronograma', r, ['Etapa', 'Plazo estimado'], COMERCIAL.cronograma, { widths: [CONTENT_W * 0.4, CONTENT_W * 0.6], small: true });
   y = spacer(y, 6);
   notice(doc, y, 'Los precios deberán actualizarse antes de contratar. Las garantías serán las documentadas para los equipos y trabajos efectivamente suministrados.');
 }
@@ -564,7 +583,7 @@ function pagina18(doc, r, numero) {
 function pagina19(doc, r, numero) {
   let y = encabezado(doc, numero, 'Entrega, mantenimiento y comprobación del ahorro', r.titular);
   if (graficoIncluido(r, 'g23-entrega')) {
-    y = table(doc, y, ['Momento', 'Entrega o comprobación'], [
+    y = tablaF(doc, y, 'g23-entrega', r, ['Momento', 'Entrega o comprobación'], [
       ['Antes de obra', 'Plano, diagrama unifilar, memoria eléctrica, cálculo de estructura, modelos, protecciones, alcance y contrato.'],
       ['Al terminar', 'Inventario y números de serie, pruebas, documentación de conexión, manuales y garantías, plano final, acceso al monitoreo y capacitación.'],
       ['Durante operación', 'Registrar producción, importaciones, exportaciones, demanda, consumo y recibos. Revisar limpiezas, conexiones y alarmas.'],
@@ -584,7 +603,7 @@ function pagina20(doc, r, numero) {
   let y = encabezado(doc, numero, 'Glosario: términos usados en este estudio', r.titular);
   y = bodyX(doc, y, 'Para consultar rápido el significado de los términos técnicos que aparecen en las páginas anteriores.');
   y = spacer(y, 8);
-  if (graficoIncluido(r, 'g24-glosario')) table(doc, y, ['Término', 'Qué significa'], [
+  if (graficoIncluido(r, 'g24-glosario')) tablaF(doc, y, 'g24-glosario', r, ['Término', 'Qué significa'], [
     ['kWh (kilowatt-hora)', 'La unidad en la que CFE cobra la electricidad: cuánta energía se consumió.'],
     ['kW / kWp', 'La potencia (velocidad del consumo/generación). "Pico" es la potencia máxima de los paneles en condiciones ideales.'],
     ['Demanda contratada', 'En tarifas de negocio/gobierno, la potencia máxima reservada por CFE; se paga por tenerla disponible.'],

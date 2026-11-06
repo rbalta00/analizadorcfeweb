@@ -490,6 +490,21 @@ input[type="file"] { padding: 6px 0; }
 .celda-editada { outline: 1px solid var(--cfe-gold); background: #fffaf0; }
 .celda-con-global { text-decoration: underline dotted var(--teal); text-underline-offset: 3px; }
 
+/* ===================== Ocultar columnas/filas de una tabla (2026-11-05) ===================== */
+.btn-ocultar-col-fila {
+  display: inline-block; margin-left: 6px; width: 16px; height: 16px; line-height: 14px; padding: 0;
+  border: 1px solid var(--border); border-radius: 3px; background: var(--card-bg); color: var(--grey);
+  font-size: 0.68rem; cursor: pointer; vertical-align: middle;
+}
+.btn-ocultar-col-fila:hover { background: var(--teal); color: #fff; border-color: var(--teal); }
+.th-accion-tabla, .td-accion-tabla { width: 24px; padding: 2px !important; background: transparent !important; }
+/* Mismo tratamiento que .grafico-apagado/.seccion-apagada -- el contenido NUNCA se
+   quita del DOM, solo se atenua. El PDF (propuesta.js, tablaF()) es el unico lugar
+   donde de verdad desaparece. */
+.col-oculta-tabla { opacity: 0.45; }
+.fila-oculta-tabla { opacity: 0.45; }
+.fila-oculta-tabla td { text-decoration: line-through; text-decoration-color: var(--grey); }
+
 /* ===================== Documentos adjuntos (recibo + verificacion en sitio) ===================== */
 .documentos-verificacion { margin-top: 16px; }
 .documentos-grid { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 14px; }

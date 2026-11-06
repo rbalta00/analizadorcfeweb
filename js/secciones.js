@@ -158,6 +158,10 @@ let _ocultosActuales = {};
 let _onOcultarTextoActual = () => {};
 let _graficosExcluidosActual = [];
 let _onToggleGraficoActual = () => {};
+let _columnasOcultasActual = {};
+let _filasOcultasActual = {};
+let _onToggleColumnaActual = () => {};
+let _onToggleFilaActual = () => {};
 
 function siguienteTextoId() {
   return `s${_seccionActual}-t${_contadorTexto++}`;
@@ -319,31 +323,77 @@ function celdaEditable(id, textoDefecto) {
 // + las columnas listadas en textCols (descripciones largas) -- NUNCA las columnas "num"
 // (montos/porcentajes calculados), ver celdaEditable() arriba. Sin `id` (default), la
 // tabla se comporta exactamente igual que antes -- texto plano, no editable.
+// Boton chico "✕"/"↺" para ocultar/reactivar una columna o fila entera de una tabla --
+// pedido explicito del usuario, 2026-11-05: "permite eliminar columnas o renglones de
+// las tablas". MISMO patron reversible que el resto del proyecto (graficoToggle,
+// toggleSeccionIndividual): nunca borra de verdad, solo marca oculto.
+function botonOcultarColFila(oculto, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn-ocultar-col-fila';
+  btn.textContent = oculto ? '↺' : '✕';
+  btn.title = oculto ? 'Mostrar de nuevo' : 'Ocultar (no se incluirá en el PDF ni en lo que vería el cliente)';
+  btn.addEventListener('click', (ev) => { ev.preventDefault(); onClick(); });
+  return btn;
+}
+
+// `id`: ademas de activar edicion de celdas (celdaEditable, ver arriba), cuando se da
+// tambien activa el ocultado de columnas/filas individuales -- mismo id compartido con
+// graficoToggle() (apagado de la tabla COMPLETA) y con tablaF() en propuesta.js (el
+// mismo filtro aplicado al PDF). Una columna/fila oculta NUNCA se quita del DOM aqui --
+// se queda atenuada (clase col-oculta-tabla/fila-oculta-tabla) con su propio boton para
+// reactivarla, igual que el resto de "lo apagado" en este proyecto se sigue viendo en
+// la vista de edicion del admin.
 function tabla(headers, filas, { small = false, textCols = [], id = null } = {}) {
   const wrap = el('div', 'tabla-wrap');
   const t = el('table', 'tabla-seccion' + (small ? ' tabla-chica' : ''));
   const clase = (i) => (i === 0 ? null : textCols.includes(i) ? 'texto' : 'num');
   const esEditable = (i) => id != null && (i === 0 || textCols.includes(i));
+  const colsOcultas = id != null ? new Set(_columnasOcultasActual[id] || []) : new Set();
+  const filasOcultas = id != null ? new Set(_filasOcultasActual[id] || []) : new Set();
   const thead = el('thead');
   const trh = el('tr');
   headers.forEach((h, i) => {
-    const th = el('th', clase(i));
-    if (esEditable(i)) th.append(celdaEditable(`${id}-h${i}`, h)); else th.textContent = h;
+    const claseBase = clase(i);
+    const th = document.createElement('th');
+    if (claseBase) th.className = claseBase;
+    if (colsOcultas.has(i)) th.classList.add('col-oculta-tabla');
+    if (esEditable(i)) th.append(celdaEditable(`${id}-h${i}`, h)); else th.append(document.createTextNode(h));
+    if (id != null) {
+      const ocultaCol = colsOcultas.has(i);
+      th.append(botonOcultarColFila(ocultaCol, () => _onToggleColumnaActual(id, i, ocultaCol)));
+    }
     trh.append(th);
   });
+  if (id != null) trh.append(el('th', 'th-accion-tabla', ''));
   thead.append(trh);
   const tbody = el('tbody');
   filas.forEach((fila, fi) => {
-    const tr = el('tr');
+    const ocultaFila = filasOcultas.has(fi);
+    const tr = el('tr', ocultaFila ? 'fila-oculta-tabla' : null);
     fila.forEach((c, i) => {
-      const td = el('td', clase(i));
-      if (esEditable(i)) td.append(celdaEditable(`${id}-r${fi}c${i}`, String(c))); else td.textContent = String(c);
+      const claseBase = clase(i);
+      const td = document.createElement('td');
+      if (claseBase) td.className = claseBase;
+      if (colsOcultas.has(i)) td.classList.add('col-oculta-tabla');
+      if (esEditable(i)) td.append(celdaEditable(`${id}-r${fi}c${i}`, String(c))); else td.append(document.createTextNode(String(c)));
       tr.append(td);
     });
+    if (id != null) {
+      const tdAccion = el('td', 'td-accion-tabla');
+      tdAccion.append(botonOcultarColFila(ocultaFila, () => _onToggleFilaActual(id, fi, ocultaFila)));
+      tr.append(tdAccion);
+    }
     tbody.append(tr);
   });
   t.append(thead, tbody);
   wrap.append(t);
+  if (id != null && (colsOcultas.size || filasOcultas.size)) {
+    const partes = [];
+    if (colsOcultas.size) partes.push(`${colsOcultas.size} columna(s)`);
+    if (filasOcultas.size) partes.push(`${filasOcultas.size} fila(s)`);
+    wrap.append(el('p', 'nota', `🚫 ${partes.join(' y ')} oculta(s) de esta tabla -- no se incluirán en el PDF ni en lo que vería el cliente, atenuadas aquí solo como referencia.`));
+  }
   return wrap;
 }
 
@@ -1716,7 +1766,7 @@ export const TITULOS_SECCIONES = [
 // mismo patron que onToggleCalculo pero a nivel de parrafo (ver textosOcultos en
 // clientes.js). El parrafo SIEMPRE se ve aqui en pantalla (atenuado si esta oculto),
 // el estado es lo que decide si queda incluido.
-export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggleCalculo, onGuardarGlobal, onQuitarGlobal, onOcultarTexto, onToggleGrafico) {
+export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggleCalculo, onGuardarGlobal, onQuitarGlobal, onOcultarTexto, onToggleGrafico, onToggleColumna, onToggleFila) {
   _overridesActuales = r.textosEditados || {};
   _onEditarTextoActual = onEditarTexto || (() => {});
   _calculosActivosActual = r.calculosActivos || [];
@@ -1729,6 +1779,10 @@ export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggl
   _onOcultarTextoActual = onOcultarTexto || (() => {});
   _graficosExcluidosActual = r.graficosExcluidos || [];
   _onToggleGraficoActual = onToggleGrafico || (() => {});
+  _columnasOcultasActual = r.tablaColumnasOcultas || {};
+  _filasOcultasActual = r.tablaFilasOcultas || {};
+  _onToggleColumnaActual = onToggleColumna || (() => {});
+  _onToggleFilaActual = onToggleFila || (() => {});
   const fn = RENDERERS[numero - 1];
   return fn(r, leido, onToggle);
 }

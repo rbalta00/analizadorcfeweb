@@ -478,6 +478,15 @@ function poblarSelectClienteGuardar() {
   };
   agregarGrupo('Gobierno', gobierno);
   agregarGrupo('Particulares', particular);
+  // Opcion para crear un cliente nuevo sin tener que salir de la cotizacion abierta --
+  // pedido explicito del usuario, 2026-11-05: "cuando guardes tambien permite crear
+  // clientes". Elegirla abre el mini-formulario de abajo (filaNuevoClienteGuardar) en
+  // vez de guardar directo -- mismo patron de "mini-formulario inline" que ya usa este
+  // archivo para asignar un envio de cliente a uno nuevo, en vez de un prompt() nativo.
+  const optNuevo = document.createElement('option');
+  optNuevo.value = '__nuevo__';
+  optNuevo.textContent = '+ Nuevo cliente...';
+  sel.append(optNuevo);
   sel.value = clienteActual.id;
 }
 
@@ -1430,6 +1439,11 @@ function calcularYRenderizar() {
   // fuente. Pedido explicito del usuario, 2026-11-05.
   r.seccionesExcluidas = proyectoActual.seccionesExcluidas || [];
   r.graficosExcluidos = proyectoActual.graficosExcluidos || [];
+  // tablaColumnasOcultas/tablaFilasOcultas: columnas/filas ocultas POR TABLA (mismo id
+  // que graficosExcluidos usa para la tabla completa) -- ver nota en crearProyecto()
+  // (clientes.js). Pedido explicito del usuario, 2026-11-05.
+  r.tablaColumnasOcultas = proyectoActual.tablaColumnasOcultas || {};
+  r.tablaFilasOcultas = proyectoActual.tablaFilasOcultas || {};
   r.calculosActivos = proyectoActual.calculosActivos || todosLosBloques();
   r.ordenSecciones = proyectoActual.ordenSecciones || null;
   r.textosEditados = proyectoActual.textosEditados || {};
@@ -1715,6 +1729,32 @@ function onToggleGrafico(id, activo) {
   if (ultimoResultado) { ultimoResultado.graficosExcluidos = proyectoActual.graficosExcluidos; renderSecciones(ultimoResultado); }
 }
 
+// Oculta/reactiva UNA columna o UNA fila de una tabla (tablaId = mismo id que ya
+// identifica esa tabla para graficoToggle/celdaEditable) -- pedido explicito del
+// usuario, 2026-11-05: "permite eliminar columnas o renglones de las tablas". Mismo
+// patron que onToggleGrafico: nunca borra de verdad, solo marca oculto; la pantalla
+// sigue mostrando la columna/fila atenuada (ver tabla() en secciones.js), el PDF
+// (propuesta.js, tablaF()) es el unico lugar que de verdad la quita.
+function onToggleColumna(tablaId, indice, activa) {
+  const mapa = { ...(proyectoActual.tablaColumnasOcultas || {}) };
+  const set = new Set(mapa[tablaId] || []);
+  if (activa) set.delete(indice); else set.add(indice);
+  mapa[tablaId] = [...set];
+  proyectoActual.tablaColumnasOcultas = mapa;
+  guardarProyecto(clienteActual, proyectoActual);
+  if (ultimoResultado) { ultimoResultado.tablaColumnasOcultas = proyectoActual.tablaColumnasOcultas; renderSecciones(ultimoResultado); }
+}
+
+function onToggleFila(tablaId, indice, activa) {
+  const mapa = { ...(proyectoActual.tablaFilasOcultas || {}) };
+  const set = new Set(mapa[tablaId] || []);
+  if (activa) set.delete(indice); else set.add(indice);
+  mapa[tablaId] = [...set];
+  proyectoActual.tablaFilasOcultas = mapa;
+  guardarProyecto(clienteActual, proyectoActual);
+  if (ultimoResultado) { ultimoResultado.tablaFilasOcultas = proyectoActual.tablaFilasOcultas; renderSecciones(ultimoResultado); }
+}
+
 // Reordenar secciones a mano -- pedido explicito del usuario ("permite arrastrar las
 // secciones"). Se implementa con botones ↑/↓ en vez de arrastrar con el mouse: mas
 // confiable en touch/trackpad y no depende de soportar drag-and-drop real, con el
@@ -1824,7 +1864,7 @@ function renderSecciones(r) {
   $('ayudaEdicion').hidden = false;
   const numeros = ordenSeccionesEfectivo(r).filter(n => seccionTieneDatos(n, r));
   numeros.forEach((n, i) => {
-    const art = renderSeccion(n, r, ultimoLeido, onToggleSeccion, onEditarTexto, onToggleCalculo, onGuardarTextoGlobal, onQuitarTextoGlobal, onOcultarTexto, onToggleGrafico);
+    const art = renderSeccion(n, r, ultimoLeido, onToggleSeccion, onEditarTexto, onToggleCalculo, onGuardarTextoGlobal, onQuitarTextoGlobal, onOcultarTexto, onToggleGrafico, onToggleColumna, onToggleFila);
     agregarNavegacionSeccion(art, numeros[i - 1] ?? null, numeros[i + 1] ?? null);
     cont.append(art);
   });
@@ -2117,6 +2157,10 @@ $('inputNombreProyecto').addEventListener('blur', () => {
 // version final de versiones de prueba/comparacion -- pedido explicito del usuario.
 function guardarCotizacionConCliente({ definitiva } = {}) {
   if (!ultimoResultado) { alert('Calcula primero.'); return false; }
+  if ($('selectClienteGuardar').value === '__nuevo__') {
+    alert('Primero crea el cliente nuevo con el botón "Crear cliente" (o cancélalo) antes de guardar.');
+    return false;
+  }
   proyectoActual.cotizacionGuardadaEn = new Date().toISOString();
   if (definitiva) proyectoActual.definitiva = true;
   const clienteDestinoId = $('selectClienteGuardar').value;
@@ -2140,6 +2184,33 @@ function guardarCotizacionConCliente({ definitiva } = {}) {
 
 $('btnGuardarCotizacion').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: false }));
 $('btnMarcarDefinitiva').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: true }));
+
+// Crear un cliente nuevo sin salir de la cotizacion abierta -- elegir "+ Nuevo
+// cliente..." en el selector abre este mini-formulario en vez de guardar directo.
+$('selectClienteGuardar').addEventListener('change', () => {
+  $('filaNuevoClienteGuardar').hidden = $('selectClienteGuardar').value !== '__nuevo__';
+  if ($('selectClienteGuardar').value === '__nuevo__') $('inputNuevoClienteGuardarNombre').focus();
+});
+
+$('btnCancelarClienteGuardar').addEventListener('click', () => {
+  $('filaNuevoClienteGuardar').hidden = true;
+  $('inputNuevoClienteGuardarNombre').value = '';
+  $('selectClienteGuardar').value = clienteActual.id;
+});
+
+$('btnCrearClienteGuardar').addEventListener('click', () => {
+  const nombre = $('inputNuevoClienteGuardarNombre').value.trim();
+  if (!nombre) { alert('Falta el nombre del cliente nuevo.'); return; }
+  const tipo = $('selectNuevoClienteGuardarTipo').value;
+  const nuevo = crearCliente({ nombre, tipo });
+  $('filaNuevoClienteGuardar').hidden = true;
+  $('inputNuevoClienteGuardarNombre').value = '';
+  poblarSelectClienteGuardar();
+  $('selectClienteGuardar').value = nuevo.id;
+  $('estadoGuardadoCotizacion').className = 'nota ok';
+  $('estadoGuardadoCotizacion').textContent =
+    `✓ Cliente "${nuevo.nombre}" creado -- ahora dale clic a "Guardar cotización" o "Marcar como definitiva" para pasarle esta cotización.`;
+});
 
 // El PDF de verdad se intenta adjuntar via Web Share API (navigator.share con un
 // File) -- funciona en celular Android/Chrome y algunos navegadores de escritorio
