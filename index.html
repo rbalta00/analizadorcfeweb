@@ -489,6 +489,19 @@
         <button id="btnGuardarCotizacion" class="btn-secundario">💾 Guardar cotización</button>
         <button id="btnMarcarDefinitiva" class="btn-primario">✅ Marcar como definitiva y guardar</button>
       </div>
+      <div class="fila fila-nuevo-cliente-guardar" id="filaNuevoClienteGuardar" hidden>
+        <label>Nombre del cliente nuevo
+          <input type="text" id="inputNuevoClienteGuardarNombre" placeholder="Ej. Casa del Abue Sur SEDIF">
+        </label>
+        <label>Tipo
+          <select id="selectNuevoClienteGuardarTipo">
+            <option value="gobierno">Gobierno</option>
+            <option value="particular">Particular</option>
+          </select>
+        </label>
+        <button id="btnCrearClienteGuardar" class="btn-secundario">Crear cliente</button>
+        <button id="btnCancelarClienteGuardar" class="btn-link">Cancelar</button>
+      </div>
       <p class="nota" id="estadoGuardadoCotizacion"></p>
       <p class="nota">"Marcar como definitiva" guarda la cotización igual que "Guardar cotización" y además la
         marca con ✅ en el historial de este cliente, para distinguirla de versiones de prueba/comparación.</p>
