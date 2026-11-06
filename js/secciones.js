@@ -1545,7 +1545,11 @@ function s13(r, _leido, onToggle) {
     ['VAN (valor actual neto) al 10%', `${M(r.van)}: cuánto más valen, en pesos de hoy, los ahorros futuros que lo que costó el sistema.`],
   ];
   if (bc != null) filasInd.push(['Beneficio/costo', `${bc.toFixed(2)}: por cada peso invertido (y gastado en mantenimiento${reposicionAnio ? ' y reposición del inversor' : ''}), regresa ${bc.toFixed(2)} pesos actualizados en ahorros.`]);
-  art.append(graficoToggle('g13-indicadores', 'Tabla de indicadores (recuperación, ROI, TIR, VAN)', tabla(['Indicador estimado', 'Resultado y explicación'], filasInd, { small: true, id: 'g13-indicadores' })));
+  // textCols:[1] -- mismo patron encontrado en el barrido de tabla(..., {id}) de
+  // 2026-11-05 continuacion 8: "Resultado y explicación" trae oraciones explicativas
+  // completas en cada fila (no solo un numero), igual que el "hito" de condiciones de
+  // pago -- se habia quedado fuera de textCols sin que nadie lo reportara todavia.
+  art.append(graficoToggle('g13-indicadores', 'Tabla de indicadores (recuperación, ROI, TIR, VAN)', tabla(['Indicador estimado', 'Resultado y explicación'], filasInd, { small: true, textCols: [1], id: 'g13-indicadores' })));
   const escPct = r.escalamientoTarifaPct || 0;
   const escTxt = escPct
     ? `Se supone que la tarifa de CFE sube ${escPct.toFixed(1)}% anual (criterio del estudio, no una cifra oficial de CFE) a partir del año 1.`
@@ -1701,7 +1705,14 @@ function s18(r, _leido, onToggle) {
   art.append(p('No incluye baterías, respaldo en apagones, refuerzo estructural, sustitución de cubierta, ' +
     'impermeabilización general, cambio de transformador, obra de media tensión ni rehabilitación eléctrica ' +
     'ajena al sistema. Cualquier necesidad adicional se cotizará y aceptará por escrito.'));
-  art.append(graficoToggle('g22-condiciones-pago', 'Tabla de condiciones de pago sugeridas', tabla(['Condiciones de pago sugeridas', ''], COMERCIAL.pagos.map(pg => [`${Math.round(pg.porcentaje * 100)}%`, pg.hito]), { id: 'g22-condiciones-pago' })));
+  // textCols:[1] -- bug real reportado por el usuario, 2026-11-05 continuacion 8: el hito
+  // ("Anticipo al formalizar contrato y validar precio/equipos", etc.) es texto real, pero
+  // faltaba en textCols -- por default (sin textCols) solo la columna 0 (el porcentaje) se
+  // volvia editable, el hito se quedaba como texto plano sin opcion de editar ni el icono
+  // ✓/🌐✕. La columna 0 (porcentaje) se deja editable tambien a proposito -- es contenido
+  // comercial estatico (COMERCIAL.pagos), no alimenta ningun calculo del motor, asi que no
+  // hay riesgo de sobreescribir en silencio un numero calculado.
+  art.append(graficoToggle('g22-condiciones-pago', 'Tabla de condiciones de pago sugeridas', tabla(['Condiciones de pago sugeridas', ''], COMERCIAL.pagos.map(pg => [`${Math.round(pg.porcentaje * 100)}%`, pg.hito]), { textCols: [1], id: 'g22-condiciones-pago' })));
   art.append(p(COMERCIAL.naturalezaCondiciones));
   art.append(detalle('Ver cronograma estimado', tabla(['Etapa', 'Plazo estimado'], COMERCIAL.cronograma, { small: true, textCols: [1], id: 'g22-detalle-cronograma' })));
   art.append(badgeEstado('declarado'));
