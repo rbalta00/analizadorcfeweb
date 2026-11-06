@@ -241,6 +241,18 @@ a.btn-secundario { display: inline-flex; align-items: center; text-decoration: n
 .metrica .valor { font-size: 1.3rem; font-weight: 700; color: var(--navy); }
 @media (prefers-color-scheme: dark) { .metrica .valor { color: #8fd0e0; } }
 .metrica .etiqueta { font-size: 0.75rem; color: var(--grey); margin-top: 4px; }
+/* Texto chico editable (textoChico(), 2026-11-05) -- texto + icono ✓/🌐✕ en linea,
+   reutilizado por tarjetas de metricas (etiquetaTarjeta) y leyendas/etiquetas de
+   charts.js. La version de tarjeta centra y permite salto de linea si no cabe. */
+.etiqueta-tarjeta-editable { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px; }
+.texto-chico-editable { display: inline-flex; align-items: center; gap: 3px; vertical-align: middle; }
+.texto-editable-chico {
+  border-radius: 4px; padding: 1px 3px; margin: 0 -3px; outline: 1px dashed transparent; cursor: text;
+}
+.texto-editable-chico:hover { outline-color: var(--border); }
+.texto-editable-chico:focus { outline: 2px solid var(--teal); outline-offset: 1px; background: var(--card-bg); }
+.texto-editable-chico-editado { outline: 1px solid var(--cfe-gold); background: #fffaf0; color: #3a2f00; }
+.btn-icono-global-tarjeta { width: 16px; height: 16px; min-width: 16px; margin: 0; font-size: 0.6rem; vertical-align: middle; }
 
 .nota { font-size: 0.82rem; color: var(--grey); }
 .nota.aviso {

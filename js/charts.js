@@ -4,11 +4,30 @@
 // en secciones que se explican mejor con tabla o lista (garantias, fuentes, pendientes).
 import { M, PCT } from './util.js';
 
-function el(tag, cls, html) {
+// `content` acepta un string (innerHTML, comportamiento de siempre) O un Node ya
+// armado -- esto ultimo es lo que usa secciones.js para inyectar una etiqueta/leyenda
+// EDITABLE (texto + icono ✓/🌐✕, ver textoChico() en secciones.js) sin que charts.js
+// tenga que saber nada de overrides/ids -- charts.js solo recibe el nodo ya construido
+// y lo coloca donde antes iba texto plano. Pedido explicito del usuario, 2026-11-05
+// continuacion 9: cerrar el hueco de "leyendas de graficas sin poder editar".
+function el(tag, cls, content) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
-  if (html != null) e.innerHTML = html;
+  if (content != null) {
+    if (content instanceof Node) e.append(content);
+    else e.innerHTML = content;
+  }
   return e;
+}
+
+// Texto plano de una etiqueta que puede ser string o Node (ver el() arriba) -- para
+// usarla en un atributo (title) en vez de insertarla en el DOM. Si es un Node con un
+// span contenteditable adentro (textoChico(), ver secciones.js), usa SOLO ese texto
+// -- no el nodo completo, que tambien incluye el icono ✓/🌐✕ del boton.
+function textoPlano(x) {
+  if (typeof x === 'string') return x;
+  const editable = x.querySelector ? x.querySelector('[contenteditable]') : null;
+  return editable ? editable.textContent : x.textContent;
 }
 
 // Barras horizontales comparativas: items = [[etiqueta, valor, colorCss], ...]
@@ -35,8 +54,9 @@ export function barraAgrupada(categorias, serie1Label, serie1Valores, serie2Labe
   const max = Math.max(...serie1Valores, ...serie2Valores, 1);
   const cont = el('div', 'grafica grafica-agrupada');
   const leyenda = el('div', 'grafica-leyenda');
-  leyenda.innerHTML = `<span class="leyenda-chip leyenda-chip-1"></span>${serie1Label}` +
-    `<span class="leyenda-chip leyenda-chip-2"></span>${serie2Label}`;
+  // serie1Label/serie2Label pueden ser un string (texto plano) o un Node ya armado
+  // (etiqueta editable, ver textoChico() en secciones.js) -- .append() acepta ambos.
+  leyenda.append(el('span', 'leyenda-chip leyenda-chip-1'), serie1Label, el('span', 'leyenda-chip leyenda-chip-2'), serie2Label);
   cont.append(leyenda);
   const barras = el('div', 'grafica-agrupada-barras');
   categorias.forEach((cat, i) => {
@@ -44,10 +64,10 @@ export function barraAgrupada(categorias, serie1Label, serie1Valores, serie2Labe
     const par = el('div', 'grafica-agrupada-par');
     const b1 = el('div', 'grafica-agrupada-barra grafica-agrupada-barra-1');
     b1.style.height = `${Math.max((serie1Valores[i] / max) * 100, 2)}%`;
-    b1.title = `${serie1Label}: ${fmt(serie1Valores[i])}`;
+    b1.title = `${textoPlano(serie1Label)}: ${fmt(serie1Valores[i])}`;
     const b2 = el('div', 'grafica-agrupada-barra grafica-agrupada-barra-2');
     b2.style.height = `${Math.max((serie2Valores[i] / max) * 100, 2)}%`;
-    b2.title = `${serie2Label}: ${fmt(serie2Valores[i])}`;
+    b2.title = `${textoPlano(serie2Label)}: ${fmt(serie2Valores[i])}`;
     par.append(b1, b2);
     grupo.append(par, el('div', 'grafica-agrupada-etq', cat));
     barras.append(grupo);
@@ -57,7 +77,9 @@ export function barraAgrupada(categorias, serie1Label, serie1Valores, serie2Labe
 }
 
 // Medidor de porcentaje (gauge lineal), ej. que tan cerca del 100% de ahorro.
-export function gauge(pct, label) {
+// `label` y `sufijo` pueden ser string o Node (etiqueta editable, ver textoChico() en
+// secciones.js) -- PCT(pct) (el numero calculado) nunca pasa por ahi, se queda fijo.
+export function gauge(pct, label, sufijo = 'del recibo') {
   const cont = el('div', 'grafica grafica-gauge');
   if (label) cont.append(el('div', 'grafica-gauge-label', label));
   const pista = el('div', 'grafica-gauge-pista');
@@ -66,13 +88,26 @@ export function gauge(pct, label) {
   pista.append(relleno);
   cont.append(pista);
   const ejes = el('div', 'grafica-gauge-ejes');
-  ejes.innerHTML = `<span>0%</span><strong>${PCT(pct)} del recibo</strong><span>100%</span>`;
+  const fuerte = document.createElement('strong');
+  fuerte.append(`${PCT(pct)} `, sufijo);
+  ejes.append(el('span', null, '0%'), fuerte, el('span', null, '100%'));
   cont.append(ejes);
   return cont;
 }
 
 // Curva de flujo acumulado a N anios, con eje de cero y el punto de recuperacion
 // marcado -- la grafica mas importante de la seccion de recuperacion de inversion.
+// EXCEPCION deliberada al barrido de "todo texto visible debe ser editable" (pedido
+// del usuario, 2026-11-05 continuacion 9): las etiquetas de esta grafica ("$0",
+// "Recuperas: X años", los años del eje X) se dibujan como <text> DENTRO del SVG, no
+// como HTML real -- no son contentEditable de forma nativa (requeriria un hack de
+// <foreignObject> con un <span> adentro, frágil entre navegadores para texto que
+// ademas tiene que seguir el trazo de la curva al redimensionar). Ademas cada una
+// mezcla texto fijo con un numero YA CALCULADO en el mismo nodo de texto (ej.
+// "Recuperas: " + recuperacionAnios.toFixed(1) + " años" en una sola cadena) -- separar
+// ambos de verdad requeriria recalcular el layout del SVG, no solo agregar un boton.
+// Costo desproporcionado para una anotacion de ejes de grafica -- se deja como esta,
+// explicado aqui en vez de un hueco silencioso.
 export function curvaFlujo(puntos, recuperacionAnios) {
   const w = 600, h = 220, padL = 55, padR = 15, padT = 14, padB = 28;
   const plotW = w - padL - padR, plotH = h - padT - padB;

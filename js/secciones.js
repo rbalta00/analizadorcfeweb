@@ -126,10 +126,16 @@ function mapaCamposCalculo(r) {
   return filas;
 }
 
-function el(tag, cls, html) {
+// `content` acepta un string (innerHTML, comportamiento de siempre) o un Node ya
+// armado (ej. textoChico(), para insertar un chip editable dentro de otro elemento
+// sin pasar por .append() aparte). Mismo criterio que el() en charts.js.
+function el(tag, cls, content) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
-  if (html != null) e.innerHTML = html;
+  if (content != null) {
+    if (content instanceof Node) e.append(content);
+    else e.innerHTML = content;
+  }
   return e;
 }
 
@@ -146,6 +152,7 @@ function el(tag, cls, html) {
 // hecho todavia (ver ESTADO.md).
 let _seccionActual = 0;
 let _contadorTexto = 0;
+let _contadorTarjeta = 0;
 let _overridesActuales = {};
 let _onEditarTextoActual = () => {};
 let _calculosActivosActual = [];
@@ -275,11 +282,78 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
 
 function p(texto) { return textoEditable('p', null, texto); }
 
+function siguienteTarjetaId() {
+  return `s${_seccionActual}-card${_contadorTarjeta++}`;
+}
+
+// Texto chico editable, en linea (span, no bloque) -- version LIGERA de
+// campoEditableConId(), mismo criterio que celdaEditable() (sin los botones de
+// restaurar/ocultar, que no caben en un espacio chico como una tarjeta de metrica o
+// una leyenda de grafica): solo el texto editable + el icono ✓/🌐✕ de aplicar a
+// todas. Escribir de vuelta el texto original des-edita sola (mismo
+// _onEditarTextoActual que celdaEditable/campoEditableConId), por eso no hace falta
+// un boton de restaurar aparte. Reutilizado por etiquetaTarjeta() (tarjetas de
+// metricas) y por las leyendas/etiquetas de charts.js (via secciones.js, que es quien
+// construye estos nodos y se los pasa a charts.js -- charts.js no conoce overrides ni
+// ids, solo recibe Nodes u strings ya armados). Pedido explicito del usuario,
+// 2026-11-05 continuacion 9: tarjetas y leyendas de graficas eran huecos documentados
+// a proposito en una fase anterior ("deliberately left non-editable" / "not made
+// editable"), cerrados aqui porque el usuario seguia reportando "textos sin la
+// palomita" sin poder dar un ejemplo puntual.
+// `idOverride`: id ESTABLE (no autoincremental) para usarlo dentro de encabezados que
+// se llaman una sola vez por numero de seccion (ej. el titulo de bloqueCalculo()) --
+// mismo criterio que subtitulo()/subtituloChico() con su parametro `clave`, para que
+// el id no se desfase si el orden de llamadas cambia entre renders.
+function textoChico(textoDefecto, idOverride) {
+  const id = idOverride || siguienteTarjetaId();
+  const tieneProyecto = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
+  const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id);
+  const tieneGlobal = Object.prototype.hasOwnProperty.call(_globalesActuales, id);
+  const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : (tieneGlobal ? _globalesActuales[id] : textoDefecto);
+  const wrap = el('span', 'texto-chico-editable');
+  const span = document.createElement('span');
+  span.className = 'texto-editable-chico' + (tieneProyecto ? ' texto-editable-chico-editado' : '');
+  span.contentEditable = 'true';
+  span.spellcheck = false;
+  span.dataset.textoId = id;
+  span.textContent = tieneProyecto ? _overridesActuales[id] : base;
+  span.addEventListener('paste', (ev) => {
+    ev.preventDefault();
+    const texto = (ev.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, texto);
+  });
+  span.addEventListener('focusout', () => _onEditarTextoActual(id, span.textContent, base));
+  wrap.append(span);
+  const btnGlobal = document.createElement('button');
+  btnGlobal.type = 'button';
+  btnGlobal.className = 'btn-icono-global btn-icono-global-tarjeta' + (tieneGlobal ? ' activo' : '');
+  btnGlobal.textContent = tieneGlobal ? '🌐✕' : '✓';
+  btnGlobal.title = tieneGlobal
+    ? 'Quitar de todas las cotizaciones -- vuelve al texto original de la app.'
+    : 'Guardar esta edición para todas las cotizaciones (también afecta a otros clientes).';
+  btnGlobal.setAttribute('aria-label', btnGlobal.title);
+  btnGlobal.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    if (tieneGlobal) _onQuitarGlobalActual(id, textoDefecto);
+    else _onGuardarGlobalActual(id, span.textContent, textoDefecto);
+  });
+  wrap.append(btnGlobal);
+  return wrap;
+}
+
+function etiquetaTarjeta(textoDefecto) {
+  const wrap = el('div', 'etiqueta etiqueta-tarjeta-editable');
+  wrap.append(textoChico(textoDefecto));
+  return wrap;
+}
+
 function tarjetas(items) {
   const cont = el('div', 'tarjetas-metricas');
   for (const [valor, etiqueta] of items) {
     const m = el('div', 'metrica');
-    m.innerHTML = `<div class="valor">${valor}</div><div class="etiqueta">${etiqueta}</div>`;
+    const v = el('div', 'valor');
+    v.textContent = valor;
+    m.append(v, etiquetaTarjeta(etiqueta));
     cont.append(m);
   }
   return cont;
@@ -455,8 +529,12 @@ function detalle(resumen, nodoOArray) {
 // ALTERNATIVAS entre si, no una lista plana de checkboxes sin relacion. No se usan
 // radios (no son estrictamente excluyentes: a veces conviene mostrar ambos a un
 // cliente) -- son checkboxes independientes bajo un mismo titulo "elige cual mostrar".
+// Editable (textoEditable, mismo patron que p()) -- hueco real encontrado en el
+// barrido final de 2026-11-05 continuacion 9: era texto explicativo real (mismo nivel
+// que un aviso/parrafo), pero se insertaba con el() plano, sin pasar por el sistema
+// de edicion.
 function grupoGraficosAlternativos(titulo) {
-  return el('div', 'grupo-graficos-alternativos-header', `🔀 ${titulo}`);
+  return textoEditable('div', 'grupo-graficos-alternativos-header', `🔀 ${titulo}`);
 }
 
 // Toggle individual de UN grafico/tabla visual dentro de una seccion -- independiente
@@ -483,7 +561,11 @@ function graficoToggle(id, etiqueta, nodo, { notaAlternativa } = {}) {
   input.addEventListener('change', () => _onToggleGraficoActual(id, input.checked));
   wrap.append(input, document.createTextNode(` Mostrar: ${etiqueta}`));
   cont.append(wrap);
-  if (notaAlternativa) cont.append(el('p', 'nota-grafico-alternativo', notaAlternativa));
+  // id estable derivado del propio id del grafico (no siguienteTextoId()) -- esta nota
+  // es condicional (algunas llamadas la traen, otras no, a veces segun datos del
+  // cliente), asi que un contador secuencial se hubiera desfasado entre renders
+  // distintos. Hueco real encontrado en el barrido final de 2026-11-05 continuacion 9.
+  if (notaAlternativa) cont.append(campoEditableConId('p', 'nota-grafico-alternativo', notaAlternativa, `${id}-nota-alt`));
   if (excluido) cont.append(el('p', 'nota', '🚫 Apagado -- no se incluirá en el PDF ni en lo que vería el cliente. Se sigue mostrando aquí, atenuado, solo como referencia para ti.'));
   // nodo puede ser un solo elemento o un arreglo (ej. g02-datos-recibo agrupa 2
   // tablas bajo un solo toggle) -- mismo patron que bloqueCalculo()/detalle().
@@ -598,7 +680,12 @@ function bloqueCalculo(numero, nodoOArray, r) {
   const activo = _calculosActivosActual.includes(bloque);
   const cont = el('div', 'calculo-detalle' + (activo ? '' : ' calculo-detalle-apagado'));
   const header = el('div', 'calculo-detalle-header');
-  header.append(el('h3', null, '📐 Cómo se calculó'));
+  // Editable (textoChico, id ESTABLE por numero de seccion) -- hueco real encontrado
+  // en el barrido final de 2026-11-05 continuacion 9: este titulo se veia identico a
+  // un subtitulo() normal (mismo nivel h3) pero nunca paso por el sistema de edicion.
+  const h3Calculo = document.createElement('h3');
+  h3Calculo.append(textoChico('📐 Cómo se calculó', `s${numero}-calculo-titulo`));
+  header.append(h3Calculo);
   const wrap = el('label', 'toggle-seccion toggle-calculo');
   const input = document.createElement('input');
   input.type = 'checkbox';
@@ -632,6 +719,7 @@ function bloqueCalculo(numero, nodoOArray, r) {
 function crearSeccion(numero, titulo, pregunta, r, onToggle) {
   _seccionActual = numero;
   _contadorTexto = 0;
+  _contadorTarjeta = 0;
   const activos = seccionesActivasEnOrden(r);
   const pos = activos.indexOf(numero) + 1;
   const art = el('article', 'seccion' + (pos > 0 ? '' : ' seccion-apagada'));
@@ -640,7 +728,15 @@ function crearSeccion(numero, titulo, pregunta, r, onToggle) {
   const etiquetaNumero = pos > 0 ? `${String(pos).padStart(2, '0')} de ${activos.length}` : '🚫 Apagada';
   header.append(el('div', 'seccion-numero' + (pos > 0 ? '' : ' seccion-numero-apagada'), etiquetaNumero));
   header.append(tituloEditable(numero, titulo));
-  if (pregunta) header.append(el('p', 'seccion-pregunta', pregunta));
+  // Editable con id ESTABLE (no siguienteTextoId()) -- hueco real encontrado en el
+  // barrido final de 2026-11-05 continuacion 9: la "pregunta" de cada seccion (debajo
+  // del titulo, ej. "¿Cuánto cuesta el sistema completo, con IVA?") es texto real que
+  // se ve en las 25 secciones, pero nunca pasaba por el sistema de edicion. Usa id
+  // estable (mismo criterio que tituloEditable/subtitulo) porque esta llamada ocurre
+  // ANTES que los parrafos del cuerpo de la seccion -- si usara siguienteTextoId()
+  // aqui, correria el contador y desfasaria los overrides YA guardados de TODOS los
+  // parrafos siguientes de cada seccion (serian off-by-one contra ediciones previas).
+  if (pregunta) header.append(campoEditableConId('p', 'seccion-pregunta', pregunta, `s${numero}-pregunta`));
   header.append(toggleSeccionIndividual(r, numero, onToggle));
   if (pos <= 0) header.append(el('p', 'nota', '🚫 Esta sección está apagada -- no se incluirá en el PDF ni en lo que vería el cliente. Se sigue mostrando aquí, atenuada, solo como referencia para ti.'));
   art.append(header);
@@ -915,7 +1011,7 @@ function s25(r, _leido, onToggle) {
   art.append(p(`Lo que este sistema calculó a partir del consumo real del recibo (${r.n} paneles) comparado con lo ` +
     `que propone el documento de verificación en campo (${ev.n} paneles) -- ambos escenarios usan el mismo recibo, ` +
     'la misma tarifa y los mismos costos, solo cambia el número de paneles.'));
-  art.append(el('h5', null, `Calculado por este sistema (sección ${refSeccion(1, r)})`));
+  art.append(textoEditable('h5', null, `Calculado por este sistema (sección ${refSeccion(1, r)})`));
   art.append(tarjetas([
     [M(r.investment), 'Inversión estimada, IVA incluido'],
     [`${r.n} paneles`, `${r.moduloWp} W por módulo / ${r.kwp.toFixed(2)} kWp`],
@@ -923,7 +1019,7 @@ function s25(r, _leido, onToggle) {
     [r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', 'Recuperación simple estimada'],
     [PCT(r.pctAhorro), 'Ahorro anual de factura estimado'],
   ]));
-  art.append(el('h5', null, `Propuesta de la verificación en campo (sección ${refSeccion(19, r)})`));
+  art.append(textoEditable('h5', null, `Propuesta de la verificación en campo (sección ${refSeccion(19, r)})`));
   art.append(tarjetas([
     [M(ev.investment), 'Inversión estimada, IVA incluido'],
     [`${ev.n} paneles`, `${r.moduloWp} W por módulo / ${ev.kwp.toFixed(2)} kWp`],
@@ -1094,8 +1190,8 @@ function s04(r, _leido, onToggle) {
   const montoReduc = r.meta.reducibles.reduce((s, k) => s + (r.cargos[k] || 0), 0);
   const montoNoReduc = r.meta.noReducibles.reduce((s, k) => s + (r.cargos[k] || 0), 0);
   art.append(graficoToggle('g04-reducibles', 'Gráfica de lo que sí baja vs. lo que no baja', barraHorizontal([
-    ['Sí baja con los paneles', montoReduc, 'var(--cfe-teal,#21798b)'],
-    ['No baja con los paneles', montoNoReduc, 'var(--cfe-navy,#163b4c)'],
+    [textoChico('Sí baja con los paneles'), montoReduc, 'var(--cfe-teal,#21798b)'],
+    [textoChico('No baja con los paneles'), montoNoReduc, 'var(--cfe-navy,#163b4c)'],
   ])));
   art.append(p(`Lo que SÍ baja: ${listaConceptos(r.meta.reducibles)}. Lo que NO baja: ${listaConceptos(r.meta.noReducibles)}.`));
   art.append(p(`Por eso, aunque se instalaran más paneles de los que se necesitan, el pago de un período no ` +
@@ -1161,7 +1257,7 @@ function s05(r, _leido, onToggle) {
     const kwhCrudo = historial.map(x => x.kwh);
     const prom = kwhNormalizado.reduce((a, b) => a + b, 0) / kwhNormalizado.length;
     art.append(graficoToggle('g05-historial', 'Gráfica de consumo normalizado por período',
-      barraAgrupada(meses, 'Consumo normalizado a kWh/mes', kwhNormalizado, 'Promedio mensual', kwhNormalizado.map(() => prom))));
+      barraAgrupada(meses, textoChico('Consumo normalizado a kWh/mes'), kwhNormalizado, textoChico('Promedio mensual'), kwhNormalizado.map(() => prom))));
     art.append(graficoToggle('g05-historial-tabla', 'Tabla de consumo facturado por período', tabla(['Período', 'Consumo facturado (real, tal como en el recibo)', 'Normalizado a kWh/mes'],
       historial.map((x, i) => [`${x.mes} ${x.anio}`, `${kwhCrudo[i].toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${kwhNormalizado[i].toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`]),
       { small: true, id: 'g05-historial-tabla' })));
@@ -1206,9 +1302,16 @@ function s05(r, _leido, onToggle) {
 // ---------- 06: sistema propuesto (+ condiciones del inmueble) ----------
 function s06(r, _leido, onToggle) {
   const art = crearSeccion(6, `Sistema propuesto: ${r.n} paneles de ${r.moduloWp} W`, 'Paneles → inversor → inmueble ↔ red. ¿Qué se instalaría?', r, onToggle);
+  // Cada chip del esquema es editable (textoChico) -- hueco real encontrado en el
+  // barrido final de 2026-11-05 continuacion 9 (antes era innerHTML crudo). Las
+  // flechas (→/↔) son solo conectores visuales, se quedan fijas.
   const esquema = el('div', 'esquema-sistema');
-  esquema.innerHTML = '<span>☀️ Paneles</span><span class="flecha">→</span><span>⚡ Inversor</span>' +
-    '<span class="flecha">→</span><span>🏠 Inmueble</span><span class="flecha-doble">↔</span><span>🔌 Red CFE</span>';
+  esquema.append(
+    el('span', null, textoChico('☀️ Paneles')), el('span', 'flecha', '→'),
+    el('span', null, textoChico('⚡ Inversor')), el('span', 'flecha', '→'),
+    el('span', null, textoChico('🏠 Inmueble')), el('span', 'flecha-doble', '↔'),
+    el('span', null, textoChico('🔌 Red CFE')),
+  );
   art.append(esquema);
   const acKw = r.kwp / 1.2;
   art.append(graficoToggle('g06-sistema', 'Tabla de partes del sistema propuesto', tabla(['Parte del sistema', 'Cantidad y función'], [
@@ -1264,8 +1367,14 @@ function s06(r, _leido, onToggle) {
       filaCondicion('Sistemas solares/baterías existentes', inm.sistemasExistentes),
       filaCondicion('Fecha de visita y notas', [inm.fechaVisita, inm.notas].filter(Boolean).join(' — ')),
     ], { small: true, textCols: [1], id: 'g06-inmueble' })));
-    art.append(el('div', 'recuadro-implica',
-      '<strong>Qué implica para la propuesta:</strong> estos datos son los que la persona declaró o se observaron ' +
+    // textoEditable (antes era el() con innerHTML crudo, incluido un <strong>) --
+    // hueco real encontrado en el barrido final de 2026-11-05 continuacion 9. El
+    // sistema de edicion solo soporta texto plano (mismo criterio en todo el
+    // proyecto -- el pegado ya se sanitiza a texto plano a proposito), asi que se
+    // pierde el <strong> del prefijo al volverse editable; se prefiere eso a dejarlo
+    // sin poder editar.
+    art.append(textoEditable('div', 'recuadro-implica',
+      'Qué implica para la propuesta: estos datos son los que la persona declaró o se observaron ' +
       'en sitio; no reemplazan un levantamiento técnico. No se deduce tensión o fases solo por el número de hilos ' +
       'del recibo, y ninguna fotografía o inspección visual aquí descrita es un dictamen estructural.'));
   }
@@ -1364,8 +1473,8 @@ function s07(r, _leido, onToggle) {
     art.append(subtituloChico(7, 'generacion-vs-historial', 'Generación mensual estimada vs. su consumo real facturado'));
     art.append(graficoToggle('g07-historial', 'Generación vs. su consumo REAL del historial', barraAgrupada(
       r.historial.map(h => `${h.mes} ${h.anio}`),
-      'Generación mensual estimada con los paneles propuestos', r.historial.map(() => genMensualEstimada),
-      'Su consumo normalizado a kWh/mes ese período', r.consumosMensualesUsados,
+      textoChico('Generación mensual estimada con los paneles propuestos'), r.historial.map(() => genMensualEstimada),
+      textoChico('Su consumo normalizado a kWh/mes ese período'), r.consumosMensualesUsados,
     ), { notaAlternativa: 'Alternativa a la gráfica de abajo (generación vs. consumo EXTRAPOLADO) -- esta usa el consumo real de cada período de su historial.' }));
     art.append(p(`Cada barra de "consumo normalizado a kWh/mes" parte del dato real impreso en su propio recibo para ` +
       'ese período, convertido a su equivalente mensual (así un período bimestral no se compara contra una ' +
@@ -1376,7 +1485,7 @@ function s07(r, _leido, onToggle) {
   }
   const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
   art.append(graficoToggle('g07-extrapolado', 'Generación vs. consumo EXTRAPOLADO (los 12 meses)',
-    barraAgrupada(mesesAbrev, 'Generación estimada', r.rows.map(x => x.generacionKwh), 'Consumo extrapolado', r.rows.map(x => x.consumoExtrapoladoKwh)),
+    barraAgrupada(mesesAbrev, textoChico('Generación estimada'), r.rows.map(x => x.generacionKwh), textoChico('Consumo extrapolado'), r.rows.map(x => x.consumoExtrapoladoKwh)),
     r.historial && r.historial.length >= 2
       ? { notaAlternativa: 'Alternativa a la gráfica de arriba (generación vs. consumo real del historial) -- esta usa el consumo extrapolado de un año completo, no el historial real.' }
       : {}));
@@ -1448,8 +1557,8 @@ function s09(r, _leido, onToggle) {
 function s10(r, _leido, onToggle) {
   const art = crearSeccion(10, 'Cuánto pagaría y cuánto ahorraría', 'Comparación directa: factura sin solar vs. con solar.', r, onToggle);
   art.append(graficoToggle('g10-anual', 'Gráfica anual: sin paneles vs. con paneles', barraHorizontal([
-    ['Hoy, sin paneles (al año)', r.annualbefore, 'var(--cfe-navy,#163b4c)'],
-    ['Con paneles (al año)', r.annualafter, 'var(--cfe-teal,#21798b)'],
+    [textoChico('Hoy, sin paneles (al año)'), r.annualbefore, 'var(--cfe-navy,#163b4c)'],
+    [textoChico('Con paneles (al año)'), r.annualafter, 'var(--cfe-teal,#21798b)'],
   ]), { notaAlternativa: `Alternativa más detallada: la misma comparación pero mes a mes, en la sección ${refSeccion(15, r)}.` }));
   art.append(graficoToggle('g10-tabla-comparativa', 'Tabla comparativa sin/con sistema', tabla(['Concepto comparable', 'Sin sistema', 'Con sistema estimado'], [
     ['Gasto anual de referencia', M(r.annualbefore), M(r.annualafter)],
@@ -1488,7 +1597,7 @@ function s11(r, _leido, onToggle) {
   ], { id: 'g11-resumen-venta' })));
   const cat = agruparPresupuesto(r.materiales);
   art.append(graficoToggle('g11-presupuesto', 'Gráfica del presupuesto agrupado por categoría',
-    barraHorizontal(cat.map(([g, v]) => [g, v, 'var(--cfe-navy,#163b4c)']))));
+    barraHorizontal(cat.map(([g, v]) => [textoChico(g), v, 'var(--cfe-navy,#163b4c)']))));
   art.append(p(`La inversión contempla los equipos y trabajos agrupados arriba (detalle completo en la sección ${refSeccion(12, r)}` +
     '): módulos, inversor presupuestado, estructura, conexión, protecciones, monitoreo, ingeniería, ' +
     'gestión, flete, montaje y pruebas dentro de las cantidades previstas.'));
@@ -1634,7 +1743,7 @@ function s15(r, _leido, onToggle) {
   const art = crearSeccion(15, 'Pagos estimados por mes del año de referencia', '¿Cómo se ve el pago mes a mes, con y sin paneles?', r, onToggle);
   const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
   art.append(graficoToggle('g15-mensual', 'Gráfica mensual: sin solar vs. con solar',
-    barraAgrupada(mesesAbrev, 'Sin solar', r.rows.map(x => x.pagoSinSolarMxn), 'Con solar estimado', r.rows.map(x => x.pagoConSolarEstimadoMxn), { fmt: M }),
+    barraAgrupada(mesesAbrev, textoChico('Sin solar'), r.rows.map(x => x.pagoSinSolarMxn), textoChico('Con solar estimado'), r.rows.map(x => x.pagoConSolarEstimadoMxn), { fmt: M }),
     { notaAlternativa: `Alternativa más resumida: la misma comparación pero en total anual, en la sección ${refSeccion(10, r)}.` }));
   art.append(detalle('Ver tabla mes a mes', tabla(['Mes', 'Sin solar', 'Con solar estimado', 'Ahorro estimado'],
     r.rows.map(x => [x.mes, M(x.pagoSinSolarMxn), M(x.pagoConSolarEstimadoMxn), M(x.ahorroEstimadoMxn)]), { small: true, id: 'g15-detalle-mensual' })));
@@ -1653,7 +1762,7 @@ function s15(r, _leido, onToggle) {
 function s16(r, _leido, onToggle) {
   const art = crearSeccion(16, 'Qué tan cerca se puede llegar al 100% de ahorro', '¿Por qué la propuesta no llega al 100% de ahorro?', r, onToggle);
   art.append(graficoToggle('g16-gauge', 'Medidor de ahorro máximo posible',
-    gauge(r.pctMaxPeriodo, 'Ahorro máximo posible de este recibo')));
+    gauge(r.pctMaxPeriodo, textoChico('Ahorro máximo posible de este recibo'), textoChico('del recibo'))));
   art.append(p(`Para ahorrar el 100% de un pago recurrente de ${M(r.pagoRecurrentePeriodo)} por ${r.periodoDias || '?'} ` +
     'días, el pago residual tendría que ser $0.00. La generación anual por sí sola no demuestra ese resultado.'));
   art.append(p('La estimación comercial aquí presentada no llega a ese 100%, por DOS razones distintas e independientes entre sí:'));
