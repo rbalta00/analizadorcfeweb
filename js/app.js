@@ -14,7 +14,7 @@ import { generarResumenEjecutivo, generarGuiaPresentacion, generarAnexoIntercone
 import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida } from './imagenes.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
-import { todosLosBloques, bloqueDeSeccion, seccionesDelBloque, BLOQUES_COTIZACION, BLOQUES_SECCIONES_9, BLOQUES_SECCIONES_14 } from './bloques.js';
+import { todosLosBloques, bloqueDeSeccion, seccionesDelBloque, BLOQUES_COTIZACION } from './bloques.js';
 import { M, PCT } from './util.js';
 import {
   TARIFAS_SOPORTADAS, esDomestica, conectarEventosFormularioRecibo,
@@ -361,6 +361,7 @@ function tarjetaProyecto(p) {
     : (p.formulario ? 'con datos capturados, cotización sin guardar todavía' : 'sin datos capturados todavía');
   const etapa = p.etapa || 'cotizado';
   div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(p.nombre)}</strong>` +
+    (p.definitiva ? `<span class="chip-definitiva">✅ Definitiva</span>` : '') +
     `<span class="chip-etapa chip-etapa-${etapa}">${ETAPAS_PROYECTO[etapa]}</span>` +
     `<span class="nota">${estado} · actualizado ${new Date(p.actualizadoEn).toLocaleDateString('es-MX')}</span></div>`;
   div.addEventListener('click', () => abrirProyecto(clienteActual.id, p.id));
@@ -492,6 +493,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('clienteTipoBarra').textContent = clienteActual.tipo === 'gobierno' ? 'Gobierno' : 'Particular';
   $('clienteTipoBarra').className = `chip-tipo chip-tipo-${clienteActual.tipo}`;
   $('proyectoNombreBarra').textContent = proyectoActual.nombre;
+  $('inputNombreProyecto').value = proyectoActual.nombre || '';
   // Si se abre con camposIniciales, viene de subir una foto nueva (nuevo proyecto o
   // "nuevo proyecto en blanco" sin fotos) -- se conserva lo acumulado para poder seguir
   // agregando fotos del mismo recibo aqui dentro. Si se abre SIN camposIniciales (un
@@ -1458,6 +1460,7 @@ function calcularYRenderizar() {
   if (/^Cotización \d+$/.test(proyectoActual.nombre) && titular && titular !== 'Cliente') {
     proyectoActual.nombre = titular;
     $('proyectoNombreBarra').textContent = proyectoActual.nombre;
+    $('inputNombreProyecto').value = proyectoActual.nombre;
   }
 
   proyectoActual.formulario = leerFormulario();
@@ -2095,42 +2098,31 @@ $('btnAnexoInterconexion').addEventListener('click', () => {
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Anexo_interconexion_CFE'));
 });
 
-// Dos versiones mas cortas de la MISMA cotizacion completa (mismo formato de 24/25
-// secciones, no un resumen aparte) -- pedido explicito del usuario, 2026-11-03: "un
-// poco mas cortas para que las entienda mas el cliente". Usan el mismo generarPdf()
-// de la "Cotizacion completa", solo con un subconjunto fijo de bloques distinto al que
-// el usuario haya activado/desactivado a mano (BLOQUES_SECCIONES_9/14, ver bloques.js)
-// -- no tocan proyectoActual.seccionesActivas, son generaciones puntuales aparte.
-$('btnCotizacion9').addEventListener('click', () => {
-  if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  if (!confirmarSiHayCambiosSinCalcular()) return;
-  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
-  const doc = generarPdf(ultimoResultado, { secciones: BLOQUES_SECCIONES_9 });
-  mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion_corta_9_secciones'));
+// Renombrar la cotizacion -- pedido explicito del usuario, 2026-11-05: poder
+// "ponerle nombre con su proyecto y su cliente" antes de guardarla como definitiva.
+// Se guarda en blur (igual que los campos editables de texto), no en cada tecla.
+$('inputNombreProyecto').addEventListener('blur', () => {
+  if (!proyectoActual) return;
+  const nuevo = $('inputNombreProyecto').value.trim();
+  if (!nuevo || nuevo === proyectoActual.nombre) return;
+  proyectoActual.nombre = nuevo;
+  $('proyectoNombreBarra').textContent = nuevo;
+  guardarProyecto(clienteActual, proyectoActual);
 });
 
-$('btnCotizacion14').addEventListener('click', () => {
-  if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  if (!confirmarSiHayCambiosSinCalcular()) return;
-  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
-  const doc = generarPdf(ultimoResultado, { secciones: BLOQUES_SECCIONES_14 });
-  mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion_media_14_secciones'));
-});
-
-// Marca esta cotizacion como guardada/confirmada para el cliente elegido en el
-// selector -- los datos ya se autoguardan en cada calculo (guardarProyecto), esto
-// deja ademas un registro visible (fecha) de que la cotizacion se reviso y se dio
-// por buena, mostrado en la lista de cotizaciones del cliente en vez del generico
-// "con datos capturados". Si se elige un cliente DISTINTO al que la tenia abierta,
-// la cotizacion se MUEVE a ese cliente (pedido explicito del usuario: poder elegir
-// con que cliente registrado se guarda, no solo el que estaba abierto).
-$('btnGuardarCotizacion').addEventListener('click', () => {
-  if (!ultimoResultado) { alert('Calcula primero.'); return; }
+// Logica compartida de "Guardar cotización" y "Marcar como definitiva" -- ambos
+// botones guardan/mueven la cotizacion al cliente elegido en el selector; el unico
+// extra de "definitiva" es marcar proyecto.definitiva = true (se ve como ✅ en el
+// historial de cotizaciones del cliente, ver tarjetaProyecto) para distinguir la
+// version final de versiones de prueba/comparacion -- pedido explicito del usuario.
+function guardarCotizacionConCliente({ definitiva } = {}) {
+  if (!ultimoResultado) { alert('Calcula primero.'); return false; }
   proyectoActual.cotizacionGuardadaEn = new Date().toISOString();
+  if (definitiva) proyectoActual.definitiva = true;
   const clienteDestinoId = $('selectClienteGuardar').value;
   if (clienteDestinoId && clienteDestinoId !== clienteActual.id) {
     const destino = moverProyecto(clienteActual.id, clienteDestinoId, proyectoActual);
-    if (!destino) { alert('No se pudo mover la cotización a ese cliente.'); return; }
+    if (!destino) { alert('No se pudo mover la cotización a ese cliente.'); return false; }
     clienteActual = destino;
     $('clienteNombreBarra').textContent = clienteActual.nombre;
     $('clienteTipoBarra').textContent = clienteActual.tipo === 'gobierno' ? 'Gobierno' : 'Particular';
@@ -2140,14 +2132,23 @@ $('btnGuardarCotizacion').addEventListener('click', () => {
     guardarProyecto(clienteActual, proyectoActual);
   }
   $('estadoGuardadoCotizacion').className = 'nota ok';
-  $('estadoGuardadoCotizacion').textContent =
-    `✓ Guardada con el cliente "${clienteActual.nombre}", cotización "${proyectoActual.nombre}".`;
-});
+  $('estadoGuardadoCotizacion').textContent = definitiva
+    ? `✓ Marcada como DEFINITIVA y guardada con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}".`
+    : `✓ Guardada con el cliente "${clienteActual.nombre}", cotización "${proyectoActual.nombre}".`;
+  return true;
+}
 
-// WhatsApp no permite adjuntar un archivo desde un enlace wa.me, solo abrir un chat con
-// texto ya escrito -- el PDF (ya descargado con los botones de arriba) se adjunta a
-// mano. El numero de destino lo dio el usuario directamente.
-$('btnEnviarWhatsapp').addEventListener('click', () => {
+$('btnGuardarCotizacion').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: false }));
+$('btnMarcarDefinitiva').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: true }));
+
+// El PDF de verdad se intenta adjuntar via Web Share API (navigator.share con un
+// File) -- funciona en celular Android/Chrome y algunos navegadores de escritorio
+// recientes que soportan compartir archivos; ahi el usuario elige WhatsApp del menu
+// de compartir del sistema y el PDF ya sale adjunto. wa.me/api.whatsapp.com NUNCA
+// permite adjuntar un archivo desde un link (limite real de WhatsApp, no de esta
+// app) -- si el navegador no soporta compartir archivos, cae al link de siempre
+// (abre el chat de un numero fijo con el texto, el PDF se adjunta a mano).
+$('btnEnviarWhatsapp').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
   const r = ultimoResultado;
@@ -2158,6 +2159,18 @@ $('btnEnviarWhatsapp').addEventListener('click', () => {
     `Recuperación: ${r.payback ? r.payback.toFixed(1) + ' años' : 'N/D'}\n` +
     `VAN 25 años: ${M(r.van)}\n\n` +
     'Adjunto el PDF de la cotización.';
+  try {
+    const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas, seccionesExcluidas: proyectoActual.seccionesExcluidas });
+    const blob = doc.output('blob');
+    const archivo = new File([blob], nombreArchivoProyecto('Cotizacion'), { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+      await navigator.share({ files: [archivo], text: mensaje, title: `Cotización ${r.titular}` });
+      return; // el PDF ya salio adjunto -- no abrir ademas el link de solo texto
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return; // el usuario cancelo el menu de compartir a proposito
+    console.error('No se pudo compartir el PDF directo, cae al link de WhatsApp con solo texto:', err);
+  }
   const url = `https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent(mensaje)}`;
   window.open(url, '_blank');
 });

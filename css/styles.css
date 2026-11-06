@@ -303,6 +303,7 @@ input[type="file"] { padding: 6px 0; }
 .chip-etapa-ganado { background: #d6f0db; color: #1f6b35; }
 .chip-etapa-perdido { background: #f8d7da; color: #7a1f27; }
 .chip-etapa-instalado { background: #d8e8f3; color: #16425a; }
+.chip-definitiva { font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; margin-left: 6px; background: #1a7a4c; color: #fff; }
 .lista-notas-seguimiento { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .nota-seguimiento { font-size: 0.82rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
 .nota-seguimiento .nota-fecha { color: var(--grey); font-size: 0.72rem; display: block; }

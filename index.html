@@ -476,20 +476,25 @@
       <div class="acciones acciones-pdf">
         <button id="btnGenerarPdf" class="btn-primario">Cotización completa</button>
         <button id="btnResumenEjecutivo" class="btn-secundario">Resumen ejecutivo (1 página)</button>
-        <button id="btnCotizacion9" class="btn-secundario">Versión corta (9 secciones)</button>
-        <button id="btnCotizacion14" class="btn-secundario">Versión media (14 secciones)</button>
         <button id="btnAnexoInterconexion" class="btn-secundario">📐 Anexo trámite CFE</button>
         <button id="btnEnviarWhatsapp" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
       </div>
       <div class="fila fila-guardar">
+        <label>Nombre de esta cotización
+          <input type="text" id="inputNombreProyecto" placeholder="Ej. Casa del Abue — GDMTO — Opción 40 paneles">
+        </label>
         <label>Guardar esta cotización con el cliente
           <select id="selectClienteGuardar"></select>
         </label>
         <button id="btnGuardarCotizacion" class="btn-secundario">💾 Guardar cotización</button>
+        <button id="btnMarcarDefinitiva" class="btn-primario">✅ Marcar como definitiva y guardar</button>
       </div>
       <p class="nota" id="estadoGuardadoCotizacion"></p>
-      <p class="nota">El botón de WhatsApp abre el chat con un resumen en texto ya escrito — WhatsApp no
-        permite adjuntar el PDF automáticamente desde un enlace; adjúntalo a mano (ya descargado arriba).</p>
+      <p class="nota">"Marcar como definitiva" guarda la cotización igual que "Guardar cotización" y además la
+        marca con ✅ en el historial de este cliente, para distinguirla de versiones de prueba/comparación.</p>
+      <p class="nota" id="notaAdjuntoWhatsapp">El botón de WhatsApp intenta adjuntar el PDF directo al compartir
+        (funciona en celular/Android con Chrome, y algunos navegadores de escritorio recientes); si tu navegador no
+        lo permite, abre el chat solo con el texto y hay que adjuntar el PDF a mano (ya descargado arriba).</p>
       <div id="visorPdf"></div>
     </section>
   </main>
