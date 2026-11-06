@@ -5,6 +5,8 @@
   "multiplicador": 80,
   "titular": "MUSEOS PUEBLA",
   "domicilio": "4 NTE 203 MUSEO, CENT.MAC/ 10 OTE 07G, C.P.72000, PUEBLA,PUE.",
+  "razon_social_cfdi": "MUSEOS PUEBLA",
+  "titular_domicilio_advertencia": null,
   "demanda_contratada_kw": 328.0,
   "periodo_dias": 31,
   "periodo_kwh": 4355.0,

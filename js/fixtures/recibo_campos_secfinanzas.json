@@ -5,6 +5,8 @@
   "multiplicador": 350,
   "titular": "CALLE 11 ORIENTE 2224",
   "domicilio": "20 SUR Y 24SUR—, AZCARATE 08H, C.P.72501 ES, PUEBLA/PUE.",
+  "razon_social_cfdi": "GOBIERNO DEL ESTADO DE PUEBLA",
+  "titular_domicilio_advertencia": "El \"titular\" detectado (\"CALLE 11 ORIENTE 2224\") empieza como una dirección, no como un nombre -- probablemente el lector tomó la línea equivocada del recibo (caso ya visto: confundir la primera línea del domicilio con el nombre). El propio recibo trae impresa la Razón Social fiscal \"GOBIERNO DEL ESTADO DE PUEBLA\" en el bloque del CFDI -- probablemente ESE es el nombre correcto. Revisar y corregir el campo \"Titular\" a mano.",
   "demanda_contratada_kw": null,
   "periodo_dias": 31,
   "periodo_kwh": 90381.0,

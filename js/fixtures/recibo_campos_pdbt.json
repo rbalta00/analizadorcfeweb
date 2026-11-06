@@ -5,6 +5,8 @@
   "multiplicador": 1,
   "titular": "GOBIERNO DEL ESTADO DE PUEBLA",
   "domicilio": "REFORMA 703 ANGELOPOLIS, 11 OTE 2224 COL AZCARATE Y C.P. 72501, CENT.5/MAYO/11/N-R/107G, C.P.72000, PUEBLA,PUE.",
+  "razon_social_cfdi": "GOBIERNO DEL ESTADO DE PUEBLA",
+  "titular_domicilio_advertencia": null,
   "demanda_contratada_kw": 7.0,
   "periodo_dias": 32,
   "periodo_kwh": 5061.0,

@@ -5,6 +5,8 @@
   "multiplicador": 80,
   "titular": "SEDIF CASA DEL ABUE II",
   "domicilio": "103 PONIENTE 1559, BLVD CARMELITAS, MAYORAZGO 08H, C.P.72480, PUEBLA,PUE.",
+  "razon_social_cfdi": "SISTEMA PARA EL DESARROLLO INTEGRAL DE LA FAMILIA DEL ESTADO DE PUEBLA",
+  "titular_domicilio_advertencia": null,
   "demanda_contratada_kw": 77.0,
   "periodo_dias": 32,
   "periodo_kwh": 2400.0,

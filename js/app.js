@@ -374,7 +374,8 @@ function tarjetaEnvio(envio) {
   info.innerHTML = `<strong>${escapeHtml(envio.nombre_declarado || 'Sin nombre')}</strong><span class="nota">${resumen}</span>` +
     (envio.telefono_declarado ? `<span class="nota">Tel/WhatsApp: ${escapeHtml(envio.telefono_declarado)}</span>` : '') +
     (envio.notas_cliente ? `<span class="nota">Nota del cliente: ${escapeHtml(envio.notas_cliente)}</span>` : '') +
-    (envio.campos_leidos?.reconciliacion_advertencia ? '<span class="nota aviso-chico">🛑 Tenía una advertencia de reconciliación al leer el recibo -- revisar con cuidado.</span>' : '');
+    (envio.campos_leidos?.reconciliacion_advertencia ? '<span class="nota aviso-chico">🛑 Tenía una advertencia de reconciliación al leer el recibo -- revisar con cuidado.</span>' : '') +
+    (envio.campos_leidos?.titular_domicilio_advertencia ? '<span class="nota aviso-chico">🛑 El titular o el domicilio leídos del recibo parecen incorrectos -- revisar con cuidado antes de asignar.</span>' : '');
   div.append(info);
 
   if (envio.archivos && envio.archivos.length) {
@@ -1248,6 +1249,7 @@ const CAMPO_A_INPUT = {
   dap: 'dap', suministro: 'c_suministro', distribucion: 'c_distribucion', transmision: 'c_transmision',
   cenace: 'c_cenace', energia: 'c_energia', capacidad: 'c_capacidad', scnmem: 'c_scnmem',
   energia_base: 'c_energia_base', energia_intermedia: 'c_energia_intermedia', energia_punta: 'c_energia_punta',
+  titular: 'titular', domicilio: 'domicilio',
 };
 const ETIQUETA_CAMPO = {
   tarifa: 'Tarifa', periodoDias: 'Días del período', periodoKwh: 'kWh del período', dap: 'DAP',
@@ -1255,6 +1257,7 @@ const ETIQUETA_CAMPO = {
   c_cenace: 'CENACE', c_energia: 'Energía', c_capacidad: 'Capacidad', c_scnmem: 'SCnMEM',
   c_energia_base: 'Energía Base', c_energia_intermedia: 'Energía Intermedia', c_energia_punta: 'Energía Punta',
   grupoRateKw: 'Columna "$/kW" (Distribución/Capacidad)',
+  titular: 'Titular / inmueble', domicilio: 'Domicilio',
 };
 
 // Marca en naranja los campos del formulario que el recibo NO trajo solos -- pedido
@@ -1370,8 +1373,12 @@ function mostrarEstadoLecturaRecibo(campos) {
     ? 'Se usó OCR (el PDF no traía texto aprovechable, o era una foto/escaneo). Revisa con más cuidado los datos.'
     : 'Se leyó el texto del recibo directamente.')
     + (faltantes.length ? ` No se encontraron solos (quedaron marcados en naranja abajo): ${faltantes.map(k => ETIQUETA_CAMPO[CAMPO_A_INPUT[k]] || k).join(', ')}.` : '');
-  avisoEl.hidden = !campos.reconciliacion_advertencia;
-  if (campos.reconciliacion_advertencia) avisoEl.textContent = '🛑 ' + campos.reconciliacion_advertencia;
+  // Dos fuentes de aviso independientes (reconciliación aritmética de los $ y
+  // plausibilidad de titular/domicilio) -- se muestran juntas si ambas aplican, en
+  // vez de que la segunda pise a la primera.
+  const avisos = [campos.reconciliacion_advertencia, campos.titular_domicilio_advertencia].filter(Boolean);
+  avisoEl.hidden = !avisos.length;
+  if (avisos.length) avisoEl.textContent = avisos.map(a => '🛑 ' + a).join(' ');
   marcarCamposNoDetectados(campos);
 }
 

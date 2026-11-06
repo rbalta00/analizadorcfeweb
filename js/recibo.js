@@ -89,6 +89,54 @@ function leerResumen(textoNorm) {
   return out;
 }
 
+// La "Razon Social" del bloque fiscal del CFDI (impresa cerca del RFC, al pie del
+// recibo) es un dato casi siempre legible incluso cuando el bloque de arriba
+// ("Ciudad de Mexico...NO. DE SERVICIO", de donde se lee titular/domicilio) salio
+// mal por OCR -- sirve como segunda fuente para detectar cuando el titular se leyo
+// mal, sin tener que adivinar de una lista fija de nombres de dependencias.
+function leerRazonSocial(textoNorm) {
+  const m = textoNorm.match(/Raz[o0]n Social:?\s*([^\n]+?)\s*(?:R[e0]gimen Fiscal|Uso CFDI|$)/i);
+  return m ? m[1].trim().replace(/\s{2,}/g, ' ') : null;
+}
+
+const PALABRAS_DIRECCION = /^(CALLE|AV\.?|AVENIDA|BLVD\.?|BOULEVARD|PRIV\.?|PRIVADA|CALZ\.?|CALZADA|ANDADOR|PROL\.?|PROLONGACI[O0]N|CARRETERA|KM\.?|CIRCUITO|RETORNO|CERRADA)\b/i;
+const PATRON_DOMICILIO_TOKENS = /\b(C\.?P\.?\s*\d{3,5}|COL(ONIA)?\.?\b|SUR|NORTE|ORIENTE|PONIENTE|FRACC|BLVD|CALZ|AV\.?\b|NUM\.?\b|KM\.?\b)/i;
+
+// Verificacion de "¿lo que se leyo como titular/domicilio tiene sentido?" -- pedido
+// explicito del usuario (2026-11-05: "cuando capturas los datos revisa bien... las
+// direcciones y lo que extraigas"), motivado por un caso real ya en los fixtures
+// (secfinanzas): el bloque anclado en "Ciudad de Mexico...NO. DE SERVICIO" se
+// desincronizo con el OCR y el titular termino siendo "CALLE 11 ORIENTE 2224" (la
+// primera linea del domicilio), sin que nada lo marcara -- domicilio estaba excluido
+// de campos_no_encontrados a proposito (para no repetir el mismo texto en 2 inputs)
+// y un titular NO NULO pero incorrecto nunca pasaba por ningun chequeo de contenido.
+function verificarTitularDomicilio(titular, domicilio, razonSocial) {
+  const avisos = [];
+
+  const titularPareceDireccion = titular && PALABRAS_DIRECCION.test(titular.trim());
+  if (titularPareceDireccion) {
+    let msg = `El "titular" detectado ("${titular}") empieza como una dirección, no como un nombre -- ` +
+      'probablemente el lector tomó la línea equivocada del recibo (caso ya visto: confundir la primera línea del domicilio con el nombre).';
+    if (razonSocial && quitarAcentos(razonSocial).toUpperCase() !== quitarAcentos(titular).toUpperCase()) {
+      msg += ` El propio recibo trae impresa la Razón Social fiscal "${razonSocial}" en el bloque del CFDI -- ` +
+        'probablemente ESE es el nombre correcto. Revisar y corregir el campo "Titular" a mano.';
+    }
+    avisos.push(msg);
+  } else if (!titular && razonSocial) {
+    avisos.push(`No se detectó el titular, pero el comprobante CFDI trae impresa la Razón Social "${razonSocial}" -- ` +
+      'usar ese nombre si corresponde a este mismo inmueble, o corregir a mano si no.');
+  }
+
+  if (domicilio && !PATRON_DOMICILIO_TOKENS.test(domicilio)) {
+    avisos.push(`El "domicilio" detectado ("${domicilio}") no trae ningún dato típico de una dirección ` +
+      '(colonia, C.P., punto cardinal) -- revisar si se leyó completo contra el PDF/foto original.');
+  } else if (!domicilio) {
+    avisos.push('No se detectó el domicilio -- revisar a mano contra el recibo antes de continuar (hace falta para ubicar el inmueble).');
+  }
+
+  return avisos.length ? avisos.join(' ') : null;
+}
+
 function leerHistorialConsumo(textoNorm) {
   const filas = {}, orden = [];
   const re = /([A-Z]{3})\s*(\d{2})\s+(\d+)\s+([\d,]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/g;
@@ -298,10 +346,13 @@ export function extraerCampos(texto, usoOcr = false) {
     }
   }
 
+  campos.razon_social_cfdi = leerRazonSocial(norm);
+  campos.titular_domicilio_advertencia = verificarTitularDomicilio(campos.titular, campos.domicilio, campos.razon_social_cfdi);
+
   campos.uso_ocr = usoOcr;
   const ignorar = new Set(['texto_crudo', 'uso_ocr', 'rate_kw_detectado', 'rate_kw_advertencia', 'rate_kw_via_ocr',
     'bt_monto', 'bonus_monto', 'subtotal_resumen', 'iva_resumen', 'total_resumen', 'periodo_label',
-    'historial', 'domicilio', 'reconciliacion_diff', 'reconciliacion_advertencia']);
+    'historial', 'reconciliacion_diff', 'reconciliacion_advertencia', 'razon_social_cfdi', 'titular_domicilio_advertencia']);
   if (campos.energia === null && ['energia_base', 'energia_intermedia', 'energia_punta'].some(k => k in campos)) {
     ignorar.add('energia');
   }
