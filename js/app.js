@@ -2695,9 +2695,16 @@ $('btnImprimirVista').addEventListener('click', () => {
   // dialogo de impresion -- sin esto, algunos navegadores capturan el layout de antes.
   setTimeout(() => {
     window.print();
-    // Respaldo: si "afterprint" no dispara (pasa en algunos navegadores/OS cuando se
-    // cancela el dialogo), quitar la clase de todos modos tras un rato razonable.
-    setTimeout(limpiar, 5000);
+    // Respaldo si "afterprint" nunca dispara -- OJO: tiene que ser un tiempo LARGO.
+    // Bug real encontrado antes de pushear esto: con un respaldo de 5s, al elegir
+    // "Guardar como PDF" el dialogo nativo se queda abierto mientras el usuario escribe
+    // el nombre del archivo -- si este timeout disparaba primero, quitaba la clase
+    // "modo-impresion" y volvia a cerrar los <details> ANTES de que el usuario
+    // terminara de guardar, y el PDF resultante salia incompleto (secciones
+    // apagadas por error, detalles cerrados otra vez). 90s le da margen de sobra para
+    // elegir carpeta/nombre sin que "afterprint" (que SI dispara bien en Chrome al
+    // cerrar el dialogo, con Guardar o Cancelar) tenga que competir con esto.
+    setTimeout(limpiar, 90000);
   }, 50);
 });
 
