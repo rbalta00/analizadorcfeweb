@@ -679,6 +679,38 @@ body.modo-impresion #contenedorSecciones .grafico-apagado,
 body.modo-impresion #contenedorSecciones .campo-oculto,
 body.modo-impresion #contenedorSecciones .col-oculta-tabla,
 body.modo-impresion #contenedorSecciones .fila-oculta-tabla { display: none !important; }
+
+/* "Pierde el formato" al imprimir/guardar como PDF -- 3 causas reales, todas de
+   como Chrome arma la pagina de impresion (no de la vista en pantalla, que se ve
+   bien): 1) Chrome por default IGNORA colores de fondo al imprimir (checkbox
+   "Graficos de fondo" del dialogo, normalmente destildado) -- sin forzarlo, los
+   navy/cream/teal de cabeceras, avisos y graficas de barra salen en blanco, vacios.
+   2) Si el sistema esta en modo oscuro, @media (prefers-color-scheme: dark) de mas
+   arriba aplica tambien al imprimir -- textos claros pensados para fondo oscuro
+   quedarian casi invisibles sobre una pagina blanca. 3) Tablas anchas con scroll
+   horizontal (.tabla-wrap overflow-x:auto) no tienen a donde "hacer scroll" en una
+   pagina impresa -- las columnas de mas a la derecha se cortaban, no se encogian. */
+body.modo-impresion { color-scheme: light !important; }
+body.modo-impresion,
+body.modo-impresion * {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  color-adjust: exact !important;
+}
+body.modo-impresion #contenedorSecciones .badge-comprobado { background: #d8f0df !important; color: #0e5c2b !important; }
+body.modo-impresion #contenedorSecciones .badge-declarado { background: #dce8f6 !important; color: #1a4a86 !important; }
+body.modo-impresion #contenedorSecciones .badge-supuesto { background: #f6ecd0 !important; color: #7a5a10 !important; }
+body.modo-impresion #contenedorSecciones .badge-pendiente { background: #f6d8d8 !important; color: #8a1f1f !important; }
+body.modo-impresion #contenedorSecciones .aviso-cream { background: var(--cfe-cream) !important; color: #4a3c12 !important; }
+body.modo-impresion #contenedorSecciones .seccion-header h2 { color: var(--navy) !important; }
+body.modo-impresion #contenedorSecciones .tabla-wrap { overflow-x: visible !important; }
+body.modo-impresion #contenedorSecciones .tabla-seccion { font-size: 0.72rem !important; table-layout: auto; }
+/* El iframe de previsualizacion inline del PDF adjunto (recibo/verificacion) casi
+   nunca imprime -- Chrome deja un recuadro en blanco en vez del documento. Se
+   oculta y se deja solo el link "(abrir completo)"/nombre, que ya esta junto. */
+body.modo-impresion #contenedorSecciones .documento-adjunto-pdf { display: none !important; }
 @media print {
+  body { background: #fff !important; }
+  main { max-width: none !important; }
   body.modo-impresion #contenedorSecciones .seccion { break-inside: avoid; page-break-inside: avoid; }
 }

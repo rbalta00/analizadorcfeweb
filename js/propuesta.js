@@ -315,6 +315,45 @@ function pagina06c(doc, r, numero) {
   });
 }
 
+// ---------- Documento adjunto (recibo original / verificacion en sitio) ----------
+// Pedido explicito del usuario, 2026-11-07: estas 2 secciones (17 "Documento: recibo
+// original", 18 "Documento: verificacion en sitio" en pantalla) nunca tuvieron pagina
+// propia aqui -- hueco documentado desde el 2026-10-31, nunca cerrado. r._archivosReciboImgs/
+// r._archivosVerificacionImgs se preparan en app.js ANTES de llamar generarPdf() (fetch +
+// archivoAImagenComprimida(), misma funcion ya usada para la foto de sembrado/inmueble) --
+// jsPDF.addImage() necesita un dataURL ya listo, no puede ir a buscar una URL remota solo.
+// Mismo patron de grid que pagina06c, pero con filas calculadas segun cuantas imagenes
+// hay (recibo/verificacion normalmente son 1-3 paginas, no caben en una sola fila fija).
+function paginaDocumentoAdjunto(doc, r, numero, titulo, imagenes) {
+  let y = encabezado(doc, numero, titulo, r.titular);
+  y = bodyX(doc, y, 'Documento adjunto a esta cotización, tal como se subió -- no se extrajo ningún dato nuevo ' +
+    'de él aquí (ver la sección de "Su recibo: datos comprobados" para la trazabilidad de cada dato).');
+  y = spacer(y, 8);
+  const cols = imagenes.length <= 2 ? imagenes.length : 2;
+  const filas = Math.ceil(imagenes.length / cols);
+  const gap = 10;
+  const cellW = (CONTENT_W - gap * (cols - 1)) / cols;
+  const altoDisponible = CONTENT_BOTTOM - y - 10;
+  const cellH = (altoDisponible - gap * (filas - 1)) / filas;
+  imagenes.forEach((img, i) => {
+    const col = i % cols;
+    const fila = Math.floor(i / cols);
+    const cellX = MARGIN_L + col * (cellW + gap);
+    const cellY = y + fila * (cellH + gap);
+    const escala = Math.min(cellW / img.ancho, cellH / img.alto, 1);
+    const wImg = img.ancho * escala, hImg = img.alto * escala;
+    const xImg = cellX + (cellW - wImg) / 2;
+    const yImg = cellY + (cellH - hImg) / 2;
+    doc.addImage(img.dataUrl, 'JPEG', xImg, yImg, wImg, hImg);
+  });
+}
+function paginaDocumentoRecibo(doc, r, numero) {
+  paginaDocumentoAdjunto(doc, r, numero, 'Documento: recibo original de CFE', r._archivosReciboImgs || []);
+}
+function paginaDocumentoVerificacion(doc, r, numero) {
+  paginaDocumentoAdjunto(doc, r, numero, 'Documento: verificación en sitio', r._archivosVerificacionImgs || []);
+}
+
 // ---------- Pagina 7: produccion ----------
 function pagina07(doc, r, numero) {
   let y = encabezado(doc, numero, 'Cuánta electricidad podría producir', r.titular);
@@ -644,9 +683,10 @@ function pagina21(doc, r, numero) {
 // seccion (r.seccionesExcluidas, no solo el bloque completo) tambien se refleje aqui.
 // pagina06b/06c no tienen seccion propia en pantalla (son contenido condicional
 // DENTRO de la seccion 6) -- comparten el numero 6: apagar la seccion 6 individual
-// tambien las quita a ellas. 'documentos'/'comparativo_verificacion' (secciones 17-20
-// en pantalla) no tienen pagina propia en este PDF todavia -- hueco preexistente, ver
-// CLAUDE.md -- asi que no aparecen en este mapa (nada que filtrar).
+// tambien las quita a ellas. 'documentos' (secciones 17-18: recibo/verificacion
+// adjuntos) ya tiene pagina propia, agregada 2026-11-07 -- 'comparativo_verificacion'
+// (secciones 19-20) sigue sin pagina propia en este PDF, hueco preexistente, ver
+// CLAUDE.md.
 const PAGINAS = [
   ['resumen', pagina01, null, 1],
   ['recibo_cargos', pagina02, null, 2], ['recibo_cargos', pagina03, null, 3], ['recibo_cargos', pagina04, null, 4],
@@ -658,6 +698,8 @@ const PAGINAS = [
   ['presupuesto', pagina11, null, 11], ['presupuesto', pagina12, null, 12],
   ['recuperacion', pagina13, null, 13], ['recuperacion', pagina14, null, 14],
   ['pagos_100', pagina15, null, 15], ['pagos_100', pagina16, null, 16],
+  ['documentos', paginaDocumentoRecibo, (r) => !!(r._archivosReciboImgs && r._archivosReciboImgs.length), 17],
+  ['documentos', paginaDocumentoVerificacion, (r) => !!(r._archivosVerificacionImgs && r._archivosVerificacionImgs.length), 18],
   ['pendientes', pagina17, null, 21], ['pendientes', pagina17b, null, 21],
   ['alcance', pagina18, null, 22], ['alcance', pagina19, null, 23],
   ['glosario_fuentes', pagina20, null, 24], ['glosario_fuentes', pagina21, null, 25],

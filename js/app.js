@@ -2629,14 +2629,57 @@ function confirmarSiHayReconciliacionSinResolver() {
     '\n\n¿Generar el documento de todos modos? (Cancelar para revisar los montos contra el recibo real primero)');
 }
 
-$('btnGenerarPdf').addEventListener('click', () => {
+// Convierte un archivo adjunto YA SUBIDO (Supabase Storage -- {nombre,tipo,url,ruta})
+// en {dataUrl,ancho,alto} listo para doc.addImage(). Reusa archivoAImagenComprimida()
+// (misma funcion que ya convierte imagen-o-PDF-de-1-pagina a JPEG para la foto del
+// sembrado/inmueble) -- solo hace falta bajar el archivo real primero porque esa
+// funcion espera un File/Blob local, no una URL remota.
+async function archivoAdjuntoAImagenPdf(archivo) {
+  const resp = await fetch(archivo.url);
+  if (!resp.ok) throw new Error(`No se pudo descargar "${archivo.nombre}" (HTTP ${resp.status}).`);
+  const blob = await resp.blob();
+  const file = new File([blob], archivo.nombre || 'documento', { type: archivo.tipo || blob.type });
+  return archivoAImagenComprimida(file, { maxAncho: 1800, calidad: 0.8 });
+}
+
+// Prepara r._archivosReciboImgs/_archivosVerificacionImgs ANTES de generarPdf() -- esas
+// 2 secciones (17/18 en pantalla: "Documento: recibo original"/"Documento: verificación
+// en sitio") nunca tuvieron página propia en "Cotización completa" (hueco documentado
+// desde el 2026-10-31, cerrado recien el 2026-11-07 agregando paginaDocumentoRecibo/
+// paginaDocumentoVerificacion en propuesta.js). Si un archivo no se puede descargar
+// (sin internet, url vencida, etc.) se omite ese archivo puntual -- nunca bloquea la
+// generacion del resto del documento.
+async function prepararDocumentosAdjuntosParaPdf(r) {
+  async function convertirTodos(archivos) {
+    const out = [];
+    for (const a of archivos || []) {
+      try { out.push(await archivoAdjuntoAImagenPdf(a)); }
+      catch (err) { console.error('No se pudo preparar un documento adjunto para el PDF:', err); }
+    }
+    return out;
+  }
+  r._archivosReciboImgs = await convertirTodos(proyectoActual.archivosRecibo);
+  r._archivosVerificacionImgs = await convertirTodos(proyectoActual.archivosVerificacion);
+}
+
+$('btnGenerarPdf').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
   if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
   if (!confirmarSiHayReconciliacionSinResolver()) return;
   if (!confirmarSiHayPlantillaSinVerificar()) return;
-  const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas, seccionesExcluidas: proyectoActual.seccionesExcluidas });
-  mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
+  const boton = $('btnGenerarPdf');
+  boton.disabled = true;
+  const textoOriginal = boton.textContent;
+  boton.textContent = 'Generando…';
+  try {
+    await prepararDocumentosAdjuntosParaPdf(ultimoResultado);
+    const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas, seccionesExcluidas: proyectoActual.seccionesExcluidas });
+    mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
+  } finally {
+    boton.disabled = false;
+    boton.textContent = textoOriginal;
+  }
 });
 
 $('btnResumenEjecutivo').addEventListener('click', () => {
@@ -2663,23 +2706,39 @@ $('btnAnexoInterconexion').addEventListener('click', () => {
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Anexo_interconexion_CFE'));
 });
 
-// "Guardar esta vista como PDF" -- pedido explicito del usuario, 2026-11-07, tras
-// reportar que "Cotizacion completa" no bajaba ni sus ediciones de texto/tablas ni los
-// documentos de recibo/verificacion adjuntos. Causa real (confirmada leyendo
-// propuesta.js): ese boton genera un PDF aparte, con su propio texto fijo armado a
-// mano pagina por pagina -- nunca lee proyecto.textosEditados, y nunca tuvo paginas
-// propias para las secciones "Documento: recibo original"/"Documento: verificacion en
-// sitio" (ver confirmarSiHayTextoEditadoSinReflejarEnPdf arriba y ESTADO.md).
-// Conectar esas dos fuentes de verdad (reescribir propuesta.js para que lea los mismos
-// ids/overrides que secciones.js) es un rework grande y riesgoso de ~22 paginas
-// escritas independientemente -- en vez de eso, este boton imprime/guarda como PDF la
-// vista REAL en pantalla (#contenedorSecciones), que por construccion SI tiene cada
-// edicion, tabla editada, columna/fila oculta y documento adjunto exactamente como se
-// ve aqui. Las secciones/graficos/parrafos apagados se excluyen igual que en el PDF
-// normal (ver el bloque "@media ... body.modo-impresion" en styles.css).
+// "Cotizacion editada" -- pedido explicito del usuario, 2026-11-07, tras reportar que
+// "Cotizacion completa" no bajaba ni sus ediciones de texto/tablas ni los documentos de
+// recibo/verificacion adjuntos. Causa real (confirmada leyendo propuesta.js): ese boton
+// genera un PDF aparte, con su propio texto fijo armado a mano pagina por pagina --
+// nunca lee proyecto.textosEditados, y nunca tuvo paginas propias para las secciones
+// "Documento: recibo original"/"Documento: verificacion en sitio" (ver
+// confirmarSiHayTextoEditadoSinReflejarEnPdf arriba y ESTADO.md). Conectar esas dos
+// fuentes de verdad (reescribir propuesta.js para que lea los mismos ids/overrides que
+// secciones.js) es un rework grande y riesgoso de ~22 paginas escritas
+// independientemente -- en vez de eso, este boton convierte la vista REAL en pantalla
+// (#contenedorSecciones, que por construccion SI tiene cada edicion, tabla editada,
+// columna/fila oculta y documento adjunto) en un PDF.
+//
+// Se probaron 2 tecnicas, en este orden, antes de quedarse con la de abajo:
+// 1) window.print()/"Guardar como PDF" del navegador -- el usuario reporto que el
+//    resultado "pierde el formato" (Chrome quita colores de fondo al imprimir salvo que
+//    se fuerce, el iframe de PDF embebido no imprime, tablas anchas se cortaban).
+// 2) html2canvas + jsPDF (capturar cada seccion como imagen) -- probado en vivo contra
+//    un cliente de prueba real (navegador automatizado) antes de pushear: html2canvas
+//    1.4.1 devolvia canvases de 0x0 al clonar estas secciones (bug/incompatibilidad de
+//    esa libreria con este layout, no algo que se pudiera confirmar arreglable rapido
+//    sin mas investigacion) -- DESCARTADA, nunca llego a produccion.
+// Se vuelve a window.print() (tecnica 1), pero con las 3 causas reales de "pierde el
+// formato" corregidas en styles.css (bloque "body.modo-impresion"): colores de fondo
+// forzados con print-color-adjust, modo oscuro anulado para que no salga texto claro
+// invisible sobre pagina blanca, tablas anchas puestas en overflow:visible en vez de
+// cortarse, y el iframe de PDF embebido oculto (nunca imprime, deja un hueco en blanco).
 $('btnImprimirVista').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
+  const estado = $('estadoCotizacionEditada');
+  estado.className = 'nota';
+  estado.textContent = '';
   // Los <details> ("Ver detalle del calculo") empiezan colapsados -- forzarlos
   // abiertos antes de imprimir, si no su contenido no sale en el PDF/impresion.
   const detallesAAbrir = Array.from(document.querySelectorAll('#contenedorSecciones details:not([open])'));
@@ -2695,15 +2754,11 @@ $('btnImprimirVista').addEventListener('click', () => {
   // dialogo de impresion -- sin esto, algunos navegadores capturan el layout de antes.
   setTimeout(() => {
     window.print();
-    // Respaldo si "afterprint" nunca dispara -- OJO: tiene que ser un tiempo LARGO.
-    // Bug real encontrado antes de pushear esto: con un respaldo de 5s, al elegir
-    // "Guardar como PDF" el dialogo nativo se queda abierto mientras el usuario escribe
-    // el nombre del archivo -- si este timeout disparaba primero, quitaba la clase
-    // "modo-impresion" y volvia a cerrar los <details> ANTES de que el usuario
-    // terminara de guardar, y el PDF resultante salia incompleto (secciones
-    // apagadas por error, detalles cerrados otra vez). 90s le da margen de sobra para
-    // elegir carpeta/nombre sin que "afterprint" (que SI dispara bien en Chrome al
-    // cerrar el dialogo, con Guardar o Cancelar) tenga que competir con esto.
+    // Respaldo si "afterprint" nunca dispara -- tiene que ser un tiempo LARGO: con un
+    // respaldo corto (bug real encontrado antes de la primera version de este boton),
+    // si el usuario tarda en escribir el nombre/carpeta en "Guardar como PDF", este
+    // timeout disparaba primero, revertia el modo impresion/cerraba los detalles ANTES
+    // de que terminara de guardar, y el PDF salia incompleto.
     setTimeout(limpiar, 90000);
   }, 50);
 });
