@@ -713,4 +713,13 @@ body.modo-impresion #contenedorSecciones .documento-adjunto-pdf { display: none 
   body { background: #fff !important; }
   main { max-width: none !important; }
   body.modo-impresion #contenedorSecciones .seccion { break-inside: avoid; page-break-inside: avoid; }
+  /* Pedido explicito del usuario: quitar el pie de pagina que agrega Chrome por su
+     cuenta (URL del sitio + fecha + numero de pagina) en "Cotizacion editada". Eso NO
+     es contenido de esta app -- es el encabezado/pie de pagina NATIVO del navegador,
+     que solo se dibuja en el area de margen reservada para el. Forzando el margen de
+     pagina a 0 con @page, Chrome ya no tiene donde dibujarlo. Se compensa el margen
+     perdido con padding real sobre el propio contenido (si no, el texto quedaria
+     pegado al borde del papel). */
+  @page { margin: 0; }
+  body.modo-impresion #contenedorSecciones { padding: 36px 28px; }
 }

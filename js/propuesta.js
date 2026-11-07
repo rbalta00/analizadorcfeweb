@@ -354,6 +354,70 @@ function paginaDocumentoVerificacion(doc, r, numero) {
   paginaDocumentoAdjunto(doc, r, numero, 'Documento: verificación en sitio', r._archivosVerificacionImgs || []);
 }
 
+// ---------- Proyecto segun verificacion en sitio / comparativo (secciones 19/20
+// en pantalla) -- NUNCA tuvieron pagina propia en este PDF (hueco preexistente, ver
+// CLAUDE.md). Solo existen si r.escenarioVerificado existe (se capturo cuantos
+// paneles sugiere la verificacion en campo) -- mismo condicional que en pantalla
+// (s24/s25 en secciones.js). Version condensada del mismo contenido (mismos numeros).
+function paginaProyectoVerificado(doc, r, numero) {
+  const ev = r.escenarioVerificado;
+  let y = encabezado(doc, numero, 'Su proyecto según la verificación en sitio', r.titular);
+  y = bodyX(doc, y, `Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la ` +
+    `verificación en campo, en vez de los ${r.n} que calcula este sistema a partir del consumo real.`);
+  y = spacer(y, 4);
+  y = cardsRow(doc, y, [
+    [M(ev.investment), 'Lo que costaría el sistema, IVA incluido'],
+    [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se pagaría solo'],
+    [M(ev.ahorroAnual), 'Lo que ahorraría en el primer año'],
+  ]);
+  y = spacer(y, 10);
+  y = cardsRow(doc, y, [
+    [`${ev.n} paneles`, `${r.moduloWp} W por módulo / ${ev.kwp.toFixed(2)} kWp`],
+    [M(ev.ahorroAnual - ev.om1), 'Ahorro neto año 1, tras mantenimiento'],
+    [PCT(ev.pctAhorro), 'Porcentaje de la factura que ahorraría'],
+  ]);
+  y = spacer(y, 10);
+  if (ev.van != null || ev.tir != null) {
+    y = tablaF(doc, y, 'g19-indicador-adicional', r, ['Indicador adicional', 'Valor'], [
+      ['VAN (valor actual neto) al 10%', M(ev.van)],
+      ['TIR (tasa interna de retorno)', ev.tir ? PCT(ev.tir) : 'No calculable'],
+      ['Recuperación del flujo', ev.recuperacionAcumulada ? `${ev.recuperacionAcumulada.toFixed(1)} años` : 'No se recupera en 25 años'],
+    ], { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4], small: true });
+    y = spacer(y, 8);
+  }
+  notice(doc, y, 'El ahorro no necesariamente sube con más paneles: si el consumo real ya satura el piso de ' +
+    'ahorro estructural de la tarifa, paneles de más no generan ahorro adicional, solo más inversión.');
+}
+
+function paginaComparativoVerificacion(doc, r, numero) {
+  const ev = r.escenarioVerificado;
+  const dif = ev.diferenciaPaneles;
+  let y = encabezado(doc, numero, 'Comparativo: calculado vs. verificación en sitio', r.titular);
+  y = bodyX(doc, y, `Lo que este sistema calculó a partir del consumo real del recibo (${r.n} paneles) comparado ` +
+    `con lo que propone el documento de verificación en campo (${ev.n} paneles) -- ambos escenarios usan el ` +
+    'mismo recibo, la misma tarifa y los mismos costos, solo cambia el número de paneles.');
+  y = spacer(y, 4);
+  y = tablaF(doc, y, 'g20-comparativo', r, ['Concepto comparable', 'Calculado por el sistema', 'Verificación en sitio', 'Diferencia'], [
+    ['Paneles', `${r.n}`, `${ev.n}`, dif === 0 ? 'Igual' : `${dif > 0 ? '+' : ''}${dif}`],
+    ['Potencia', `${r.kwp.toFixed(2)} kWp`, `${ev.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
+    ['Inversión, IVA incluido', M(r.investment), M(ev.investment), M(ev.investment - r.investment)],
+    ['Ahorro anual', M(r.ahorroAnual), M(ev.ahorroAnual), M(ev.diferenciaAhorro)],
+    ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', '—'],
+    ['% de ahorro de factura', PCT(r.pctAhorro), PCT(ev.pctAhorro), '—'],
+  ], { widths: [CONTENT_W * 0.3, CONTENT_W * 0.25, CONTENT_W * 0.25, CONTENT_W * 0.2], small: true });
+  y = spacer(y, 8);
+  y = bodyX(doc, y, dif === 0
+    ? 'El número de paneles calculado por el consumo real coincide con lo que sugirió la verificación en campo -- ambos escenarios salen iguales.'
+    : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ` +
+      `${dif > 0 ? 'más' : 'menos'} que lo que calcula este sistema a partir del consumo real del recibo, lo que ` +
+      `cambia la inversión en ${M(Math.abs(ev.investment - r.investment))} y el ahorro anual en ` +
+      `${M(Math.abs(ev.diferenciaAhorro))}. Ambos criterios son válidos; conviene presentarle al cliente las dos ` +
+      'referencias antes de decidir el tamaño final.');
+  notice(doc, y, 'Ambos escenarios se calcularon con el mismo motor (mismo recibo, misma tarifa, mismos costos ' +
+    'de materiales) -- solo cambia el número de paneles. No implica que ambos tamaños quepan físicamente en el ' +
+    'espacio disponible; eso depende de la medición real en sitio.');
+}
+
 // ---------- Pagina 7: produccion ----------
 function pagina07(doc, r, numero) {
   let y = encabezado(doc, numero, 'Cuánta electricidad podría producir', r.titular);
@@ -684,9 +748,8 @@ function pagina21(doc, r, numero) {
 // pagina06b/06c no tienen seccion propia en pantalla (son contenido condicional
 // DENTRO de la seccion 6) -- comparten el numero 6: apagar la seccion 6 individual
 // tambien las quita a ellas. 'documentos' (secciones 17-18: recibo/verificacion
-// adjuntos) ya tiene pagina propia, agregada 2026-11-07 -- 'comparativo_verificacion'
-// (secciones 19-20) sigue sin pagina propia en este PDF, hueco preexistente, ver
-// CLAUDE.md.
+// adjuntos) y 'comparativo_verificacion' (secciones 19-20) ya tienen pagina propia,
+// agregadas 2026-11-07 -- hueco preexistente desde 2026-10-31, cerrado.
 const PAGINAS = [
   ['resumen', pagina01, null, 1],
   ['recibo_cargos', pagina02, null, 2], ['recibo_cargos', pagina03, null, 3], ['recibo_cargos', pagina04, null, 4],
@@ -700,6 +763,8 @@ const PAGINAS = [
   ['pagos_100', pagina15, null, 15], ['pagos_100', pagina16, null, 16],
   ['documentos', paginaDocumentoRecibo, (r) => !!(r._archivosReciboImgs && r._archivosReciboImgs.length), 17],
   ['documentos', paginaDocumentoVerificacion, (r) => !!(r._archivosVerificacionImgs && r._archivosVerificacionImgs.length), 18],
+  ['comparativo_verificacion', paginaProyectoVerificado, (r) => !!r.escenarioVerificado, 19],
+  ['comparativo_verificacion', paginaComparativoVerificacion, (r) => !!r.escenarioVerificado, 20],
   ['pendientes', pagina17, null, 21], ['pendientes', pagina17b, null, 21],
   ['alcance', pagina18, null, 22], ['alcance', pagina19, null, 23],
   ['glosario_fuentes', pagina20, null, 24], ['glosario_fuentes', pagina21, null, 25],
