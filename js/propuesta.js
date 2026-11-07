@@ -26,7 +26,6 @@ import { COMERCIAL } from './comercial.js';
 import { beneficioCosto } from './motor.js';
 export { beneficioCosto };
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
-import { TITULOS_SECCIONES } from './secciones.js';
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 
@@ -419,34 +418,6 @@ function paginaComparativoVerificacion(doc, r, numero) {
     'espacio disponible; eso depende de la medición real en sitio.');
 }
 
-// ---------- Textos editados (pedido explicito del usuario, 2026-11-07: "le falta
-// generar en pdf los textos editados... le faltan el total de ediciones") ----------
-// "Cotizacion completa" sigue siendo un documento aparte con su propio texto fijo --
-// propuesta.js y secciones.js NO comparten la misma redaccion parrafo por parrafo, asi
-// que no hay un lugar "equivalente" donde insertar cada edicion exacta dentro de las
-// paginas ya escritas (intentarlo seria el rework grande y riesgoso ya documentado en
-// ESTADO.md/CLAUDE.md). En vez de eso, esta pagina nueva incluye el TEXTO COMPLETO de
-// cada edicion, explicitamente, al final del documento -- satisface el pedido literal
-// ("que el PDF lleve el total de las ediciones") sin arriesgar desalinear las 24
-// paginas existentes. Los ids con prefijo "sN-" (parrafos/titulos/subtitulos/preguntas,
-// ver secciones.js) se pueden atribuir a su sección por numero; los demas (celdas de
-// tabla, leyendas de graficas) se listan igual pero sin ese dato, no hay como derivarlo
-// del id sin otro mapa que no existe.
-function paginaTextosEditados(doc, r, numero) {
-  let y = encabezado(doc, numero, 'Textos personalizados de esta cotización', r.titular);
-  y = bodyX(doc, y, 'Estos párrafos, títulos o celdas de tabla se reescribieron a mano para esta cotización en la ' +
-    'vista de edición de la app -- se incluyen aquí completos porque el resto de este documento (páginas ' +
-    'anteriores) sigue usando el texto original/de fábrica, no estas ediciones.');
-  y = spacer(y, 6);
-  const filas = Object.entries(r.textosEditados || {}).map(([id, texto]) => {
-    const m = /^s(\d+)-/.exec(id);
-    const seccion = m ? `${m[1]} — ${TITULOS_SECCIONES[Number(m[1]) - 1] || ''}` : '(tabla/gráfica)';
-    const acotado = String(texto).length > 600 ? String(texto).slice(0, 600) + '…' : String(texto);
-    return [seccion, acotado];
-  });
-  table(doc, y, ['Sección', 'Texto editado'], filas, { widths: [CONTENT_W * 0.22, CONTENT_W * 0.78], small: true });
-}
-
 // ---------- Pagina 7: produccion ----------
 function pagina07(doc, r, numero) {
   let y = encabezado(doc, numero, 'Cuánta electricidad podría producir', r.titular);
@@ -794,10 +765,6 @@ const PAGINAS = [
   ['documentos', paginaDocumentoVerificacion, (r) => !!(r._archivosVerificacionImgs && r._archivosVerificacionImgs.length), 18],
   ['comparativo_verificacion', paginaProyectoVerificado, (r) => !!r.escenarioVerificado, 19],
   ['comparativo_verificacion', paginaComparativoVerificacion, (r) => !!r.escenarioVerificado, 20],
-  // bloque 'resumen' (siempre activo, ver generarPdf) a proposito -- esta pagina no
-  // corresponde a ninguna seccion individual de pantalla, asi que no debe depender de
-  // ningun bloque que el usuario pueda apagar; solo depende de si hay ediciones.
-  ['resumen', paginaTextosEditados, (r) => !!(r.textosEditados && Object.keys(r.textosEditados).length), 0],
   ['pendientes', pagina17, null, 21], ['pendientes', pagina17b, null, 21],
   ['alcance', pagina18, null, 22], ['alcance', pagina19, null, 23],
   ['glosario_fuentes', pagina20, null, 24], ['glosario_fuentes', pagina21, null, 25],
