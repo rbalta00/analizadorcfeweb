@@ -2600,18 +2600,27 @@ function confirmarSiHayCambiosSinCalcular() {
     'los datos de ANTES de esos cambios. ¿Generar de todos modos?\n\n(Cancelar para volver y presionar "Calcular" primero)');
 }
 
-// La edicion de texto en pantalla (textoEditable en secciones.js) NO se refleja en el
-// PDF -- propuesta.js arma sus propios parrafos fijos, independientes de
-// proyecto.textosEditados (ver ESTADO.md: conectar las dos fuentes es un trabajo
-// aparte, con riesgo real de desalinear texto entre las 22+ paginas del generador, no
-// hecho todavia). Antes esto solo quedaba documentado en ESTADO.md -- nadie que
-// generara un PDF se enteraba de que sus ediciones no iban a salir ahi. Se avisa aqui,
-// en el momento en que de verdad importa, en vez de dejarlo como una nota enterrada.
-function confirmarSiHayTextoEditadoSinReflejarEnPdf() {
+// La edicion de texto en pantalla (textoEditable en secciones.js) NO se inserta en su
+// lugar original dentro de las paginas de propuesta.js -- cada pagina tiene su propio
+// texto fijo, independiente de proyecto.textosEditados, y no hay un lugar "equivalente"
+// 1:1 para empalmar cada edicion sin reescribir el generador casi completo (riesgo real
+// de desalinear texto entre las 24 paginas, ver ESTADO.md/CLAUDE.md). Pedido explicito
+// del usuario, 2026-11-07 ("le falta generar en pdf los textos editados, le faltan el
+// total de ediciones"): "Cotizacion completa" SI incluye ahora el texto completo de
+// cada edicion, pero como pagina aparte al final ("Textos personalizados de esta
+// cotizacion", ver paginaTextosEditados en propuesta.js) -- NO en el lugar original.
+// Resumen ejecutivo y Anexo tramite CFE (resumen.js) siguen sin incluir nada de esto.
+function confirmarSiHayTextoEditadoSinReflejarEnPdf(incluyeApendice = false) {
   const n = Object.keys(proyectoActual.textosEditados || {}).length;
   if (!n) return true;
-  return confirm(`Editaste ${n} párrafo(s)/aviso(s) en pantalla para esta cotización -- el PDF todavía NO incluye ` +
-    'esas ediciones (sigue usando el texto original de la app). ¿Generar el PDF de todos modos?\n\n(Cancelar para revisar primero qué se editó)');
+  if (incluyeApendice) {
+    return confirm(`Editaste ${n} párrafo(s)/aviso(s)/celda(s) en pantalla para esta cotización -- este PDF ya ` +
+      'incluye el texto completo de esas ediciones, pero como página aparte al final ("Textos personalizados de ' +
+      'esta cotización"), NO en su lugar original (el resto del documento sigue mostrando el texto de fábrica ahí ' +
+      'donde se editó). ¿Generar el PDF de todos modos?\n\n(Cancelar para revisar primero qué se editó)');
+  }
+  return confirm(`Editaste ${n} párrafo(s)/aviso(s) en pantalla para esta cotización -- este documento todavía NO ` +
+    'incluye esas ediciones (sigue usando el texto original de la app). ¿Generar el PDF de todos modos?\n\n(Cancelar para revisar primero qué se editó)');
 }
 
 // Hallazgo 10, auditoria 2026-11-06: la reconciliacion aritmetica del recibo
@@ -2665,7 +2674,7 @@ async function prepararDocumentosAdjuntosParaPdf(r) {
 $('btnGenerarPdf').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
-  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
+  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf(true)) return;
   if (!confirmarSiHayReconciliacionSinResolver()) return;
   if (!confirmarSiHayPlantillaSinVerificar()) return;
   const boton = $('btnGenerarPdf');
