@@ -90,3 +90,21 @@ export async function supabaseEliminarArchivo(ruta) {
     throw new Error(`No se pudo borrar el archivo (${resp.status}): ${texto || resp.statusText}`);
   }
 }
+
+// Lista los archivos que hay AHORA MISMO en una carpeta del bucket "recibos" (panel
+// "Archivos en la nube" de app.js, 2026-11-06) -- el endpoint de "list" de Storage NO
+// es recursivo (trata "/" como separador de carpeta, igual que un listado de
+// directorio), asi que hay que pedirlo carpeta por carpeta (cotizaciones/envios/
+// verificaciones, las 3 que usa supabaseSubirArchivo en este proyecto) en vez de una
+// sola vez con prefix vacio.
+export async function supabaseListarArchivos(carpeta) {
+  const resp = await fetch(`${SUPABASE_URL}/storage/v1/object/list/recibos`, {
+    method: 'POST',
+    headers: { ...HEADERS_BASE, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefix: carpeta, limit: 1000, sortBy: { column: 'created_at', order: 'desc' } }),
+  });
+  const items = await manejarRespuesta(resp);
+  // Las carpetas listadas aparecen como objetos sin id (son sub-carpetas, nunca pasa
+  // aqui porque ya pedimos con el prefijo exacto, pero por si acaso se filtran).
+  return (items || []).filter((it) => it && it.id);
+}

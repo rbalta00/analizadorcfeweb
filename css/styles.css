@@ -615,9 +615,70 @@ input[type="file"] { padding: 6px 0; }
 /* ===================== PDF embebido ===================== */
 .iframe-pdf { width: 100%; height: 900px; border: 1px solid var(--border); border-radius: 8px; }
 
+/* ===================== Opciones avanzadas de la nube (eliminar cliente/archivos del
+   respaldo compartido, 2026-11-06) -- intencionalmente mas "pesado" visualmente que el
+   resto de botones secundarios, porque borra del respaldo COMPARTIDO, no solo local. */
+.panel-avanzado-nube {
+  margin-top: 14px; padding: 14px; border: 1px dashed #e09a9a; border-radius: 8px;
+  background: #fdecea;
+}
+@media (prefers-color-scheme: dark) { .panel-avanzado-nube { background: #2a1513; border-color: #6e2b22; } }
+.panel-avanzado-nube h4 { margin: 4px 0 6px; color: #7a1f14; }
+@media (prefers-color-scheme: dark) { .panel-avanzado-nube h4 { color: #ffb4a8; } }
+.btn-peligro {
+  background: #c0392b; color: #fff; border: 1px solid #a3291c; border-radius: 8px;
+  padding: 11px 20px; font-size: 0.92rem; font-weight: 600; cursor: pointer;
+}
+.btn-peligro:active { opacity: 0.85; }
+.btn-peligro:disabled { opacity: 0.55; cursor: not-allowed; }
+.lista-archivos-nube { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.fila-archivo-nube {
+  display: flex; align-items: center; gap: 8px; font-size: 0.82rem; flex-wrap: wrap;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+}
+.fila-archivo-nube a { word-break: break-all; flex: 1 1 auto; }
+.fila-archivo-nube .carpeta-archivo-nube { color: var(--grey); font-size: 0.72rem; }
+
 @media (max-width: 480px) {
   main { padding: 12px; }
   .fila { flex-direction: column; }
   .seccion { padding: 14px; margin: 12px auto; }
   .tarjetas-metricas { grid-template-columns: 1fr 1fr; }
+}
+
+/* ===================== Imprimir / guardar como PDF la vista en pantalla =====================
+   "Cotizacion completa" (propuesta.js) es un PDF generado aparte, con su propio texto fijo --
+   NUNCA refleja ediciones de texto/tablas ni secciones como "Documento: recibo original"/
+   "Documento: verificacion en sitio" (nunca tuvieron pagina propia en ese generador, ver
+   ESTADO.md). btnImprimirVista (app.js) agrega esta clase al <body> justo antes de
+   window.print() -- esto imprime/guarda como PDF la vista real de #contenedorSecciones, que SI
+   tiene cada edicion, tabla editada y documento adjunto tal como se ve en pantalla. */
+body.modo-impresion > *:not(#pantallaCliente) { display: none !important; }
+body.modo-impresion #pantallaCliente > *:not(#contenedorSecciones) { display: none !important; }
+body.modo-impresion #contenedorSecciones .seccion-numero,
+body.modo-impresion #contenedorSecciones .toggle-seccion,
+body.modo-impresion #contenedorSecciones .btn-restaurar-texto,
+body.modo-impresion #contenedorSecciones .btn-icono-global,
+body.modo-impresion #contenedorSecciones .btn-ocultar-texto,
+body.modo-impresion #contenedorSecciones .btn-ocultar-col-fila,
+body.modo-impresion #contenedorSecciones .nota-texto-global,
+body.modo-impresion #contenedorSecciones .nota-texto-oculto,
+body.modo-impresion #contenedorSecciones .th-accion-tabla,
+body.modo-impresion #contenedorSecciones .td-accion-tabla,
+body.modo-impresion #contenedorSecciones .btn-link { display: none !important; }
+body.modo-impresion #contenedorSecciones .texto-editable,
+body.modo-impresion #contenedorSecciones .texto-editable-chico {
+  outline: none !important; background: none !important;
+}
+/* Secciones/graficos/parrafos/columnas/filas que el admin apago a proposito se quedan
+   FUERA del documento impreso -- mismo criterio que "Cotizacion completa" (propuesta.js),
+   que tampoco los incluye. En pantalla solo se atenuan como referencia para el admin;
+   aqui se quitan del todo porque esto SI es el documento final que se le da al cliente. */
+body.modo-impresion #contenedorSecciones .seccion-apagada,
+body.modo-impresion #contenedorSecciones .grafico-apagado,
+body.modo-impresion #contenedorSecciones .campo-oculto,
+body.modo-impresion #contenedorSecciones .col-oculta-tabla,
+body.modo-impresion #contenedorSecciones .fila-oculta-tabla { display: none !important; }
+@media print {
+  body.modo-impresion #contenedorSecciones .seccion { break-inside: avoid; page-break-inside: avoid; }
 }

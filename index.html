@@ -38,7 +38,8 @@
       </div>
       <div class="acciones acciones-pdf">
         <button id="btnCrearCliente" class="btn-primario">+ Nuevo cliente</button>
-        <button id="btnAbrirDashboard" class="btn-secundario">📊 Dashboard de todos los clientes</button>
+        <button id="btnAbrirDashboard" class="btn-secundario">🕐 Historial / Dashboard</button>
+        <button id="btnAbrirDefinitivasPorTarifa" class="btn-secundario">✅ Definitivas por tarifa</button>
         <button id="btnAbrirEnvios" class="btn-secundario">📥 Envíos de clientes <span id="contadorEnvios"></span></button>
         <button id="btnEnviarFormularioWhatsapp" class="btn-whatsapp">💬 Enviar formulario por WhatsApp</button>
         <a href="cliente.html" target="_blank" id="btnAbrirFormulario" class="btn-secundario">📄 Abrir formulario</a>
@@ -49,8 +50,38 @@
       <div class="acciones">
         <button id="btnSubirNube" class="btn-secundario">☁️ Guardar copia en la nube</button>
         <button id="btnBajarNube" class="btn-secundario">⬇️ Traer de la nube</button>
+        <button id="btnMostrarAvanzadoNube" class="btn-secundario">⚙️ Opciones avanzadas de la nube</button>
       </div>
       <p class="nota" id="estadoNube"></p>
+
+      <div id="panelAvanzadoNube" class="panel-avanzado-nube" hidden>
+        <h4>🗑️ Eliminar un cliente de la nube</h4>
+        <p class="nota aviso">⚠️ Esto solo quita a ese cliente (y sus cotizaciones) del respaldo compartido en
+          la nube -- NO toca lo que tengas guardado en este dispositivo. Úsalo si subiste algo por accidente, o
+          si ya lo borraste aquí y no quieres que siga allá. No se puede deshacer.</p>
+        <div class="fila">
+          <label>Cliente en la nube
+            <select id="selectClienteEliminarNube"><option value="">-- elige --</option></select>
+          </label>
+          <label>Escribe su nombre exacto para confirmar
+            <input id="inputConfirmarEliminarNube" type="text" placeholder="Nombre del cliente" />
+          </label>
+        </div>
+        <div class="acciones">
+          <button id="btnRefrescarClientesNube" class="btn-secundario">↻ Leer lista actual de la nube</button>
+          <button id="btnEliminarClienteNube" class="btn-peligro">🗑️ Eliminar de la nube</button>
+        </div>
+        <p class="nota" id="estadoEliminarClienteNube"></p>
+
+        <h4>📁 Archivos subidos a la nube</h4>
+        <p class="nota">Fotos y PDFs de recibos, verificaciones en sitio y cotizaciones que se subieron a la
+          nube desde cada cliente. Bórralos aquí si ya no hacen falta (duplicados, pruebas, etc.).</p>
+        <div class="acciones">
+          <button id="btnListarArchivosNube" class="btn-secundario">📁 Ver archivos en la nube</button>
+        </div>
+        <p class="nota" id="estadoArchivosNube"></p>
+        <div id="listaArchivosNube" class="lista-archivos-nube"></div>
+      </div>
     </section>
 
     <section class="tarjeta">
@@ -88,7 +119,7 @@
   <main id="pantallaDashboard" hidden>
     <div class="cliente-barra">
       <button id="btnVolverClientesDesdeDashboard" class="btn-link">← Clientes</button>
-      <strong>Dashboard de todos los clientes</strong>
+      <strong>Historial -- todas las cotizaciones, en el orden en que se crearon</strong>
     </div>
     <section class="tarjeta">
       <div id="dashboardTotales" class="tarjetas-metricas"></div>
@@ -101,10 +132,40 @@
     </section>
     <section class="tarjeta">
       <div class="acciones">
+        <label><input type="checkbox" id="chkSoloDefinitivasDashboard" /> Mostrar solo las ✅ definitivas</label>
         <button id="btnExportarDashboardCsv" class="btn-secundario">⬇️ Exportar todo a CSV</button>
         <button id="btnRefrescarDashboard" class="btn-secundario">↻ Refrescar</button>
       </div>
+      <p class="nota">Clic en "Abrir" para entrar directo a esa cotización -- útil para tomar una ya definitiva de
+        otro cliente, cambiarle el nombre (se separa sola, sin pisar la original) y guardarla con el cliente que
+        corresponda.</p>
       <div id="dashboardTabla"></div>
+    </section>
+  </main>
+
+  <!-- ================= PANTALLA: DEFINITIVAS POR TARIFA ================= -->
+  <main id="pantallaDefinitivasPorTarifa" hidden>
+    <div class="cliente-barra">
+      <button id="btnVolverClientesDesdeDefinitivas" class="btn-link">← Clientes</button>
+      <strong>✅ Definitivas por tarifa</strong>
+    </div>
+    <section class="tarjeta">
+      <p class="nota">Elige una tarifa para ver los ejemplos de cotizaciones ya marcadas como ✅ definitiva con esa
+        tarifa (de cualquier cliente) -- puede haber una, varias, o ninguna todavía. Clic en "Abrir" para entrar
+        directo a esa cotización, usarla de referencia, y guardarla (con otro nombre y/o otro cliente) sin tocar
+        la original.</p>
+      <label>Tarifa
+        <select id="selectTarifaDefinitivas">
+          <option value="">-- Elige una tarifa --</option>
+          <option value="GDMTO">GDMTO (media tensión, con demanda)</option>
+          <option value="GDMTH">GDMTH (media tensión, con demanda, por horario)</option>
+          <option value="GDBT">GDBT (baja tensión, con demanda)</option>
+          <option value="PDBT">PDBT (baja tensión, sin demanda)</option>
+          <option value="01">01 (doméstica)</option>
+          <option value="DAC">DAC (doméstica de alto consumo)</option>
+        </select>
+      </label>
+      <div id="listaDefinitivasPorTarifa"></div>
     </section>
   </main>
 
@@ -335,8 +396,8 @@
         <label class="campo-usado-calculo" title="Se usa para calcular el sistema: cuánta energía genera cada panel al día con este criterio.">Horas-sol efectivas al día<input id="horasUtiles" type="number" value="4.5" step="0.1" /></label>
       </div>
       <div class="fila">
-        <label class="campo-usado-calculo" title="Se usa para calcular la inversión: decide la lista de precios (residencial o comercial) para presupuestar.">Escala de costos
-          <select id="escalaCostos"><option value="residencial">Residencial (chico)</option><option value="comercial">Comercial (grande)</option></select>
+        <label class="campo-usado-calculo" title="Se decide sola según la tarifa: GDMTO/GDMTH/GDBT (gran demanda) = comercial, PDBT/01/DAC (pequeña demanda o doméstica) = residencial. Define la lista de precios para presupuestar.">Escala de costos
+          <select id="escalaCostos" disabled><option value="residencial">Residencial (chico)</option><option value="comercial">Comercial (grande)</option></select>
         </label>
         <label class="campo-usado-calculo" title="Se usa para calcular el flujo a 25 años: cuánto se supone que sube la tarifa de CFE cada año.">Incremento anual estimado de la tarifa CFE (%)<input id="escalamiento" type="number" value="4.0" step="0.5" /></label>
         <label>Vigencia de la cotización (días)<input id="vigenciaDias" type="number" value="15" min="1" step="1" /></label>
@@ -548,6 +609,13 @@
         <button id="btnResumenEjecutivo" class="btn-secundario">Resumen ejecutivo (1 página)</button>
         <button id="btnAnexoInterconexion" class="btn-secundario">📐 Anexo trámite CFE</button>
         <button id="btnEnviarWhatsapp" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
+      </div>
+      <p class="nota">⚠️ "Cotización completa" es un documento aparte con texto fijo -- <strong>todavía NO
+        incluye tus ediciones de texto/tablas ni los documentos de "Recibo original"/"Verificación en sitio"</strong>
+        (nunca tuvieron página propia ahí). Para un PDF que sí lleve TODO tal como lo ves aquí (tus ediciones,
+        archivos adjuntos, comparativos), usa este botón:</p>
+      <div class="acciones acciones-pdf">
+        <button id="btnImprimirVista" class="btn-secundario">🖨️ Guardar esta vista como PDF (con tus ediciones)</button>
       </div>
       <div class="fila fila-guardar">
         <label>Nombre de esta cotización

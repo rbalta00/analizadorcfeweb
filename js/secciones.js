@@ -919,6 +919,44 @@ function filaArchivo(a) {
   link.href = a.url; link.target = '_blank'; link.rel = 'noopener';
   link.textContent = (esImagen ? '🖼 ' : '📄 ') + a.nombre + (esPdf ? ' (abrir completo)' : '');
   fila.append(link);
+  // Boton de guardar/descargar -- este documento (recibo original / verificacion en
+  // sitio) NUNCA sale incluido en el PDF de la cotizacion que genera "Cotizacion
+  // completa" (propuesta.js no tiene paginas para estas secciones, ver ESTADO.md) --
+  // sin este boton, la unica forma de quedarse con el archivo era el link de "abrir
+  // completo", que solo navega/previsualiza, no fuerza una descarga real. Se arma con
+  // fetch+blob (no solo el atributo download en el <a>) porque el archivo vive en otro
+  // origen (Supabase Storage) y los navegadores suelen ignorar "download" en links
+  // cross-origin y solo navegan en vez de descargar.
+  const btnDescargar = document.createElement('button');
+  btnDescargar.type = 'button';
+  btnDescargar.className = 'btn-link';
+  btnDescargar.textContent = '💾 Guardar / descargar';
+  btnDescargar.title = 'Descargar este archivo a tu dispositivo';
+  btnDescargar.addEventListener('click', async () => {
+    const textoOriginal = btnDescargar.textContent;
+    btnDescargar.disabled = true;
+    btnDescargar.textContent = 'Descargando…';
+    try {
+      const resp = await fetch(a.url);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const tmp = document.createElement('a');
+      tmp.href = blobUrl; tmp.download = a.nombre || 'documento';
+      document.body.append(tmp);
+      tmp.click();
+      tmp.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('No se pudo descargar el archivo:', err);
+      alert('No se pudo descargar el archivo directamente. Usa el link "' +
+        (esImagen ? '🖼' : '📄 (abrir completo)') + '" y guárdalo manualmente desde ahí.');
+    } finally {
+      btnDescargar.disabled = false;
+      btnDescargar.textContent = textoOriginal;
+    }
+  });
+  fila.append(btnDescargar);
   return fila;
 }
 

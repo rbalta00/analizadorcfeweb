@@ -14,15 +14,18 @@ import { generarPdf } from './propuesta.js';
 import { generarResumenEjecutivo, generarGuiaPresentacion, generarAnexoInterconexion } from './resumen.js';
 import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida } from './imagenes.js';
-import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
+import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, escalaCostosParaTarifa, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion, seccionesDelBloque, BLOQUES_COTIZACION } from './bloques.js';
 import { M, PCT } from './util.js';
 import {
   TARIFAS_SOPORTADAS, esDomestica, conectarEventosFormularioRecibo,
   leerFormularioRecibo, aplicarFormularioRecibo, llenarFormularioDesdeReciboCampos,
 } from './formularioRecibo.js';
-import { supabaseListar, supabaseActualizar, supabaseEliminar, supabaseSubirArchivo, supabaseEliminarArchivo } from './supabase.js';
-import { subirANube, bajarDeNube } from './nube.js';
+import {
+  SUPABASE_URL, supabaseListar, supabaseActualizar, supabaseEliminar, supabaseSubirArchivo,
+  supabaseEliminarArchivo, supabaseListarArchivos,
+} from './supabase.js';
+import { subirANube, bajarDeNube, eliminarClienteDeNube, listarClientesEnNube } from './nube.js';
 import { panelesEnTecho, esquinasDelTecho, crearEditorPaneles, hornearImagenSembrado, PANEL_ANCHO_M, PANEL_ALTO_M } from './sembrador.js';
 
 window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
@@ -60,6 +63,13 @@ alGuardar((ok) => (ok ? ocultarAvisoErrorGuardado() : mostrarAvisoErrorGuardado(
 
 let clienteActual = null;
 let proyectoActual = null;
+// Copia completa (deep clone) de proyectoActual tal como estaba AL ABRIRLO -- ver
+// guardarProyectoRespetandoRenombre() mas abajo. Necesaria porque Calcular ya autoguarda
+// (guardarProyecto dentro de calcularYRenderizar) ANTES de que el usuario llegue a
+// renombrar -- comparar contra lo que hay en disco en ese momento ya no sirve, porque
+// disco ya tiene los datos nuevos bajo el nombre viejo. Comparar contra esta copia (la
+// version real "de antes de tocar nada en esta sesion de edicion") si sirve.
+let snapshotProyectoAlAbrir = null;
 let ultimoResultado = null;
 let ultimoLeido = null;
 // Snapshot JSON del formulario que produjo ultimoResultado -- ver hayCambiosSinCalcular().
@@ -149,6 +159,7 @@ function mostrarPantallaClientes() {
   $('pantallaClientes').hidden = false;
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
+  $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
@@ -199,6 +210,136 @@ $('btnBajarNube').addEventListener('click', async () => {
   }
 });
 
+// ---------------- Opciones avanzadas de la nube: eliminar UN cliente del respaldo
+// compartido, o archivos sueltos ya subidos -- pedido explicito del usuario,
+// 2026-11-06. A proposito, separado de "Guardar copia en la nube" (que sube/pisa TODO
+// lo de este dispositivo): el punto de esto es poder limpiar un residuo especifico
+// (algo subido por accidente, o que ya se borro aqui) sin arrastrar el resto de los
+// cambios locales. Mas "especial"/protegido que el resto de los borrados de esta app
+// (que solo usan confirm()) porque esto afecta el respaldo COMPARTIDO -- cualquier
+// otro dispositivo que lo use lo pierde tambien -- asi que ademas de confirm() pide
+// escribir el nombre exacto antes de dejar hacer clic.
+$('btnMostrarAvanzadoNube').addEventListener('click', () => {
+  const panel = $('panelAvanzadoNube');
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) cargarSelectClientesNube();
+});
+
+async function cargarSelectClientesNube() {
+  const sel = $('selectClienteEliminarNube');
+  sel.innerHTML = '<option value="">Cargando...</option>';
+  try {
+    const clientes = await listarClientesEnNube();
+    sel.innerHTML = clientes.length ? '<option value="">-- elige --</option>' : '<option value="">(no hay ningún cliente en la nube todavía)</option>';
+    clientes.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.dataset.nombre = c.nombre;
+      opt.textContent = `${c.nombre} (${(c.proyectos || []).length} cotización(es))`;
+      sel.append(opt);
+    });
+  } catch (err) {
+    sel.innerHTML = '<option value="">Error al leer la nube</option>';
+    console.error(err);
+  }
+}
+
+$('btnRefrescarClientesNube').addEventListener('click', cargarSelectClientesNube);
+
+$('btnEliminarClienteNube').addEventListener('click', async () => {
+  const sel = $('selectClienteEliminarNube');
+  const estadoEl = $('estadoEliminarClienteNube');
+  const clienteId = sel.value;
+  if (!clienteId) { alert('Elige primero a qué cliente quitar de la nube.'); return; }
+  const nombreEsperado = sel.options[sel.selectedIndex].dataset.nombre;
+  const escrito = $('inputConfirmarEliminarNube').value.trim();
+  if (escrito !== nombreEsperado) {
+    alert(`El nombre que escribiste no coincide exactamente con "${nombreEsperado}". Cópialo tal cual para confirmar.`);
+    return;
+  }
+  if (!confirm(`¿Eliminar a "${nombreEsperado}" del respaldo en la nube? Esto NO se puede deshacer y afecta ` +
+               'a cualquier otro dispositivo que use ese respaldo (no solo este).')) return;
+  $('btnEliminarClienteNube').disabled = true;
+  estadoEl.className = 'nota';
+  estadoEl.textContent = 'Eliminando de la nube...';
+  try {
+    const { numClientesRestantes } = await eliminarClienteDeNube(clienteId);
+    estadoEl.className = 'nota ok';
+    estadoEl.textContent = `✓ Eliminado de la nube. Quedan ${numClientesRestantes} cliente(s) en el respaldo.`;
+    $('inputConfirmarEliminarNube').value = '';
+    await cargarSelectClientesNube();
+  } catch (err) {
+    estadoEl.className = 'nota aviso';
+    estadoEl.textContent = 'No se pudo eliminar: ' + err.message;
+    console.error(err);
+  } finally {
+    $('btnEliminarClienteNube').disabled = false;
+  }
+});
+
+// Las 3 carpetas que usa supabaseSubirArchivo en todo el proyecto (recibo de la
+// cotizacion, verificacion en sitio, y los archivos que sube un cliente via
+// cliente.html) -- ver supabase.js, el listado de Storage no es recursivo.
+const CARPETAS_ARCHIVOS_NUBE = ['cotizaciones', 'envios', 'verificaciones'];
+
+$('btnListarArchivosNube').addEventListener('click', async () => {
+  const estadoEl = $('estadoArchivosNube');
+  const cont = $('listaArchivosNube');
+  $('btnListarArchivosNube').disabled = true;
+  estadoEl.className = 'nota';
+  estadoEl.textContent = 'Leyendo archivos de la nube...';
+  cont.innerHTML = '';
+  try {
+    const listas = await Promise.all(CARPETAS_ARCHIVOS_NUBE.map((carpeta) =>
+      supabaseListarArchivos(carpeta).then((items) => items.map((it) => ({ ...it, carpeta })))));
+    const archivos = listas.flat().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    if (!archivos.length) {
+      estadoEl.className = 'nota';
+      estadoEl.textContent = 'No hay ningún archivo subido a la nube.';
+      return;
+    }
+    estadoEl.className = 'nota ok';
+    estadoEl.textContent = `${archivos.length} archivo(s) encontrados.`;
+    archivos.forEach((archivo) => {
+      const ruta = `${archivo.carpeta}/${archivo.name}`;
+      const div = document.createElement('div');
+      div.className = 'fila-archivo-nube';
+      const a = document.createElement('a');
+      a.href = `${SUPABASE_URL}/storage/v1/object/public/recibos/${ruta}`;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = archivo.name;
+      const tamKb = archivo.metadata && archivo.metadata.size ? Math.round(archivo.metadata.size / 1024) : null;
+      const span = document.createElement('span');
+      span.className = 'carpeta-archivo-nube';
+      span.textContent = `${archivo.carpeta}${tamKb ? ' · ' + tamKb + ' KB' : ''}`;
+      const btnBorrar = document.createElement('button');
+      btnBorrar.className = 'btn-peligro';
+      btnBorrar.textContent = '🗑️ Eliminar';
+      btnBorrar.addEventListener('click', async () => {
+        if (!confirm(`¿Eliminar "${archivo.name}" de la nube? No se puede deshacer. Si alguna cotización ` +
+                     'guardada todavía lo referencia, ese enlace dejará de funcionar.')) return;
+        btnBorrar.disabled = true;
+        try {
+          await supabaseEliminarArchivo(ruta);
+          div.remove();
+        } catch (err) {
+          alert('No se pudo eliminar: ' + err.message);
+          btnBorrar.disabled = false;
+        }
+      });
+      div.append(a, span, btnBorrar);
+      cont.append(div);
+    });
+  } catch (err) {
+    estadoEl.className = 'nota aviso';
+    estadoEl.textContent = 'No se pudo leer: ' + err.message;
+    console.error(err);
+  } finally {
+    $('btnListarArchivosNube').disabled = false;
+  }
+});
+
 // =====================================================================
 // Pantalla: Envios de clientes (bandeja de entrada de cliente.html)
 // =====================================================================
@@ -230,6 +371,8 @@ async function renderListaEnvios() {
 
 function mostrarPantallaEnvios() {
   $('pantallaClientes').hidden = true;
+  $('pantallaDashboard').hidden = true;
+  $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaEnvios').hidden = false;
@@ -252,6 +395,10 @@ function datosDashboard() {
   for (const c of listarClientes()) {
     for (const p of (c.proyectos || [])) filas.push({ cliente: c, proyecto: p });
   }
+  // Orden de creacion (mas nueva primero) para que esta pantalla sirva de "historial
+  // general" -- pedido explicito del usuario, 2026-11-07 -- en vez del orden por
+  // cliente que daba listarClientes() antes.
+  filas.sort((a, b) => (b.proyecto.creadoEn || '').localeCompare(a.proyecto.creadoEn || ''));
   return filas;
 }
 
@@ -291,7 +438,10 @@ function renderDashboardTabla(filas) {
   const cont = $('dashboardTabla');
   cont.innerHTML = '';
   if (!filas.length) {
-    cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: 'Sin clientes/cotizaciones todavía.' }));
+    cont.append(Object.assign(document.createElement('p'), {
+      className: 'nota',
+      textContent: $('chkSoloDefinitivasDashboard').checked ? 'Ninguna cotización marcada como definitiva todavía.' : 'Sin clientes/cotizaciones todavía.',
+    }));
     return;
   }
   const wrap = document.createElement('div');
@@ -299,18 +449,25 @@ function renderDashboardTabla(filas) {
   const t = document.createElement('table');
   t.className = 'tabla-seccion tabla-chica';
   const thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>Cliente</th><th>Tipo</th><th>Cotización</th><th>Etapa</th><th>Tarifa</th>' +
-    '<th class="num">Inversión</th><th class="num">Ahorro anual</th><th>Actualizado</th></tr>';
+  thead.innerHTML = '<tr><th>Cliente</th><th>Tipo</th><th>Cotización</th><th>Definitiva</th><th>Etapa</th><th>Tarifa</th>' +
+    '<th class="num">Inversión</th><th class="num">Ahorro anual</th><th>Creada</th><th>Actualizado</th><th></th></tr>';
   t.append(thead);
   const tbody = document.createElement('tbody');
   for (const { cliente, proyecto } of filas) {
     const etapa = proyecto.etapa || 'cotizado';
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${escapeHtml(cliente.nombre)}</td><td>${cliente.tipo === 'gobierno' ? 'Gobierno' : 'Particular'}</td>` +
-      `<td>${escapeHtml(proyecto.nombre)}</td><td>${ETAPAS_PROYECTO[etapa]}</td><td>${escapeHtml(proyecto.formulario?.tarifa || '—')}</td>` +
+      `<td>${escapeHtml(proyecto.nombre)}</td><td>${proyecto.definitiva ? '✅' : ''}</td>` +
+      `<td>${ETAPAS_PROYECTO[etapa]}</td><td>${escapeHtml(proyecto.formulario?.tarifa || '—')}</td>` +
       `<td class="num">${proyecto.ultimaInversionTotal != null ? M(proyecto.ultimaInversionTotal) : '—'}</td>` +
       `<td class="num">${proyecto.ultimoAhorroAnual != null ? M(proyecto.ultimoAhorroAnual) : '—'}</td>` +
-      `<td>${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</td>`;
+      `<td>${new Date(proyecto.creadoEn).toLocaleDateString('es-MX')}</td>` +
+      `<td>${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</td><td></td>`;
+    const btnAbrir = document.createElement('button');
+    btnAbrir.className = 'btn-link';
+    btnAbrir.textContent = 'Abrir';
+    btnAbrir.addEventListener('click', () => abrirProyecto(cliente.id, proyecto.id));
+    tr.lastElementChild.append(btnAbrir);
     tbody.append(tr);
   }
   t.append(tbody);
@@ -319,11 +476,13 @@ function renderDashboardTabla(filas) {
 }
 
 function renderDashboard() {
-  const filas = datosDashboard();
-  renderDashboardTotales(filas);
-  renderDashboardEtapas(filas);
+  const todas = datosDashboard();
+  const filas = $('chkSoloDefinitivasDashboard').checked ? todas.filter(f => f.proyecto.definitiva) : todas;
+  renderDashboardTotales(todas);
+  renderDashboardEtapas(todas);
   renderDashboardTabla(filas);
 }
+$('chkSoloDefinitivasDashboard').addEventListener('change', renderDashboard);
 
 function csvEscape(v) {
   const s = String(v ?? '');
@@ -331,13 +490,16 @@ function csvEscape(v) {
 }
 
 function exportarDashboardCsv() {
-  const filas = datosDashboard();
-  const lineas = [['Cliente', 'Tipo', 'Cotización', 'Etapa', 'Tarifa', 'Inversión', 'Ahorro anual', 'Actualizado'].join(',')];
+  const todas = datosDashboard();
+  const filas = $('chkSoloDefinitivasDashboard').checked ? todas.filter(f => f.proyecto.definitiva) : todas;
+  const lineas = [['Cliente', 'Tipo', 'Cotización', 'Definitiva', 'Etapa', 'Tarifa', 'Inversión', 'Ahorro anual', 'Creada', 'Actualizado'].join(',')];
   for (const { cliente, proyecto } of filas) {
     const etapa = proyecto.etapa || 'cotizado';
     lineas.push([
-      csvEscape(cliente.nombre), csvEscape(cliente.tipo), csvEscape(proyecto.nombre), csvEscape(ETAPAS_PROYECTO[etapa]),
-      csvEscape(proyecto.formulario?.tarifa || ''), proyecto.ultimaInversionTotal ?? '', proyecto.ultimoAhorroAnual ?? '',
+      csvEscape(cliente.nombre), csvEscape(cliente.tipo), csvEscape(proyecto.nombre), proyecto.definitiva ? 'Sí' : 'No',
+      csvEscape(ETAPAS_PROYECTO[etapa]), csvEscape(proyecto.formulario?.tarifa || ''),
+      proyecto.ultimaInversionTotal ?? '', proyecto.ultimoAhorroAnual ?? '',
+      csvEscape(new Date(proyecto.creadoEn).toLocaleDateString('es-MX')),
       csvEscape(new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')),
     ].join(','));
   }
@@ -355,6 +517,7 @@ function exportarDashboardCsv() {
 function mostrarPantallaDashboard() {
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
+  $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaDashboard').hidden = false;
@@ -364,6 +527,57 @@ $('btnAbrirDashboard').addEventListener('click', mostrarPantallaDashboard);
 $('btnVolverClientesDesdeDashboard').addEventListener('click', mostrarPantallaClientes);
 $('btnRefrescarDashboard').addEventListener('click', renderDashboard);
 $('btnExportarDashboardCsv').addEventListener('click', exportarDashboardCsv);
+
+// =====================================================================
+// Pantalla: Definitivas por tarifa -- pedido explicito del usuario, 2026-11-07:
+// "otro lugar donde estan las definitivas por tarifa, que puede haber uno o varios
+// ejemplos... abro una tarifa y se me despliega un ejemplo de cotizacion definitiva".
+// Distinto de "Plantilla final revisada por tarifa" (textosGlobales.js), que solo
+// guarda texto/tablas sueltas -- aqui se ven las cotizaciones COMPLETAS ya marcadas
+// como definitiva, de cualquier cliente, agrupadas por su propia tarifa real
+// (proyecto.formulario.tarifa), reutilizando datosDashboard() (misma fuente que el
+// historial) en vez de mantener un indice aparte.
+function renderDefinitivasPorTarifa() {
+  const tarifa = $('selectTarifaDefinitivas').value;
+  const cont = $('listaDefinitivasPorTarifa');
+  cont.innerHTML = '';
+  if (!tarifa) return;
+  const filas = datosDashboard().filter(f => f.proyecto.definitiva && f.proyecto.formulario?.tarifa === tarifa);
+  if (!filas.length) {
+    cont.append(Object.assign(document.createElement('p'), {
+      className: 'nota', textContent: `Todavía no hay ninguna cotización definitiva con tarifa ${tarifa}.`,
+    }));
+    return;
+  }
+  for (const { cliente, proyecto } of filas) {
+    const div = document.createElement('div');
+    div.className = 'tarjeta-cliente';
+    div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(proyecto.nombre)}</strong>` +
+      `<span class="nota">Cliente: ${escapeHtml(cliente.nombre)} · ` +
+      `${proyecto.ultimaInversionTotal != null ? 'Inversión ' + M(proyecto.ultimaInversionTotal) : 'sin calcular'}` +
+      (proyecto.ultimoAhorroAnual != null ? ` · Ahorro anual ${M(proyecto.ultimoAhorroAnual)}` : '') +
+      ` · creada ${new Date(proyecto.creadoEn).toLocaleDateString('es-MX')}</span></div>`;
+    const btnAbrir = document.createElement('button');
+    btnAbrir.className = 'btn-link';
+    btnAbrir.textContent = 'Abrir';
+    btnAbrir.addEventListener('click', () => abrirProyecto(cliente.id, proyecto.id));
+    div.append(btnAbrir);
+    cont.append(div);
+  }
+}
+
+function mostrarPantallaDefinitivasPorTarifa() {
+  $('pantallaClientes').hidden = true;
+  $('pantallaEnvios').hidden = true;
+  $('pantallaDashboard').hidden = true;
+  $('pantallaProyectos').hidden = true;
+  $('pantallaCliente').hidden = true;
+  $('pantallaDefinitivasPorTarifa').hidden = false;
+  renderDefinitivasPorTarifa();
+}
+$('btnAbrirDefinitivasPorTarifa').addEventListener('click', mostrarPantallaDefinitivasPorTarifa);
+$('btnVolverClientesDesdeDefinitivas').addEventListener('click', mostrarPantallaClientes);
+$('selectTarifaDefinitivas').addEventListener('change', renderDefinitivasPorTarifa);
 
 function tarjetaEnvio(envio) {
   const div = document.createElement('div');
@@ -454,7 +668,7 @@ function formularioDesdeEnvio(envio) {
     dPeriodoKwh: envio.es_domestica ? envio.periodo_kwh : 400,
     historialNoDom: envio.es_domestica ? [] : (envio.historial || []),
     historialDom: envio.es_domestica ? (envio.historial || []) : [],
-    moduloWp: 605, cobertura: 1.0, horasUtiles: 4.5, escalaCostos: 'residencial', escalamiento: 4.0,
+    moduloWp: 605, cobertura: 1.0, horasUtiles: 4.5, escalaCostos: escalaCostosParaTarifa(envio.tarifa), escalamiento: 4.0,
   };
 }
 
@@ -556,6 +770,7 @@ function mostrarPantallaProyectos(clienteId) {
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
+  $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaProyectos').hidden = false;
   $('pantallaCliente').hidden = true;
   $('clienteNombreBarraProyectos').textContent = clienteActual.nombre;
@@ -739,6 +954,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
+  $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = false;
   $('clienteNombreBarra').textContent = clienteActual.nombre;
@@ -800,6 +1016,14 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
       try { calcularYRenderizar(); } catch (e) { console.error('No se pudo recalcular automáticamente al reabrir:', e); }
     }
   }
+  // Snapshot DESPUES del recalculo automatico de arriba (si aplico) -- ese recalculo ya
+  // normaliza el formulario a como lo devuelve leerFormulario() (todo string, ej.
+  // periodoKwh "2400" en vez del numero 2400 que a veces trae lo guardado de antes) y
+  // ya lo autoguarda (calcularYRenderizar hace guardarProyecto). Si el snapshot se
+  // tomara ANTES de esto, compararia formas distintas del MISMO dato (numero vs
+  // string) y marcaria "los datos cambiaron" aunque el usuario no haya tocado nada --
+  // bug real encontrado probando esta misma sesion.
+  snapshotProyectoAlAbrir = JSON.parse(JSON.stringify(proyectoActual));
 }
 
 conectarEventosFormularioRecibo();
@@ -825,12 +1049,19 @@ function aplicarFormulario(f) {
   $('noServicio').value = f?.noServicio || '';
   aplicarFormularioRecibo(f);
   $('moduloWp').value = f?.moduloWp ?? 605; $('cobertura').value = f?.cobertura ?? 1.0; $('horasUtiles').value = f?.horasUtiles ?? 4.5;
-  $('escalaCostos').value = f?.escalaCostos || 'residencial'; $('escalamiento').value = f?.escalamiento ?? 4.0;
+  // Si el snapshot ya trae una escala guardada (proyecto previo) se respeta tal cual;
+  // si no (proyecto nuevo, o uno de antes de que esto se derivara solo), se deriva de
+  // la tarifa que acaba de aplicar aplicarFormularioRecibo() arriba.
+  $('escalaCostos').value = f?.escalaCostos || escalaCostosParaTarifa($('tarifa').value);
+  $('escalamiento').value = f?.escalamiento ?? 4.0;
   $('aplicaIsr').checked = f?.aplicaIsr || false; $('tasaIsr').value = f?.tasaIsr ?? 30;
   $('tasaIsr').disabled = !$('aplicaIsr').checked;
   $('vigenciaDias').value = f?.vigenciaDias ?? 15;
 }
 $('aplicaIsr').addEventListener('change', () => { $('tasaIsr').disabled = !$('aplicaIsr').checked; });
+// Escala de costos: se deriva sola de la tarifa (ya no se pide a mano) -- gran demanda
+// (GDMTO/GDMTH/GDBT) = comercial, pequeña demanda/domestica (PDBT/01/DAC) = residencial.
+$('tarifa').addEventListener('change', () => { $('escalaCostos').value = escalaCostosParaTarifa($('tarifa').value); });
 
 function leerInmueble() {
   return {
@@ -2432,6 +2663,90 @@ $('btnAnexoInterconexion').addEventListener('click', () => {
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Anexo_interconexion_CFE'));
 });
 
+// "Guardar esta vista como PDF" -- pedido explicito del usuario, 2026-11-07, tras
+// reportar que "Cotizacion completa" no bajaba ni sus ediciones de texto/tablas ni los
+// documentos de recibo/verificacion adjuntos. Causa real (confirmada leyendo
+// propuesta.js): ese boton genera un PDF aparte, con su propio texto fijo armado a
+// mano pagina por pagina -- nunca lee proyecto.textosEditados, y nunca tuvo paginas
+// propias para las secciones "Documento: recibo original"/"Documento: verificacion en
+// sitio" (ver confirmarSiHayTextoEditadoSinReflejarEnPdf arriba y ESTADO.md).
+// Conectar esas dos fuentes de verdad (reescribir propuesta.js para que lea los mismos
+// ids/overrides que secciones.js) es un rework grande y riesgoso de ~22 paginas
+// escritas independientemente -- en vez de eso, este boton imprime/guarda como PDF la
+// vista REAL en pantalla (#contenedorSecciones), que por construccion SI tiene cada
+// edicion, tabla editada, columna/fila oculta y documento adjunto exactamente como se
+// ve aqui. Las secciones/graficos/parrafos apagados se excluyen igual que en el PDF
+// normal (ver el bloque "@media ... body.modo-impresion" en styles.css).
+$('btnImprimirVista').addEventListener('click', () => {
+  if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  if (!confirmarSiHayCambiosSinCalcular()) return;
+  // Los <details> ("Ver detalle del calculo") empiezan colapsados -- forzarlos
+  // abiertos antes de imprimir, si no su contenido no sale en el PDF/impresion.
+  const detallesAAbrir = Array.from(document.querySelectorAll('#contenedorSecciones details:not([open])'));
+  detallesAAbrir.forEach((d) => { d.open = true; });
+  const limpiar = () => {
+    document.body.classList.remove('modo-impresion');
+    detallesAAbrir.forEach((d) => { d.open = false; });
+    window.removeEventListener('afterprint', limpiar);
+  };
+  window.addEventListener('afterprint', limpiar);
+  document.body.classList.add('modo-impresion');
+  // Pequeno respiro para que el navegador aplique la clase/estilos antes de abrir el
+  // dialogo de impresion -- sin esto, algunos navegadores capturan el layout de antes.
+  setTimeout(() => {
+    window.print();
+    // Respaldo: si "afterprint" no dispara (pasa en algunos navegadores/OS cuando se
+    // cancela el dialogo), quitar la clase de todos modos tras un rato razonable.
+    setTimeout(limpiar, 5000);
+  }, 50);
+});
+
+// Renombrar + guardar sin pisar una cotizacion ya guardada con datos distintos --
+// pedido explicito del usuario, 2026-11-07, tras un bug real: abrio "Casa del Abue"
+// (ya guardada como definitiva), cargo el recibo de "Carretera de Cuota" en la MISMA
+// pantalla (mismo proyectoActual.id), calculo (esto YA autoguarda -- ver
+// calcularYRenderizar, "guardarProyecto(clienteActual, proyectoActual)" tras cada
+// Calcular) y al renombrar+guardar se quedo con los datos de Carretera bajo el mismo
+// id que antes tenia Casa del Abue -- la version vieja ya no existia en ningun lado.
+//
+// Por eso NO sirve comparar contra lo que hay en disco en este momento (ya esta
+// contaminado por el autoguardado de Calcular) -- se compara contra
+// snapshotProyectoAlAbrir, una copia completa tomada en abrirProyecto() ANTES de que
+// el usuario tocara nada en esta sesion de edicion. Si el nombre cambio Y el
+// formulario (recibo/cargos) ya es distinto al que tenia esa cotizacion al abrirla, se
+// trata como "Guardar como": se RESTAURA el registro original (mismo id) a como
+// estaba al abrirlo, y se crea una cotizacion NUEVA (id nuevo) con los datos de
+// ahorita bajo el nombre nuevo. Si solo cambio el nombre (mismo recibo/datos, ej.
+// corrigiendo un error de dedo) se renombra la misma, sin duplicar -- de otro modo,
+// renombrar justo despues del primer "Marcar como definitiva" (comun: guardar
+// primero, ponerle el nombre real despues) crearia un duplicado vacio de si misma.
+function guardarProyectoRespetandoRenombre(cliente, proyecto) {
+  const snap = snapshotProyectoAlAbrir;
+  const esElMismoQueSeAbrio = snap && snap.id === proyecto.id;
+  const nombreCambio = esElMismoQueSeAbrio && snap.nombre.trim() !== proyecto.nombre.trim();
+  // snap.formulario null = la cotizacion estaba en blanco al abrirla (recien creada,
+  // "+ Cotizacion en blanco" o similar) -- llenarla por primera vez y ponerle nombre
+  // real despues NO es un "Guardar como", es la captura normal. Solo cuenta como
+  // "los datos cambiaron" si YA habia datos reales antes y ahora son otros.
+  const datosCambiaron = esElMismoQueSeAbrio && !!snap.formulario &&
+    JSON.stringify(snap.formulario) !== JSON.stringify(proyecto.formulario);
+  if (!esElMismoQueSeAbrio || !nombreCambio || !datosCambiaron) {
+    guardarProyecto(cliente, proyecto);
+    return { proyecto, esNuevo: false, nombreAnterior: null };
+  }
+  const datosDeAhorita = JSON.parse(JSON.stringify(proyecto));
+  // Restaura el registro original (mismo id) a como estaba al abrirlo -- deshace el
+  // autoguardado de Calcular que ya lo habia pisado con los datos nuevos.
+  Object.assign(proyecto, snap);
+  guardarProyecto(cliente, proyecto);
+  // Crea la cotizacion nueva con los datos de ahorita (los que se iban a guardar).
+  const nuevo = crearProyecto(cliente, { nombre: datosDeAhorita.nombre });
+  Object.assign(nuevo, datosDeAhorita, { id: nuevo.id, creadoEn: nuevo.creadoEn });
+  guardarProyecto(cliente, nuevo);
+  snapshotProyectoAlAbrir = JSON.parse(JSON.stringify(nuevo));
+  return { proyecto: nuevo, esNuevo: true, nombreAnterior: snap.nombre };
+}
+
 // Renombrar la cotizacion -- pedido explicito del usuario, 2026-11-05: poder
 // "ponerle nombre con su proyecto y su cliente" antes de guardarla como definitiva.
 // Se guarda en blur (igual que los campos editables de texto), no en cada tecla.
@@ -2441,7 +2756,14 @@ $('inputNombreProyecto').addEventListener('blur', () => {
   if (!nuevo || nuevo === proyectoActual.nombre) return;
   proyectoActual.nombre = nuevo;
   $('proyectoNombreBarra').textContent = nuevo;
-  guardarProyecto(clienteActual, proyectoActual);
+  const resultado = guardarProyectoRespetandoRenombre(clienteActual, proyectoActual);
+  if (resultado.esNuevo) {
+    proyectoActual = resultado.proyecto;
+    $('estadoGuardadoCotizacion').className = 'nota aviso';
+    $('estadoGuardadoCotizacion').textContent =
+      `✓ Se creó una cotización NUEVA llamada "${nuevo}" con los datos de ahorita -- ` +
+      `"${resultado.nombreAnterior}" se quedó intacta tal como estaba guardada.`;
+  }
 });
 
 // Logica compartida de "Guardar cotización" y "Marcar como definitiva" -- ambos
@@ -2449,7 +2771,15 @@ $('inputNombreProyecto').addEventListener('blur', () => {
 // extra de "definitiva" es marcar proyecto.definitiva = true (se ve como ✅ en el
 // historial de cotizaciones del cliente, ver tarjetaProyecto) para distinguir la
 // version final de versiones de prueba/comparacion -- pedido explicito del usuario.
-function guardarCotizacionConCliente({ definitiva } = {}) {
+//
+// "Marcar como definitiva" ademas sube un respaldo a la nube automaticamente (pedido
+// explicito 2026-11-06: "checa que cuando se guarde la cotizacion validada se guarde
+// en la nube") -- a diferencia de "Traer de la nube" (bajarDeNube, SIEMPRE manual con
+// confirmacion porque reemplaza datos locales, ver nube.js), subir NUNCA pisa nada de
+// otro dispositivo, solo empuja lo de este -- es seguro automatizarlo solo en esta
+// direccion. "Guardar cotización" (borrador, no definitiva) se queda solo local, igual
+// que antes -- el respaldo automatico es solo para la version ya validada.
+async function guardarCotizacionConCliente({ definitiva } = {}) {
   if (!ultimoResultado) { alert('Calcula primero.'); return false; }
   if ($('selectClienteGuardar').value === '__nuevo__') {
     alert('Primero crea el cliente nuevo con el botón "Crear cliente" (o cancélalo) antes de guardar.');
@@ -2458,7 +2788,9 @@ function guardarCotizacionConCliente({ definitiva } = {}) {
   proyectoActual.cotizacionGuardadaEn = new Date().toISOString();
   if (definitiva) proyectoActual.definitiva = true;
   const clienteDestinoId = $('selectClienteGuardar').value;
+  let seMovioDeCliente = false;
   if (clienteDestinoId && clienteDestinoId !== clienteActual.id) {
+    seMovioDeCliente = true;
     const destino = moverProyecto(clienteActual.id, clienteDestinoId, proyectoActual);
     if (!destino) { alert('No se pudo mover la cotización a ese cliente.'); return false; }
     clienteActual = destino;
@@ -2466,13 +2798,35 @@ function guardarCotizacionConCliente({ definitiva } = {}) {
     $('clienteTipoBarra').textContent = clienteActual.tipo === 'gobierno' ? 'Gobierno' : 'Particular';
     $('clienteTipoBarra').className = `chip-tipo chip-tipo-${clienteActual.tipo}`;
     poblarSelectClienteGuardar();
-  } else {
-    guardarProyecto(clienteActual, proyectoActual);
+  }
+  let avisoSeparada = '';
+  if (!seMovioDeCliente) {
+    // Solo aqui (no se movio de cliente arriba) puede aplicar el "Guardar como" --
+    // ver guardarProyectoRespetandoRenombre() mas abajo para el criterio completo.
+    const resultado = guardarProyectoRespetandoRenombre(clienteActual, proyectoActual);
+    if (resultado.esNuevo) {
+      proyectoActual = resultado.proyecto;
+      avisoSeparada = ` (se creó como cotización NUEVA -- "${resultado.nombreAnterior}" se quedó intacta.)`;
+    }
   }
   $('estadoGuardadoCotizacion').className = 'nota ok';
-  $('estadoGuardadoCotizacion').textContent = definitiva
-    ? `✓ Marcada como DEFINITIVA y guardada con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}".`
-    : `✓ Guardada con el cliente "${clienteActual.nombre}", cotización "${proyectoActual.nombre}".`;
+  $('estadoGuardadoCotizacion').textContent = (definitiva
+    ? `✓ Marcada como DEFINITIVA y guardada con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". Subiendo respaldo a la nube...`
+    : `✓ Guardada con el cliente "${clienteActual.nombre}", cotización "${proyectoActual.nombre}".`) + avisoSeparada;
+  if (definitiva) {
+    try {
+      await subirANube();
+      $('estadoGuardadoCotizacion').textContent =
+        `✓ Marcada como DEFINITIVA y guardada con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". ` +
+        'Respaldo en la nube actualizado.';
+    } catch (err) {
+      $('estadoGuardadoCotizacion').className = 'nota aviso';
+      $('estadoGuardadoCotizacion').textContent =
+        `✓ Marcada como DEFINITIVA y guardada en este dispositivo, pero NO se pudo subir el respaldo a la nube ` +
+        `(${err.message}). Usa "Guardar copia en la nube" más tarde para intentarlo de nuevo.`;
+      console.error(err);
+    }
+  }
   return true;
 }
 
@@ -2556,13 +2910,24 @@ $('btnRefrescar').addEventListener('click', () => {
   } else if (!$('pantallaProyectos').hidden) {
     renderListaProyectos();
   } else if (!$('pantallaCliente').hidden && clienteActual && proyectoActual) {
-    // Re-abre el MISMO cliente/proyecto releyendolo de localStorage (no solo
-    // recalcula con los valores que ya estaban en el formulario) -- asi si algo
-    // externo cambio el proyecto guardado (otra pestaña, nube) se refleja.
+    // Bug real reportado por el usuario, 2026-11-06: si se corrige un dato a mano en
+    // el formulario (ej. un campo que el OCR leyo mal, o que hubo que capturar manual)
+    // y se pulsa "Actualizar" SIN haber pulsado "Calcular" antes, esto releia
+    // proyectoActual.formulario de localStorage -- la version YA GUARDADA, descartando
+    // en silencio lo recien escrito en pantalla que todavia no se habia guardado.
+    // "Actualizar" debe reflejar el dato que el usuario acaba de corregir, no borrarlo.
+    // Se guarda primero el formulario actual (mismo patron ya usado en
+    // revisarVersionNuevaApp() para no perder lo escrito al detectar una app nueva) y
+    // DESPUES se reabre -- asi re-leer de localStorage recoge exactamente lo que
+    // estaba en pantalla, y si en vez de eso cambio algo externo (otra pestaña, "Traer
+    // de la nube") sin que aqui se haya tocado nada, el resultado es el mismo de antes
+    // (nada que guardar primero, se re-lee tal cual).
     try {
+      proyectoActual.formulario = leerFormulario();
+      guardarProyecto(clienteActual, proyectoActual);
       abrirProyecto(clienteActual.id, proyectoActual.id);
       $('estadoCalculo').className = 'nota ok';
-      $('estadoCalculo').textContent = 'Actualizado con los datos guardados más recientes.';
+      $('estadoCalculo').textContent = 'Actualizado y recalculado con los datos en pantalla.';
     } catch (e) {
       $('estadoCalculo').className = 'nota aviso';
       $('estadoCalculo').textContent = 'Error al actualizar: ' + e.message;

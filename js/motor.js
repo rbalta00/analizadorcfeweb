@@ -233,6 +233,13 @@ export const COSTOS_COMERCIAL = {
   fleteMxn: 5500, manoObraMxnWp: 2.5, contingencia: 0.08, margenSobreVenta: 0.25, iva: 0.16,
 };
 
+// Deriva la escala de costos (residencial/comercial) de la tarifa en vez de pedirla a
+// mano -- el nombre de la tarifa ya distingue "Gran Demanda" (GDMTO/GDMTH/GDBT, siempre
+// instalaciones grandes) de "Pequeña Demanda"/domestica (PDBT/01/DAC, siempre chicas).
+export function escalaCostosParaTarifa(tarifa) {
+  return ['GDMTO', 'GDMTH', 'GDBT'].includes(tarifa) ? 'comercial' : 'residencial';
+}
+
 export const DIAS_MES_REF = 30.5;
 const HORAS_UTILES_REF = 4.5;
 

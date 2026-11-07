@@ -53,3 +53,33 @@ export async function bajarDeNube() {
   reemplazarTodosLosClientes(fila.clientes || []);
   return { numClientes: (fila.clientes || []).length, actualizadoEn: fila.actualizado_en };
 }
+
+// Lista los clientes que hay AHORA MISMO en el respaldo de la nube (no los de este
+// dispositivo) -- para el selector de "Eliminar un cliente de la nube" en app.js.
+export async function listarClientesEnNube() {
+  const fila = await obtenerFilaActual();
+  return (fila && fila.clientes) || [];
+}
+
+// Quita UN cliente especifico (y sus cotizaciones) del respaldo en la nube, sin tocar
+// nada de este dispositivo ni del resto del respaldo -- pedido explicito del usuario,
+// 2026-11-06: poder limpiar algo que se subio por accidente (o que ya se borro aqui)
+// sin tener que reemplazar TODO el respaldo con "Guardar copia en la nube" (eso
+// subiria la lista actual completa, que es justo lo que se quiere evitar si el punto
+// es limpiar un residuo viejo sin arrastrar cambios sin terminar de este dispositivo).
+export async function eliminarClienteDeNube(clienteId) {
+  const fila = await obtenerFilaActual();
+  if (!fila) throw new Error('Todavía no hay ningún respaldo guardado en la nube.');
+  const clientes = fila.clientes || [];
+  const clientesFiltrados = clientes.filter((c) => c.id !== clienteId);
+  if (clientesFiltrados.length === clientes.length) {
+    throw new Error('Ese cliente ya no está en el respaldo de la nube (puede que ya se haya quitado).');
+  }
+  await supabaseActualizar(TABLA, fila.id, {
+    clientes: clientesFiltrados,
+    actualizado_en: new Date().toISOString(),
+    actualizado_desde: navigator.userAgent.slice(0, 120),
+  });
+  idFilaCache = fila.id;
+  return { numClientesRestantes: clientesFiltrados.length };
+}
