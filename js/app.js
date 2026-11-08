@@ -853,16 +853,8 @@ $('btnMarcarPlantillaVerificada').addEventListener('click', () => {
   guardarProyecto(clienteActual, proyectoActual);
   renderAvisoPlantillaOrigen();
 });
-// Mismo patron que confirmarSiHayReconciliacionSinResolver (hallazgo 10 de la
-// auditoria 2026-11-06): no bloquea generar el documento (podria ser un falso
-// positivo si el admin ya revisó y solo olvidó marcar el botón), pero exige una
-// confirmación consciente antes de entregarle al cliente una cotización cuyos cargos
-// siguen siendo literalmente los de OTRO cliente.
-function confirmarSiHayPlantillaSinVerificar() {
-  if (!proyectoActual.plantillaOrigen || proyectoActual.plantillaVerificada) return true;
-  return confirm('Esta cotización se creó desde otra ya guardada y todavía no marcaste que verificaste los datos ' +
-    'contra el recibo real de este cliente.\n\n¿Generar el documento de todos modos?\n\n(Cancelar para revisar primero)');
-}
+// (el aviso de "plantilla sin verificar" se consolido en avisosPendientesParaDocumento(),
+// mas abajo en este archivo, junto con los demas avisos antes de generar un documento)
 
 $('btnNuevoProyectoPlantilla').addEventListener('click', () => {
   $('panelPlantillas').hidden = false;
@@ -2600,33 +2592,43 @@ function confirmarSiHayCambiosSinCalcular() {
     'los datos de ANTES de esos cambios. ¿Generar de todos modos?\n\n(Cancelar para volver y presionar "Calcular" primero)');
 }
 
-// La edicion de texto en pantalla (textoEditable en secciones.js) NO se refleja en el
-// PDF -- propuesta.js arma sus propios parrafos fijos, independientes de
-// proyecto.textosEditados (ver ESTADO.md: conectar las dos fuentes es un trabajo
-// aparte, con riesgo real de desalinear texto entre las 22+ paginas del generador, no
-// hecho todavia). Antes esto solo quedaba documentado en ESTADO.md -- nadie que
-// generara un PDF se enteraba de que sus ediciones no iban a salir ahi. Se avisa aqui,
-// en el momento en que de verdad importa, en vez de dejarlo como una nota enterrada.
-function confirmarSiHayTextoEditadoSinReflejarEnPdf() {
-  const n = Object.keys(proyectoActual.textosEditados || {}).length;
-  if (!n) return true;
-  return confirm(`Editaste ${n} párrafo(s)/aviso(s) en pantalla para esta cotización -- el PDF todavía NO incluye ` +
-    'esas ediciones (sigue usando el texto original de la app). ¿Generar el PDF de todos modos?\n\n(Cancelar para revisar primero qué se editó)');
-}
-
-// Hallazgo 10, auditoria 2026-11-06: la reconciliacion aritmetica del recibo
-// (campos.reconciliacion_advertencia, ver recibo.js) solo se mostraba como aviso
-// dismissible -- se podia generar una propuesta/PDF completos con un recibo mal leido
-// (caso real: $128,429 de diferencia en el fixture secfinanzas) sin ningun freno. No se
-// bloquea por completo (una reconciliacion con falso positivo real es posible, ej. un
-// adeudo anterior o un concepto no modelado) -- se exige una confirmacion consciente,
-// mismo patron que confirmarSiHayCambiosSinCalcular/confirmarSiHayTextoEditadoSin...,
-// justo antes de generar el documento final que de verdad importa.
-function confirmarSiHayReconciliacionSinResolver() {
+// Antes, generar cualquiera de los 3 documentos (Cotizacion completa/Resumen
+// ejecutivo/Anexo tramite) podia disparar HASTA 4 confirm() nativos uno detras de
+// otro (cambios sin calcular, texto editado, reconciliacion, plantilla sin verificar)
+// -- cada uno solo con botones genericos "Aceptar/Cancelar" del navegador, sin
+// distinguirse entre si. Pedido explicito del usuario, 2026-11-07 ("permiteme generar
+// los pdf... y guardar los cambios", tras reportar "sale un aviso/confirm y no se que
+// hacer"): un solo aviso, con TODO lo pendiente listado de una vez, en vez de una fila
+// de popups indistinguibles. "Aceptar" siempre significa "generar de todos modos";
+// "Cancelar" siempre significa "déjame revisar primero".
+function avisosPendientesParaDocumento() {
+  const avisos = [];
+  if (hayCambiosSinCalcular()) {
+    avisos.push('• Hiciste cambios en el formulario después de la última vez que calculaste -- este documento ' +
+      'saldría con los datos de ANTES de esos cambios.');
+  }
+  const nEditados = Object.keys(proyectoActual.textosEditados || {}).length;
+  if (nEditados) {
+    avisos.push(`• Editaste ${nEditados} párrafo(s)/aviso(s)/celda(s) en pantalla para esta cotización -- este ` +
+      'documento NO incluye esas ediciones (sigue usando el texto original de la app).');
+  }
+  // Hallazgo 10, auditoria 2026-11-06: la reconciliacion aritmetica del recibo
+  // (campos.reconciliacion_advertencia, ver recibo.js) solo se mostraba como aviso
+  // dismissible -- se podia generar un documento con un recibo mal leido (caso real:
+  // $128,429 de diferencia en el fixture secfinanzas) sin ningun freno.
   const adv = ultimoLeido && ultimoLeido.reconciliacion_advertencia;
-  if (!adv) return true;
-  return confirm('⚠ El recibo leído tiene una advertencia de reconciliación sin resolver:\n\n' + adv +
-    '\n\n¿Generar el documento de todos modos? (Cancelar para revisar los montos contra el recibo real primero)');
+  if (adv) avisos.push('• El recibo leído tiene una advertencia de reconciliación sin resolver:\n  ' + adv);
+  if (proyectoActual.plantillaOrigen && !proyectoActual.plantillaVerificada) {
+    avisos.push('• Esta cotización se creó desde otra ya guardada y todavía no marcaste que verificaste los ' +
+      'datos contra el recibo real de este cliente.');
+  }
+  return avisos;
+}
+function confirmarAntesDeGenerarDocumento() {
+  const avisos = avisosPendientesParaDocumento();
+  if (!avisos.length) return true;
+  return confirm('Antes de generar, revisa esto:\n\n' + avisos.join('\n\n') +
+    '\n\n¿Generar de todos modos?\n(Cancelar para revisar primero)');
 }
 
 // Convierte un archivo adjunto YA SUBIDO (Supabase Storage -- {nombre,tipo,url,ruta})
@@ -2664,10 +2666,7 @@ async function prepararDocumentosAdjuntosParaPdf(r) {
 
 $('btnGenerarPdf').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  if (!confirmarSiHayCambiosSinCalcular()) return;
-  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
-  if (!confirmarSiHayReconciliacionSinResolver()) return;
-  if (!confirmarSiHayPlantillaSinVerificar()) return;
+  if (!confirmarAntesDeGenerarDocumento()) return;
   const boton = $('btnGenerarPdf');
   boton.disabled = true;
   const textoOriginal = boton.textContent;
@@ -2684,24 +2683,14 @@ $('btnGenerarPdf').addEventListener('click', async () => {
 
 $('btnResumenEjecutivo').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  if (!confirmarSiHayCambiosSinCalcular()) return;
-  // Hallazgo 11, auditoria 2026-11-06: este aviso solo protegia a "Cotización
-  // completa" -- el Resumen Ejecutivo tampoco refleja textosEditados (propuesta.js
-  // nunca los lee, en ninguno de los 3 documentos), pero no avisaba nada.
-  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
-  if (!confirmarSiHayReconciliacionSinResolver()) return;
-  if (!confirmarSiHayPlantillaSinVerificar()) return;
+  if (!confirmarAntesDeGenerarDocumento()) return;
   const doc = generarResumenEjecutivo(ultimoResultado);
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Resumen_ejecutivo'));
 });
 
 $('btnAnexoInterconexion').addEventListener('click', () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  if (!confirmarSiHayCambiosSinCalcular()) return;
-  // Mismo fix que btnResumenEjecutivo arriba (hallazgo 11, auditoria 2026-11-06).
-  if (!confirmarSiHayTextoEditadoSinReflejarEnPdf()) return;
-  if (!confirmarSiHayReconciliacionSinResolver()) return;
-  if (!confirmarSiHayPlantillaSinVerificar()) return;
+  if (!confirmarAntesDeGenerarDocumento()) return;
   const doc = generarAnexoInterconexion(ultimoResultado);
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Anexo_interconexion_CFE'));
 });
@@ -2712,7 +2701,7 @@ $('btnAnexoInterconexion').addEventListener('click', () => {
 // genera un PDF aparte, con su propio texto fijo armado a mano pagina por pagina --
 // nunca lee proyecto.textosEditados, y nunca tuvo paginas propias para las secciones
 // "Documento: recibo original"/"Documento: verificacion en sitio" (ver
-// confirmarSiHayTextoEditadoSinReflejarEnPdf arriba y ESTADO.md). Conectar esas dos
+// avisosPendientesParaDocumento arriba y ESTADO.md). Conectar esas dos
 // fuentes de verdad (reescribir propuesta.js para que lea los mismos ids/overrides que
 // secciones.js) es un rework grande y riesgoso de ~22 paginas escritas
 // independientemente -- en vez de eso, este boton convierte la vista REAL en pantalla
