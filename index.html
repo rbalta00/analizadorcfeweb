@@ -602,22 +602,10 @@
     </section>
 
     <section class="tarjeta" id="tabPdf" hidden>
-      <h2>Exportar PDF</h2>
-      <p class="nota">Usa las mismas secciones activadas arriba. Revisa el documento antes de enviarlo al cliente.</p>
-      <div class="acciones acciones-pdf">
-        <button id="btnGenerarPdf" class="btn-primario">Cotización completa</button>
-        <button id="btnResumenEjecutivo" class="btn-secundario">Resumen ejecutivo (1 página)</button>
-        <button id="btnAnexoInterconexion" class="btn-secundario">📐 Anexo trámite CFE</button>
-        <button id="btnEnviarWhatsapp" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
-      </div>
-      <p class="nota">✓ "Cotización completa" ya incluye tus ediciones de texto/tablas, el "Recibo original", la
-        "Verificación en sitio" y el comparativo calculado-vs-verificación (lo que aplique). Las gráficas se
-        muestran como una tabla de los mismos datos, no como la barra/medidor visual de la pantalla. "Cotización
-        editada" es una alternativa que replica la pantalla de forma más literal (botón abajo), por si la prefieres:</p>
-      <div class="acciones acciones-pdf">
-        <button id="btnImprimirVista" class="btn-secundario">📝 Cotización editada (alternativa)</button>
-      </div>
-      <p class="nota" id="estadoCotizacionEditada"></p>
+      <h2>1. Guarda tus cambios</h2>
+      <p class="nota">Primero guarda -- así tus ediciones de texto/tablas, archivos adjuntos y datos quedan
+        completos antes de generar cualquier documento. "Guardar cotización" y "Marcar como definitiva" también
+        suben un respaldo a la nube automáticamente (ver abajo).</p>
       <div class="fila fila-guardar">
         <label>Nombre de esta cotización
           <input type="text" id="inputNombreProyecto" placeholder="Ej. Casa del Abue — GDMTO — Opción 40 paneles">
@@ -644,6 +632,17 @@
       <p class="nota" id="estadoGuardadoCotizacion"></p>
       <p class="nota">"Marcar como definitiva" guarda la cotización igual que "Guardar cotización" y además la
         marca con ✅ en el historial de este cliente, para distinguirla de versiones de prueba/comparación.</p>
+
+      <h2>2. Genera el PDF ya guardado</h2>
+      <p class="nota">Usa las mismas secciones activadas arriba. "Cotización completa" lee directo lo que ves en
+        pantalla -- incluye tus ediciones de texto/tablas, el "Recibo original", la "Verificación en sitio" y el
+        comparativo calculado-vs-verificación (lo que aplique). Revisa el documento antes de enviarlo al cliente.</p>
+      <div class="acciones acciones-pdf">
+        <button id="btnGenerarPdf" class="btn-primario">Cotización completa</button>
+        <button id="btnResumenEjecutivo" class="btn-secundario">Resumen ejecutivo (1 página)</button>
+        <button id="btnAnexoInterconexion" class="btn-secundario">📐 Anexo trámite CFE</button>
+        <button id="btnEnviarWhatsapp" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
+      </div>
       <p class="nota" id="notaAdjuntoWhatsapp">El botón de WhatsApp intenta adjuntar el PDF directo al compartir
         (funciona en celular/Android con Chrome, y algunos navegadores de escritorio recientes); si tu navegador no
         lo permite, abre el chat solo con el texto y hay que adjuntar el PDF a mano (ya descargado arriba).</p>

@@ -2723,62 +2723,12 @@ $('btnAnexoInterconexion').addEventListener('click', () => {
   mostrarPdfEnVisor(doc, nombreArchivoProyecto('Anexo_interconexion_CFE'));
 });
 
-// "Cotizacion editada" -- pedido explicito del usuario, 2026-11-07, tras reportar que
-// "Cotizacion completa" no bajaba ni sus ediciones de texto/tablas ni los documentos de
-// recibo/verificacion adjuntos. Causa real (confirmada leyendo propuesta.js): ese boton
-// genera un PDF aparte, con su propio texto fijo armado a mano pagina por pagina --
-// nunca lee proyecto.textosEditados, y nunca tuvo paginas propias para las secciones
-// "Documento: recibo original"/"Documento: verificacion en sitio" (ver
-// avisosPendientesParaDocumento arriba y ESTADO.md). Conectar esas dos
-// fuentes de verdad (reescribir propuesta.js para que lea los mismos ids/overrides que
-// secciones.js) es un rework grande y riesgoso de ~22 paginas escritas
-// independientemente -- en vez de eso, este boton convierte la vista REAL en pantalla
-// (#contenedorSecciones, que por construccion SI tiene cada edicion, tabla editada,
-// columna/fila oculta y documento adjunto) en un PDF.
-//
-// Se probaron 2 tecnicas, en este orden, antes de quedarse con la de abajo:
-// 1) window.print()/"Guardar como PDF" del navegador -- el usuario reporto que el
-//    resultado "pierde el formato" (Chrome quita colores de fondo al imprimir salvo que
-//    se fuerce, el iframe de PDF embebido no imprime, tablas anchas se cortaban).
-// 2) html2canvas + jsPDF (capturar cada seccion como imagen) -- probado en vivo contra
-//    un cliente de prueba real (navegador automatizado) antes de pushear: html2canvas
-//    1.4.1 devolvia canvases de 0x0 al clonar estas secciones (bug/incompatibilidad de
-//    esa libreria con este layout, no algo que se pudiera confirmar arreglable rapido
-//    sin mas investigacion) -- DESCARTADA, nunca llego a produccion.
-// Se vuelve a window.print() (tecnica 1), pero con las 3 causas reales de "pierde el
-// formato" corregidas en styles.css (bloque "body.modo-impresion"): colores de fondo
-// forzados con print-color-adjust, modo oscuro anulado para que no salga texto claro
-// invisible sobre pagina blanca, tablas anchas puestas en overflow:visible en vez de
-// cortarse, y el iframe de PDF embebido oculto (nunca imprime, deja un hueco en blanco).
-$('btnImprimirVista').addEventListener('click', () => {
-  if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  if (!confirmarSiHayCambiosSinCalcular()) return;
-  const estado = $('estadoCotizacionEditada');
-  estado.className = 'nota';
-  estado.textContent = '';
-  // Los <details> ("Ver detalle del calculo") empiezan colapsados -- forzarlos
-  // abiertos antes de imprimir, si no su contenido no sale en el PDF/impresion.
-  const detallesAAbrir = Array.from(document.querySelectorAll('#contenedorSecciones details:not([open])'));
-  detallesAAbrir.forEach((d) => { d.open = true; });
-  const limpiar = () => {
-    document.body.classList.remove('modo-impresion');
-    detallesAAbrir.forEach((d) => { d.open = false; });
-    window.removeEventListener('afterprint', limpiar);
-  };
-  window.addEventListener('afterprint', limpiar);
-  document.body.classList.add('modo-impresion');
-  // Pequeno respiro para que el navegador aplique la clase/estilos antes de abrir el
-  // dialogo de impresion -- sin esto, algunos navegadores capturan el layout de antes.
-  setTimeout(() => {
-    window.print();
-    // Respaldo si "afterprint" nunca dispara -- tiene que ser un tiempo LARGO: con un
-    // respaldo corto (bug real encontrado antes de la primera version de este boton),
-    // si el usuario tarda en escribir el nombre/carpeta en "Guardar como PDF", este
-    // timeout disparaba primero, revertia el modo impresion/cerraba los detalles ANTES
-    // de que terminara de guardar, y el PDF salia incompleto.
-    setTimeout(limpiar, 90000);
-  }, 50);
-});
+// (el boton "Cotizacion editada" / window.print() se quito 2026-11-07, pedido
+// explicito del usuario: "los botones que no sirvan o esten redudantes quitalos" --
+// quedo redundante en cuanto "Cotizacion completa" empezo a leer la pantalla real
+// con sus ediciones de verdad, confirmado con la auditoria automatizada de cobertura
+// de texto. El bloque CSS "body.modo-impresion" que usaba tambien se quito de
+// styles.css.)
 
 // Renombrar + guardar sin pisar una cotizacion ya guardada con datos distintos --
 // pedido explicito del usuario, 2026-11-07, tras un bug real: abrio "Casa del Abue"
@@ -2888,23 +2838,27 @@ async function guardarCotizacionConCliente({ definitiva } = {}) {
       avisoSeparada = ` (se creó como cotización NUEVA -- "${resultado.nombreAnterior}" se quedó intacta.)`;
     }
   }
+  const etiqueta = definitiva ? 'Marcada como DEFINITIVA y guardada' : 'Guardada';
   $('estadoGuardadoCotizacion').className = 'nota ok';
-  $('estadoGuardadoCotizacion').textContent = (definitiva
-    ? `✓ Marcada como DEFINITIVA y guardada con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". Subiendo respaldo a la nube...`
-    : `✓ Guardada con el cliente "${clienteActual.nombre}", cotización "${proyectoActual.nombre}".`) + avisoSeparada;
-  if (definitiva) {
-    try {
-      await subirANube();
-      $('estadoGuardadoCotizacion').textContent =
-        `✓ Marcada como DEFINITIVA y guardada con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". ` +
-        'Respaldo en la nube actualizado.';
-    } catch (err) {
-      $('estadoGuardadoCotizacion').className = 'nota aviso';
-      $('estadoGuardadoCotizacion').textContent =
-        `✓ Marcada como DEFINITIVA y guardada en este dispositivo, pero NO se pudo subir el respaldo a la nube ` +
-        `(${err.message}). Usa "Guardar copia en la nube" más tarde para intentarlo de nuevo.`;
-      console.error(err);
-    }
+  $('estadoGuardadoCotizacion').textContent =
+    `✓ ${etiqueta} con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". Subiendo respaldo a la nube...` + avisoSeparada;
+  // Pedido explicito del usuario, 2026-11-08 ("tambien se tiene que guardar en la
+  // nube"): antes SOLO "Marcar como definitiva" subia a la nube automaticamente --
+  // "Guardar cotización" (borrador) se quedaba solo local a proposito, para no subir
+  // cada cambio chico mientras se sigue editando. Eso generaba confusion (¿cual guarda
+  // en la nube y cual no?) -- ahora los dos suben, simplificando el flujo a "Guarda
+  // (local + nube) -> Genera el PDF".
+  try {
+    await subirANube();
+    $('estadoGuardadoCotizacion').textContent =
+      `✓ ${etiqueta} con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". ` +
+      'Respaldo en la nube actualizado.' + avisoSeparada;
+  } catch (err) {
+    $('estadoGuardadoCotizacion').className = 'nota aviso';
+    $('estadoGuardadoCotizacion').textContent =
+      `✓ ${etiqueta} en este dispositivo, pero NO se pudo subir el respaldo a la nube ` +
+      `(${err.message}). Usa "Guardar copia en la nube" más tarde para intentarlo de nuevo.` + avisoSeparada;
+    console.error(err);
   }
   return true;
 }
