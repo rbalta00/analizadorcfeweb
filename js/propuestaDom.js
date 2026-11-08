@@ -299,15 +299,11 @@ function dibujarGraficaComoTabla(doc, cont, y) {
   return spacer(y, 8);
 }
 
-function dibujarDocumentoAdjunto(doc, cont, y) {
-  // Dentro de secciones genericas (no 17/18, que usan su propia funcion dedicada en
-  // propuesta.js) un "documento-adjunto" es la foto del sembrado o de condiciones del
-  // inmueble (seccion 6) -- esas SI viven como dataURL local (r.fotoSembrado/
-  // r.fotosInmueble), nunca una URL remota, asi que se pueden dibujar sin fetch.
-  const img = cont.querySelector('img');
+// Dibuja una sola imagen (dataURL local, nunca remota) con salto de pagina si no cabe.
+// Compartida por dibujarDocumentoAdjunto() y por el dispatch directo de <img> en
+// recorrer() -- ver el comentario ahi sobre el bug real que esto corrige (2026-11-08).
+function dibujarImagenDataUrl(doc, img, y) {
   if (!img || !img.src || !img.src.startsWith('data:')) return y;
-  // Si queda muy poco espacio en esta pagina, mejor empezar una nueva que encoger la
-  // imagen a una tira inservible.
   if (CONTENT_BOTTOM - y < 150) { y = continuarSiNecesario(doc, y, 150); }
   const maxAncho = CONTENT_W, maxAlto = CONTENT_BOTTOM - y - 10;
   const ratio = (img.naturalWidth && img.naturalHeight) ? img.naturalWidth / img.naturalHeight : 1.4;
@@ -315,6 +311,10 @@ function dibujarDocumentoAdjunto(doc, cont, y) {
   if (h > maxAlto) { h = maxAlto; w = h * ratio; }
   doc.addImage(img.src, 'JPEG', MARGIN_L, y, w, h);
   return y + h + 8;
+}
+
+function dibujarDocumentoAdjunto(doc, cont, y) {
+  return dibujarImagenDataUrl(doc, cont.querySelector('img'), y);
 }
 
 function recorrer(doc, nodo, y) {
@@ -331,6 +331,18 @@ function recorrer(doc, nodo, y) {
       y = dibujarGraficaComoTabla(doc, hijo, y);
     } else if (cls.includes('documento-adjunto') && !cls.includes('documento-adjunto-pdf')) {
       y = dibujarDocumentoAdjunto(doc, hijo, y);
+    } else if (hijo.tagName === 'IMG') {
+      // Bug real reportado por el usuario ("sigue sin aparecer la seccion del sembrado
+      // de paneles"): la foto de sembrado (r.fotoSembrado, seccion 6) y las fotos de
+      // condiciones del inmueble (r.fotosInmueble, dentro de <figure> en una galeria)
+      // NO estan envueltas en un contenedor con clase "documento-adjunto" en
+      // secciones.js (es un <img class="seccion-img-sembrado"> suelto, o un <img>
+      // suelto dentro de <figure>) -- la rama de arriba nunca las agarraba, y como un
+      // <img> no tiene hijos ni texto propio, tampoco caian en el fallback de "texto
+      // huerfano" ni en el contenedor generico (ambos de mas abajo). Se perdian en
+      // silencio. Un <img> siempre es hoja (sin hijos), asi que dibujarlo aqui
+      // directo es seguro sin duplicar nada.
+      y = dibujarImagenDataUrl(doc, hijo, y);
     } else if (hijo.tagName === 'DETAILS') {
       // "Ver detalle del calculo" -- se incluye el contenido siempre (el PDF no tiene
       // "clic para expandir"), saltando el <summary> (solo es el texto del control).
