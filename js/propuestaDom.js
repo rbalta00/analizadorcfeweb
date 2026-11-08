@@ -302,9 +302,17 @@ function dibujarGraficaComoTabla(doc, cont, y) {
 // Dibuja una sola imagen (dataURL local, nunca remota) con salto de pagina si no cabe.
 // Compartida por dibujarDocumentoAdjunto() y por el dispatch directo de <img> en
 // recorrer() -- ver el comentario ahi sobre el bug real que esto corrige (2026-11-08).
+// Alto minimo que se le exige a la pagina actual antes de dibujar la foto -- si no
+// alcanza, mejor empezar pagina nueva que dejar la foto chiquita en el huequito que
+// haya quedado. Bug real reportado por el usuario ("la imagen quedo muy pequeña"): el
+// umbral viejo (150pt) era casi cualquier huequito, asi que casi nunca forzaba pagina
+// nueva -- la foto terminaba encogida al espacio sobrante en vez de usar la pagina
+// completa (~700pt de alto util en A4).
+const ALTO_MINIMO_FOTO = 380;
+
 function dibujarImagenDataUrl(doc, img, y) {
   if (!img || !img.src || !img.src.startsWith('data:')) return y;
-  if (CONTENT_BOTTOM - y < 150) { y = continuarSiNecesario(doc, y, 150); }
+  if (CONTENT_BOTTOM - y < ALTO_MINIMO_FOTO) { y = continuarSiNecesario(doc, y, ALTO_MINIMO_FOTO); }
   const maxAncho = CONTENT_W, maxAlto = CONTENT_BOTTOM - y - 10;
   const ratio = (img.naturalWidth && img.naturalHeight) ? img.naturalWidth / img.naturalHeight : 1.4;
   let w = maxAncho, h = w / ratio;
