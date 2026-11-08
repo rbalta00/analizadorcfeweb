@@ -315,7 +315,7 @@ function textoAcotado(doc, texto, maxWidth) {
   return acotado + '…';
 }
 
-function dibujarHeaderFooter(doc, titulo, subtitulo, aviso, pagina, totalPaginas) {
+export function dibujarHeaderFooter(doc, titulo, subtitulo, aviso, pagina, totalPaginas) {
   setFont(doc, 10.5, true, NAVY);
   doc.text(textoAcotado(doc, titulo, CONTENT_W), MARGIN_L, 34);
   setFont(doc, 7.8, false, GREY);

@@ -14,10 +14,12 @@
 import {
   CONTENT_W, CONTENT_TOP, CONTENT_BOTTOM, MARGIN_L, headX, subX, bodyX, spacer, cardsRow,
   notice, table, curve, groupedBarChart, horizontalBarChart, gauge, buildPdf, GREY,
+  crearDoc, dibujarHeaderFooter,
 } from './pdfComponents.js';
 import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA } from './util.js';
 import { BLOQUES_COTIZACION } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
+import { dibujarSeccionGenerica } from './propuestaDom.js';
 // beneficioCosto importado desde motor.js (auditoria 2026-11-06, hallazgo 1): antes
 // esta copia local omitia la reposicion del inversor del costo descontado, mientras
 // que secciones.js (pantalla) SI la incluia -- el PDF mostraba un indicador mas
@@ -347,10 +349,10 @@ function paginaDocumentoAdjunto(doc, r, numero, titulo, imagenes) {
     doc.addImage(img.dataUrl, 'JPEG', xImg, yImg, wImg, hImg);
   });
 }
-function paginaDocumentoRecibo(doc, r, numero) {
+export function paginaDocumentoRecibo(doc, r, numero) {
   paginaDocumentoAdjunto(doc, r, numero, 'Documento: recibo original de CFE', r._archivosReciboImgs || []);
 }
-function paginaDocumentoVerificacion(doc, r, numero) {
+export function paginaDocumentoVerificacion(doc, r, numero) {
   paginaDocumentoAdjunto(doc, r, numero, 'Documento: verificación en sitio', r._archivosVerificacionImgs || []);
 }
 
@@ -359,7 +361,7 @@ function paginaDocumentoVerificacion(doc, r, numero) {
 // CLAUDE.md). Solo existen si r.escenarioVerificado existe (se capturo cuantos
 // paneles sugiere la verificacion en campo) -- mismo condicional que en pantalla
 // (s24/s25 en secciones.js). Version condensada del mismo contenido (mismos numeros).
-function paginaProyectoVerificado(doc, r, numero) {
+export function paginaProyectoVerificado(doc, r, numero) {
   const ev = r.escenarioVerificado;
   let y = encabezado(doc, numero, 'Su proyecto según la verificación en sitio', r.titular);
   y = bodyX(doc, y, `Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la ` +
@@ -389,7 +391,7 @@ function paginaProyectoVerificado(doc, r, numero) {
     'ahorro estructural de la tarifa, paneles de más no generan ahorro adicional, solo más inversión.');
 }
 
-function paginaComparativoVerificacion(doc, r, numero) {
+export function paginaComparativoVerificacion(doc, r, numero) {
   const ev = r.escenarioVerificado;
   const dif = ev.diferenciaPaneles;
   let y = encabezado(doc, numero, 'Comparativo: calculado vs. verificación en sitio', r.titular);
@@ -790,4 +792,50 @@ export function generarPdf(r, { secciones = null, seccionesExcluidas = null } = 
   const aviso = 'Presupuesto preliminar. Los precios deberán actualizarse antes de contratar.';
   const paginas = paginasFiltradas.map(([, fn], i) => (doc) => fn(doc, r, i + 1));
   return buildPdf(titulo, subtitulo, aviso, paginas);
+}
+
+// "Cotizacion completa" CON las ediciones de texto reales -- pedido explicito del
+// usuario, 2026-11-07, tras varias rondas donde el documento no las reflejaba (ver
+// la nota larga al inicio de propuestaDom.js para el porque de este diseño en vez de
+// intentar "conectar" los textos editados a las paginas fijas de arriba).
+//
+// No recibe secciones/seccionesExcluidas como generarPdf() -- lee directo cuales
+// secciones estan activas del DOM de #contenedorSecciones, que YA viene renderizado
+// con exactamente ese filtro (clase .seccion-apagada, calculada por secciones.js con
+// el mismo r.seccionesActivas/r.seccionesExcluidas). Requiere que la pantalla ya haya
+// calculado y renderizado este mismo `r` -- siempre es el caso cuando se llama desde
+// el boton real de la app (nunca se calcula un PDF sin haber calculado la cotizacion
+// primero).
+//
+// Las secciones 17/18/19/20 (documentos adjuntos + comparativo vs. verificacion en
+// sitio) siguen usando sus funciones dedicadas -- manejan datos (imagenes ya
+// descargadas, escenario verificado) que no son texto plano del DOM. El resto se
+// dibuja genericamente leyendo el contenido YA renderizado (con ediciones aplicadas).
+export function generarPdfCompletaDesdeVista(r) {
+  const doc = crearDoc();
+  const contenedor = document.getElementById('contenedorSecciones');
+  const seccionesDom = contenedor
+    ? Array.from(contenedor.querySelectorAll(':scope > .seccion')).filter((s) => !s.classList.contains('seccion-apagada'))
+    : [];
+
+  seccionesDom.forEach((seccionEl, i) => {
+    const numero = Number((seccionEl.id || '').replace('seccion-', ''));
+    if (i > 0) doc.addPage();
+    const pag = doc.getNumberOfPages();
+    if (numero === 17 && r._archivosReciboImgs && r._archivosReciboImgs.length) paginaDocumentoRecibo(doc, r, pag);
+    else if (numero === 18 && r._archivosVerificacionImgs && r._archivosVerificacionImgs.length) paginaDocumentoVerificacion(doc, r, pag);
+    else if (numero === 19 && r.escenarioVerificado) paginaProyectoVerificado(doc, r, pag);
+    else if (numero === 20 && r.escenarioVerificado) paginaComparativoVerificacion(doc, r, pag);
+    else dibujarSeccionGenerica(doc, seccionEl);
+  });
+
+  const titulo = `ESTUDIO DEL SISTEMA SOLAR · ${r.titular}`;
+  const subtitulo = `${r.tarifa} · servicio ${r.noServicio || ''} · ${r.fechaEstudio} · ${r.n} paneles de ${r.moduloWp} W`;
+  const aviso = 'Presupuesto preliminar. Los precios deberán actualizarse antes de contratar. Documento generado desde la vista en pantalla -- incluye tus ediciones.';
+  const total = doc.getNumberOfPages();
+  for (let p = 1; p <= total; p++) {
+    doc.setPage(p);
+    dibujarHeaderFooter(doc, titulo, subtitulo, aviso, p, total);
+  }
+  return doc;
 }

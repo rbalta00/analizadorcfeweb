@@ -10,7 +10,7 @@ import {
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
 import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
-import { generarPdf } from './propuesta.js';
+import { generarPdf, generarPdfCompletaDesdeVista } from './propuesta.js';
 import { generarResumenEjecutivo, generarGuiaPresentacion, generarAnexoInterconexion } from './resumen.js';
 import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida } from './imagenes.js';
@@ -1124,6 +1124,17 @@ async function agregarArchivosReciboAProyecto(files) {
       console.error('No se pudo subir el archivo del recibo:', err);
     }
   }
+  // Hallazgo de auditoria (revision de guardado), 2026-11-07: si la subida fallaba
+  // (sin internet, Supabase caido) solo se veia en la consola -- el usuario pensaba
+  // que el archivo ya habia quedado adjunto cuando en realidad nunca llego a
+  // proyectoActual.archivosRecibo ni a Supabase Storage.
+  if (subidos.length < files.length) {
+    const el = $('estadoRecibo');
+    el.className = 'nota aviso';
+    el.textContent = subidos.length
+      ? `⚠ Se subieron ${subidos.length} de ${files.length} archivo(s) del recibo -- revisa tu conexión e intenta subir el resto de nuevo.`
+      : '⚠ No se pudo subir el archivo del recibo (revisa tu conexión a internet) -- no quedó adjuntado a esta cotización, intenta subirlo de nuevo.';
+  }
   if (!subidos.length) return;
   proyectoActual.archivosRecibo = (proyectoActual.archivosRecibo || []).concat(subidos);
   guardarProyecto(clienteActual, proyectoActual);
@@ -1175,6 +1186,14 @@ async function agregarArchivosVerificacionAProyecto(files) {
     } catch (err) {
       console.error('No se pudo subir el archivo de verificación:', err);
     }
+  }
+  // Mismo fix que agregarArchivosReciboAProyecto (hallazgo de auditoria,
+  // 2026-11-07) -- esta seccion no tiene un elemento "estado" propio, se usa
+  // alert() en vez de inventar un elemento nuevo en el DOM.
+  if (subidos.length < files.length) {
+    alert(subidos.length
+      ? `Se subieron ${subidos.length} de ${files.length} archivo(s) de verificación -- revisa tu conexión e intenta subir el resto de nuevo.`
+      : 'No se pudo subir el archivo de verificación (revisa tu conexión a internet) -- no quedó adjuntado a esta cotización, intenta subirlo de nuevo.');
   }
   if (!subidos.length) return;
   proyectoActual.archivosVerificacion = (proyectoActual.archivosVerificacion || []).concat(subidos);
@@ -2601,14 +2620,19 @@ function confirmarSiHayCambiosSinCalcular() {
 // hacer"): un solo aviso, con TODO lo pendiente listado de una vez, en vez de una fila
 // de popups indistinguibles. "Aceptar" siempre significa "generar de todos modos";
 // "Cancelar" siempre significa "déjame revisar primero".
-function avisosPendientesParaDocumento() {
+// `incluyeEdiciones`: true para "Cotizacion completa" (btnGenerarPdf), que desde
+// 2026-11-07 SI lee las ediciones de texto/tablas reales (ver
+// generarPdfCompletaDesdeVista en propuesta.js) -- Resumen ejecutivo/Anexo tramite CFE
+// (resumen.js) siguen usando texto fijo, sin tocar, asi que para esos 2 el aviso de
+// "tus ediciones no salen aqui" sigue aplicando.
+function avisosPendientesParaDocumento(incluyeEdiciones = false) {
   const avisos = [];
   if (hayCambiosSinCalcular()) {
     avisos.push('• Hiciste cambios en el formulario después de la última vez que calculaste -- este documento ' +
       'saldría con los datos de ANTES de esos cambios.');
   }
   const nEditados = Object.keys(proyectoActual.textosEditados || {}).length;
-  if (nEditados) {
+  if (nEditados && !incluyeEdiciones) {
     avisos.push(`• Editaste ${nEditados} párrafo(s)/aviso(s)/celda(s) en pantalla para esta cotización -- este ` +
       'documento NO incluye esas ediciones (sigue usando el texto original de la app).');
   }
@@ -2624,8 +2648,8 @@ function avisosPendientesParaDocumento() {
   }
   return avisos;
 }
-function confirmarAntesDeGenerarDocumento() {
-  const avisos = avisosPendientesParaDocumento();
+function confirmarAntesDeGenerarDocumento(incluyeEdiciones = false) {
+  const avisos = avisosPendientesParaDocumento(incluyeEdiciones);
   if (!avisos.length) return true;
   return confirm('Antes de generar, revisa esto:\n\n' + avisos.join('\n\n') +
     '\n\n¿Generar de todos modos?\n(Cancelar para revisar primero)');
@@ -2666,14 +2690,18 @@ async function prepararDocumentosAdjuntosParaPdf(r) {
 
 $('btnGenerarPdf').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  if (!confirmarAntesDeGenerarDocumento()) return;
+  if (!confirmarAntesDeGenerarDocumento(true)) return;
   const boton = $('btnGenerarPdf');
   boton.disabled = true;
   const textoOriginal = boton.textContent;
   boton.textContent = 'Generando…';
   try {
     await prepararDocumentosAdjuntosParaPdf(ultimoResultado);
-    const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas, seccionesExcluidas: proyectoActual.seccionesExcluidas });
+    // generarPdfCompletaDesdeVista (no generarPdf) -- lee el contenido YA renderizado
+    // en #contenedorSecciones, con las ediciones de texto/tablas aplicadas. Pedido
+    // explicito del usuario, 2026-11-07. generarPdf() (el generador de texto fijo de
+    // siempre) se deja sin usar pero intacta en propuesta.js, por si hace falta volver.
+    const doc = generarPdfCompletaDesdeVista(ultimoResultado);
     mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
   } finally {
     boton.disabled = false;

@@ -3,7 +3,7 @@
 // en esta maquina -- ver web/ESTADO.md. Los datos (historial de cotizaciones) nunca
 // pasan por aqui, viven en localStorage del navegador, no en este cache.
 
-const CACHE_NOMBRE = "cfe-cotizador-v13";
+const CACHE_NOMBRE = "cfe-cotizador-v14";
 
 const ARCHIVOS_APP_SHELL = [
   "./",
@@ -32,6 +32,7 @@ const ARCHIVOS_APP_SHELL = [
   "js/resultado.js",
   "js/secciones.js",
   "js/propuesta.js",
+  "js/propuestaDom.js",
   "js/resumen.js",
   "js/imagenes.js",
   "js/sembrador.js",
