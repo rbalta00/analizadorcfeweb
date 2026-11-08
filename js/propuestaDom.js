@@ -24,11 +24,19 @@ import {
   CONTENT_W, CONTENT_TOP, CONTENT_BOTTOM, MARGIN_L, NAVY, GREY,
 } from './pdfComponents.js';
 
+// OJO: 'detalle-calculo' NO va aqui -- bug real reportado por el usuario ("no veo la
+// seccion 06"): esVisible() corre ANTES que el chequeo de tagName==='DETAILS' en
+// recorrer(), asi que tenerlo en esta lista lo descartaba ENTERO antes de llegar al
+// codigo que sí lo procesa (saltando el <summary>, recorriendo el resto) -- todos los
+// bloques "📐 Cómo se calculó" de TODAS las secciones genericas se perdian en
+// silencio. 'seccion-numero' tampoco va aqui -- es el "06 de 18" que el usuario usa
+// para confirmar que no falta nada, se queda como contenido real (ver el fallback
+// generico de texto "huerfano" en recorrer()).
 const CLASES_OMITIR = [
-  'seccion-numero', 'toggle-seccion', 'btn-restaurar-texto', 'btn-icono-global',
+  'toggle-seccion', 'btn-restaurar-texto', 'btn-icono-global',
   'btn-ocultar-texto', 'nota-texto-global', 'nota-texto-oculto', 'th-accion-tabla',
   'td-accion-tabla', 'grafico-apagado', 'campo-oculto', 'col-oculta-tabla',
-  'fila-oculta-tabla', 'documento-adjunto-pdf', 'detalle-calculo', // detalle-calculo: ver nota en recorrer()
+  'fila-oculta-tabla', 'documento-adjunto-pdf',
 ];
 
 function tieneClaseOmitida(nodo) {
@@ -49,19 +57,44 @@ function esVisible(nodo) {
 // Paneles → ⚡ Inversor..."). Se quitan en vez de intentar soportarlos; los acentos y
 // ñ/¿/¡ del espanol SI quedan (viven dentro de Latin-1, 0-255).
 function limpiarParaPdf(texto) {
-  return String(texto).replace(/[^\x00-\xFF]/g, '').replace(/\s{2,}/g, ' ').trim();
+  return String(texto)
+    // Flechas/separadores usados en varios lados (ej. el esquema "☀️ Paneles → ⚡
+    // Inversor → 🏠 Inmueble ↔ 🔌 Red CFE" de la seccion 6) -- se reemplazan por su
+    // equivalente en ASCII ANTES de quitar lo que esta fuera de Latin-1, si no el
+    // texto quedaba pegado sin ningun separador ("Paneles Inversor Inmueble Red" en
+    // vez de "Paneles -> Inversor -> Inmueble <-> Red") -- bug real visto en vivo.
+    .replace(/[→➜➔⇒↦]/g, ' -> ')
+    .replace(/[↔⇔]/g, ' <-> ')
+    .replace(/[•‣▪]/g, '-')
+    .replace(/[^\x00-\xFF]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 // Si el cursor ya esta muy cerca del margen inferior, abre pagina nueva ANTES de
 // dibujar lo que sigue -- igual de "ingenuo" que el resto de este proyecto (dibujar y
 // recortar si no cabe, ver pdfComponents.js), pero revisado ANTES en vez de despues
 // para no cortar whole elementos a la mitad en la mayoria de los casos.
-function continuarSiNecesario(doc, y, margenMinimo = 24) {
-  if (y > CONTENT_BOTTOM - margenMinimo) {
+//
+// OJO: `altura` debe ser la altura REAL del elemento completo que se va a dibujar a
+// continuacion, no un margen generico chico -- bug real reportado por el usuario
+// ("se cortan entre hojas"): la primera version solo revisaba un colchon fijo de
+// 40pt antes de un parrafo entero (a veces de varias lineas), asi que un parrafo
+// largo podia EMPEZAR a dibujarse cerca del fondo y sus ultimas lineas quedaban
+// cortadas en el borde de la pagina en vez de saltar completo a la siguiente.
+function continuarSiNecesario(doc, y, altura) {
+  if (y + altura > CONTENT_BOTTOM) {
     doc.addPage();
     return CONTENT_TOP;
   }
   return y;
+}
+
+// --- Estimacion de altura ANTES de dibujar (mismas formulas que pdfComponents.js,
+// que no las expone por separado -- ver dibujarParrafo/notice/table ahi). ---
+function contarLineas(doc, texto, ancho, size) {
+  doc.setFontSize(size);
+  return doc.splitTextToSize(String(texto), ancho).length;
 }
 
 function dibujarTexto(doc, nodo, y) {
@@ -69,26 +102,31 @@ function dibujarTexto(doc, nodo, y) {
   if (!texto) return y;
   const tag = nodo.tagName;
   const cls = nodo.className || '';
-  y = continuarSiNecesario(doc, y, 40);
   if (tag === 'H2') {
+    const lineas = (() => { doc.setFontSize(14); return doc.splitTextToSize(texto, CONTENT_W); })();
+    y = continuarSiNecesario(doc, y, lineas.length * 18 + 4);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(NAVY);
-    const lineas = doc.splitTextToSize(texto, CONTENT_W);
-    for (const l of lineas) { y = continuarSiNecesario(doc, y, 20); doc.text(l, MARGIN_L, y + 12); y += 18; }
+    for (const l of lineas) { doc.text(l, MARGIN_L, y + 12); y += 18; }
     return y + 4;
   }
   if (tag === 'H3' || tag === 'H4' || tag === 'H5') {
+    y = continuarSiNecesario(doc, y, contarLineas(doc, texto, CONTENT_W, 11.5) * 15 + 8 + 11.5);
     return subX(doc, y, texto);
   }
   if (cls.includes('seccion-pregunta')) {
+    const lineas = (() => { doc.setFontSize(9.5); return doc.splitTextToSize(texto, CONTENT_W); })();
+    y = continuarSiNecesario(doc, y, lineas.length * 12 + 4 + 9);
     doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5); doc.setTextColor(GREY);
-    const lineas = doc.splitTextToSize(texto, CONTENT_W);
-    for (const l of lineas) { y = continuarSiNecesario(doc, y, 16); doc.text(l, MARGIN_L, y + 9); y += 12; }
+    for (const l of lineas) { doc.text(l, MARGIN_L, y + 9); y += 12; }
     return y + 4;
   }
   if (cls.includes('aviso-cream')) {
+    const n = contarLineas(doc, texto, CONTENT_W - 20, 9.5);
+    y = continuarSiNecesario(doc, y, n * 13 + 20);
     return notice(doc, y, texto);
   }
   // Parrafo normal, celda chica de tarjeta/leyenda, nota, badge, etc.
+  y = continuarSiNecesario(doc, y, contarLineas(doc, texto, CONTENT_W, 10) * 13.5 + 6 + 10);
   return bodyX(doc, y, texto);
 }
 
@@ -103,15 +141,39 @@ function anchosProporcionales(headers, rows) {
     return Math.max(...valores.map((v) => v.length), 3);
   });
   const total = pesos.reduce((a, b) => a + b, 0) || headers.length;
-  // 0.12 en vez de un piso mas chico -- probado en vivo: con 0.08 una columna
-  // numerica angosta ("Resultado", "$3,439.05") alcanzaba a envolver a 2 lineas por
-  // un margen minimo. No es incorrecto (el valor completo sigue ahi), pero se ve mal.
-  const PISO = CONTENT_W * 0.12;
   const anchosCrudos = pesos.map((p) => (p / total) * CONTENT_W);
-  const faltante = anchosCrudos.reduce((suma, a) => suma + Math.max(PISO - a, 0), 0);
+  // Piso POR COLUMNA basado en el ancho real que necesita su propio ENCABEZADO (que
+  // table() nunca envuelve a varias lineas) -- un piso generico fijo (ej. 12% del
+  // ancho) no bastaba: bug real visto en vivo con "Parte del sistema" encimandose con
+  // "Cantidad y función" porque la OTRA columna tenia valores de oraciones completas
+  // (70+ caracteres) que dominaban el reparto proporcional, dejando a "Parte del
+  // sistema" (17 caracteres) por debajo de lo que su propio encabezado necesita.
+  const pisos = headers.map((h) => Math.max(CONTENT_W * 0.1, String(h).length * 4.6 + 14));
+  const faltante = anchosCrudos.reduce((suma, a, i) => suma + Math.max(pisos[i] - a, 0), 0);
   if (!faltante) return anchosCrudos;
-  const totalPorEncimaDePiso = anchosCrudos.reduce((suma, a) => suma + (a > PISO ? a : 0), 0) || 1;
-  return anchosCrudos.map((a) => (a < PISO ? PISO : a - faltante * (a / totalPorEncimaDePiso)));
+  const totalPorEncimaDePiso = anchosCrudos.reduce((suma, a, i) => suma + (a > pisos[i] ? a : 0), 0) || 1;
+  return anchosCrudos.map((a, i) => (a < pisos[i] ? pisos[i] : a - faltante * (a / totalPorEncimaDePiso)));
+}
+
+// Altura real de table() (pdfComponents.js) para headers+rows+widths dados -- misma
+// formula que esa funcion usa internamente para calcular alturaFila por renglon
+// (lineas envueltas en la celda mas alta de la fila × leading + padY*2), mas la fila
+// de encabezado (lineH fijo). Necesaria para decidir ANTES de dibujar si hace falta
+// saltar de pagina (ver continuarSiNecesario).
+function alturaTabla(doc, headers, rows, widths, small) {
+  const padX = 6, padY = 5;
+  const lineH = (small ? 10 : 11.5) + padY * 2;
+  let total = lineH;
+  for (const fila of rows) {
+    let nLineas = 1;
+    fila.forEach((c, i) => {
+      doc.setFontSize(small ? 8 : 9);
+      const n = doc.splitTextToSize(String(c), widths[i] - padX * 2).length;
+      if (n > nLineas) nLineas = n;
+    });
+    total += nLineas * (small ? 10 : 11.5) + padY * 2;
+  }
+  return total;
 }
 
 function dibujarTabla(doc, tabla, y) {
@@ -126,7 +188,6 @@ function dibujarTabla(doc, tabla, y) {
       .map((td) => limpiarParaPdf(td.textContent))
   );
   if (!headers.length || !rows.length) return y;
-  y = continuarSiNecesario(doc, y, 60);
   // table() (pdfComponents.js) no envuelve el texto del ENCABEZADO (solo el de las
   // celdas) -- con columnas de ancho igual (el default sin "widths"), un encabezado
   // largo se encima con el de la columna siguiente en tablas con muchas columnas o
@@ -135,22 +196,24 @@ function dibujarTabla(doc, tabla, y) {
   // le dan "widths" a mano por tabla -- aqui se calcula un ancho proporcional al
   // texto mas largo de cada columna (encabezado o celda), generico para cualquier
   // tabla que venga del DOM.
-  y = table(doc, y, headers, rows, { small: true, widths: anchosProporcionales(headers, rows) });
+  const widths = anchosProporcionales(headers, rows);
+  y = continuarSiNecesario(doc, y, alturaTabla(doc, headers, rows, widths, true));
+  y = table(doc, y, headers, rows, { small: true, widths });
   return spacer(y, 8);
 }
 
 function dibujarTarjetas(doc, cont, y) {
   const metricas = Array.from(cont.querySelectorAll(':scope > .metrica'));
   if (!metricas.length) return y;
-  y = continuarSiNecesario(doc, y, 60);
   const items = metricas.map((m) => {
     const valor = m.querySelector('.valor');
     const etiqueta = m.querySelector('.texto-editable-chico, .etiqueta');
     return [valor ? limpiarParaPdf(valor.textContent) : '', etiqueta ? limpiarParaPdf(etiqueta.textContent) : ''];
   });
   // cardsRow() dibuja siempre en filas de 3 -- si hay mas de 3 tarjetas, se agrupan.
+  // Altura FIJA de cardsRow (56) + spacer(8) = 64, no una estimacion.
   for (let i = 0; i < items.length; i += 3) {
-    y = continuarSiNecesario(doc, y, 60);
+    y = continuarSiNecesario(doc, y, 64);
     y = cardsRow(doc, y, items.slice(i, i + 3));
     y = spacer(y, 8);
   }
@@ -190,12 +253,13 @@ function dibujarGraficaComoTabla(doc, cont, y) {
       .map((t) => [t, '']);
   }
   if (!filas.length) return y;
-  y = continuarSiNecesario(doc, y, 50);
   const headers = cont.classList.contains('grafica-agrupada') ? ['Categoría', 'Serie 1', 'Serie 2'] : ['Dato', 'Valor'];
   const filasLimpias = filas.map((f) => {
     const completa = f.length === headers.length ? f : [...f, ...Array(headers.length - f.length).fill('')];
     return completa.map((c) => limpiarParaPdf(c));
   });
+  const widths = headers.map(() => CONTENT_W / headers.length);
+  y = continuarSiNecesario(doc, y, alturaTabla(doc, headers, filasLimpias, widths, true));
   y = table(doc, y, headers, filasLimpias, { small: true });
   return spacer(y, 8);
 }
@@ -207,7 +271,9 @@ function dibujarDocumentoAdjunto(doc, cont, y) {
   // r.fotosInmueble), nunca una URL remota, asi que se pueden dibujar sin fetch.
   const img = cont.querySelector('img');
   if (!img || !img.src || !img.src.startsWith('data:')) return y;
-  y = continuarSiNecesario(doc, y, 100);
+  // Si queda muy poco espacio en esta pagina, mejor empezar una nueva que encoger la
+  // imagen a una tira inservible.
+  if (CONTENT_BOTTOM - y < 150) { y = continuarSiNecesario(doc, y, 150); }
   const maxAncho = CONTENT_W, maxAlto = CONTENT_BOTTOM - y - 10;
   const ratio = (img.naturalWidth && img.naturalHeight) ? img.naturalWidth / img.naturalHeight : 1.4;
   let w = maxAncho, h = w / ratio;
@@ -237,6 +303,14 @@ function recorrer(doc, nodo, y) {
         if (nieto.tagName === 'SUMMARY') continue;
         y = recorrer(doc, nieto, y);
       }
+    } else if (!hijo.children.length && hijo.textContent.trim()) {
+      // Texto "huerfano" -- un div/span con su propio texto que no cayo en ninguno de
+      // los casos reconocidos arriba (ej. .seccion-numero "06 de 18", .badge-estado
+      // "Comprobado"/"Pendiente"). Bug real reportado por el usuario ("no veo la
+      // seccion 06 de 18"): sin este fallback, estos nodos se recorrian como
+      // contenedor generico, no tenian hijos ELEMENTO (solo un nodo de texto), y su
+      // contenido se perdia en silencio sin dibujar nada.
+      y = dibujarTexto(doc, hijo, y);
     } else {
       // Contenedor generico (div envoltorio, campo-editable, seccion-header, etc.) --
       // sigue bajando por sus hijos en el mismo orden visual.
