@@ -20,22 +20,25 @@
 // (imagenes remotas, escenario verificado) que no viven como texto plano en el DOM.
 // Todo lo demas (1-16, 21-25) se dibuja genericamente desde el DOM.
 import {
-  crearDoc, headX, subX, bodyX, spacer, cardsRow, notice, table,
-  CONTENT_W, CONTENT_TOP, CONTENT_BOTTOM, MARGIN_L, NAVY, GREY,
+  crearDoc, headX, subX, bodyX, spacer, cardsRow, notice,
+  CONTENT_W, CONTENT_TOP, CONTENT_BOTTOM, MARGIN_L, NAVY, GREY, WHITE, BLACK, LINE,
 } from './pdfComponents.js';
 
-// OJO: 'detalle-calculo' NO va aqui -- bug real reportado por el usuario ("no veo la
-// seccion 06"): esVisible() corre ANTES que el chequeo de tagName==='DETAILS' en
-// recorrer(), asi que tenerlo en esta lista lo descartaba ENTERO antes de llegar al
-// codigo que sí lo procesa (saltando el <summary>, recorriendo el resto) -- todos los
-// bloques "📐 Cómo se calculó" de TODAS las secciones genericas se perdian en
-// silencio. 'seccion-numero' tampoco va aqui -- es el "06 de 18" que el usuario usa
-// para confirmar que no falta nada, se queda como contenido real (ver el fallback
-// generico de texto "huerfano" en recorrer()).
+// OJO: ni 'detalle-calculo' (la clase del <details> real que arma detalle(), para
+// "Ver detalle completo") ni 'calculo-detalle' (la clase del <div> que arma
+// bloqueCalculo(), para "📐 Cómo se calculó") van en esta lista -- bug real reportado
+// por el usuario ("no veo la seccion 06"): esVisible() corre ANTES que el chequeo de
+// tagName==='DETAILS' en recorrer(), asi que tener la primera aqui descartaba ese
+// bloque ENTERO antes de llegar al codigo que sí lo procesa. 'calculo-detalle-apagado'
+// SI va -- esa es la clase que SI corresponde omitir (el toggle individual de "Cómo se
+// calculó" de bloqueCalculo() esta apagado). 'seccion-numero' tampoco va aqui -- es el
+// "NN de XX" que el usuario usa para confirmar que no falta nada, se queda como
+// contenido real (ver el fallback generico de texto "huerfano" en recorrer()).
 const CLASES_OMITIR = [
   'toggle-seccion', 'btn-restaurar-texto', 'btn-icono-global',
   'btn-ocultar-texto', 'nota-texto-global', 'nota-texto-oculto', 'th-accion-tabla',
   'td-accion-tabla', 'grafico-apagado', 'campo-oculto', 'col-oculta-tabla',
+  'calculo-detalle-apagado',
   'fila-oculta-tabla', 'documento-adjunto-pdf',
 ];
 
@@ -155,25 +158,59 @@ function anchosProporcionales(headers, rows) {
   return anchosCrudos.map((a, i) => (a < pisos[i] ? pisos[i] : a - faltante * (a / totalPorEncimaDePiso)));
 }
 
-// Altura real de table() (pdfComponents.js) para headers+rows+widths dados -- misma
-// formula que esa funcion usa internamente para calcular alturaFila por renglon
-// (lineas envueltas en la celda mas alta de la fila × leading + padY*2), mas la fila
-// de encabezado (lineH fijo). Necesaria para decidir ANTES de dibujar si hace falta
-// saltar de pagina (ver continuarSiNecesario).
-function alturaTabla(doc, headers, rows, widths, small) {
+// Version de table() (pdfComponents.js) que SI pagina -- bug real encontrado probando
+// en vivo ("sigue sin verse completa la cotizacion"): table() dibuja TODAS las filas
+// que se le den en una sola pasada, sin revisar si se paso del fondo de la pagina.
+// jsPDF no dibuja nada fuera del area de la hoja -- no tira error, simplemente esas
+// filas "desaparecian" en silencio (visto con una tabla de 7 filas donde solo la
+// primera aparecia en el PDF). Antes esto nunca se notaba porque las tablas fijas de
+// propuesta.js siempre estan calibradas a mano para caber en una sola pagina -- las
+// tablas genericas de aqui leen el texto REAL de pantalla (mucho mas largo) y pueden
+// necesitar varias paginas. Si una fila no cabe, se abre pagina nueva y se repite el
+// encabezado antes de seguir.
+function dibujarTablaPaginada(doc, y, headers, rows, widths, small) {
   const padX = 6, padY = 5;
+  const sizeH = small ? 8 : 9, sizeB = small ? 8 : 9;
   const lineH = (small ? 10 : 11.5) + padY * 2;
-  let total = lineH;
-  for (const fila of rows) {
-    let nLineas = 1;
-    fila.forEach((c, i) => {
-      doc.setFontSize(small ? 8 : 9);
-      const n = doc.splitTextToSize(String(c), widths[i] - padX * 2).length;
-      if (n > nLineas) nLineas = n;
+  function dibujarEncabezado(yActual) {
+    doc.setFillColor(NAVY);
+    doc.rect(MARGIN_L, yActual, CONTENT_W, lineH, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(sizeH); doc.setTextColor(WHITE);
+    let x = MARGIN_L;
+    headers.forEach((h, i) => {
+      doc.text(String(h), x + padX, yActual + lineH / 2 + sizeH / 2 - 1);
+      x += widths[i];
     });
-    total += nLineas * (small ? 10 : 11.5) + padY * 2;
+    return yActual + lineH;
   }
-  return total;
+  if (y + lineH > CONTENT_BOTTOM) { doc.addPage(); y = CONTENT_TOP; }
+  y = dibujarEncabezado(y);
+  for (const fila of rows) {
+    doc.setFontSize(sizeB);
+    const celdasLineas = fila.map((c, i) => doc.splitTextToSize(String(c), widths[i] - padX * 2));
+    const nLineas = Math.max(...celdasLineas.map((l) => l.length), 1);
+    const alturaFila = nLineas * (small ? 10 : 11.5) + padY * 2;
+    if (y + alturaFila > CONTENT_BOTTOM) {
+      doc.addPage();
+      y = CONTENT_TOP;
+      y = dibujarEncabezado(y);
+    }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(sizeB); doc.setTextColor(BLACK);
+    let x = MARGIN_L;
+    fila.forEach((c, i) => {
+      const alinDer = i > 0;
+      celdasLineas[i].forEach((linea, li) => {
+        const ly = y + padY + (small ? 8 : 9) + li * (small ? 10 : 11.5);
+        if (alinDer) doc.text(linea, x + widths[i] - padX, ly, { align: 'right' });
+        else doc.text(linea, x + padX, ly);
+      });
+      x += widths[i];
+    });
+    doc.setDrawColor(LINE); doc.setLineWidth(0.5);
+    doc.line(MARGIN_L, y + alturaFila, MARGIN_L + CONTENT_W, y + alturaFila);
+    y += alturaFila;
+  }
+  return y;
 }
 
 function dibujarTabla(doc, tabla, y) {
@@ -197,8 +234,7 @@ function dibujarTabla(doc, tabla, y) {
   // texto mas largo de cada columna (encabezado o celda), generico para cualquier
   // tabla que venga del DOM.
   const widths = anchosProporcionales(headers, rows);
-  y = continuarSiNecesario(doc, y, alturaTabla(doc, headers, rows, widths, true));
-  y = table(doc, y, headers, rows, { small: true, widths });
+  y = dibujarTablaPaginada(doc, y, headers, rows, widths, true);
   return spacer(y, 8);
 }
 
@@ -258,9 +294,8 @@ function dibujarGraficaComoTabla(doc, cont, y) {
     const completa = f.length === headers.length ? f : [...f, ...Array(headers.length - f.length).fill('')];
     return completa.map((c) => limpiarParaPdf(c));
   });
-  const widths = headers.map(() => CONTENT_W / headers.length);
-  y = continuarSiNecesario(doc, y, alturaTabla(doc, headers, filasLimpias, widths, true));
-  y = table(doc, y, headers, filasLimpias, { small: true });
+  const widths = anchosProporcionales(headers, filasLimpias);
+  y = dibujarTablaPaginada(doc, y, headers, filasLimpias, widths, true);
   return spacer(y, 8);
 }
 

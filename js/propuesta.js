@@ -818,14 +818,18 @@ export function generarPdfCompletaDesdeVista(r) {
     ? Array.from(contenedor.querySelectorAll(':scope > .seccion')).filter((s) => !s.classList.contains('seccion-apagada'))
     : [];
 
+  // Secciones 19/20 (comparativo vs. verificacion en sitio) SE QUITARON de aqui
+  // (2026-11-07) -- usaban paginaProyectoVerificado/paginaComparativoVerificacion
+  // (texto fijo, no reflejan ediciones), el mismo problema que esta reescritura entera
+  // vino a resolver. A diferencia de 17/18 (que si necesitan imagenes remotas
+  // pre-descargadas), 19/20 son solo parrafos/tarjetas/tablas -- el mismo contenido que
+  // cualquier otra seccion generica, ya resuelto en el DOM con sus ediciones aplicadas.
   seccionesDom.forEach((seccionEl, i) => {
     const numero = Number((seccionEl.id || '').replace('seccion-', ''));
     if (i > 0) doc.addPage();
     const pag = doc.getNumberOfPages();
     if (numero === 17 && r._archivosReciboImgs && r._archivosReciboImgs.length) paginaDocumentoRecibo(doc, r, pag);
     else if (numero === 18 && r._archivosVerificacionImgs && r._archivosVerificacionImgs.length) paginaDocumentoVerificacion(doc, r, pag);
-    else if (numero === 19 && r.escenarioVerificado) paginaProyectoVerificado(doc, r, pag);
-    else if (numero === 20 && r.escenarioVerificado) paginaComparativoVerificacion(doc, r, pag);
     else dibujarSeccionGenerica(doc, seccionEl);
   });
 
