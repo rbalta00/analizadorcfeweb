@@ -375,6 +375,26 @@ function recorrer(doc, nodo, y) {
   return y;
 }
 
+// Lee el texto ACTUAL (con su edicion aplicada) de un parrafo editable dentro de una
+// seccion que NO usa dibujarSeccionGenerica -- ej. paginaDocumentoAdjunto() en
+// propuesta.js (secciones 17/18), que necesita su propia funcion por las imagenes
+// (dataURL ya descargado, no puede leerse del DOM) pero el PARRAFO explicativo de
+// arriba SI es texto plano normal, sin ninguna razon real para no leerlo del DOM como
+// todo lo demas. Bug real reportado por el usuario ("oculte un parrafo y sigue
+// apareciendo en el PDF", 2026-11-09): antes este parrafo era texto fijo en
+// propuesta.js, nunca pasaba por el sistema de edicion/ocultado aunque en pantalla SI
+// se veia con los controles ✓/🙈 (confunde al usuario, que no tiene forma de saber
+// que esos controles no aplican ahi). Regresa: el texto limpio si esta visible,
+// 'oculto' si el usuario lo apago, o 'no-encontrado' si el selector no hallo nada
+// (seccion vieja sin este nodo, o no se paso seccionEl) -- en ese ultimo caso el
+// llamador debe usar su propio texto fijo de respaldo, nunca dejar el parrafo vacio.
+export function textoVisibleDe(seccionEl, selector) {
+  const nodo = seccionEl && seccionEl.querySelector(selector);
+  if (!nodo) return 'no-encontrado';
+  if (nodo.closest('.campo-oculto')) return 'oculto';
+  return limpiarParaPdf(nodo.textContent);
+}
+
 // Dibuja UNA seccion (ya resuelta en el DOM, con sus ediciones aplicadas), empezando
 // en pagina nueva -- el encabezado global (titulo del estudio + titular + numero de
 // pagina) lo pone aparte dibujarHeaderFooter() en cada pagina fisica (ver

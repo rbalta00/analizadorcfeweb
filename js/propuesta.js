@@ -19,7 +19,7 @@ import {
 import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA } from './util.js';
 import { BLOQUES_COTIZACION } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
-import { dibujarSeccionGenerica } from './propuestaDom.js';
+import { dibujarSeccionGenerica, textoVisibleDe } from './propuestaDom.js';
 // beneficioCosto importado desde motor.js (auditoria 2026-11-06, hallazgo 1): antes
 // esta copia local omitia la reposicion del inversor del costo descontado, mientras
 // que secciones.js (pantalla) SI la incluia -- el PDF mostraba un indicador mas
@@ -326,11 +326,38 @@ function pagina06c(doc, r, numero) {
 // jsPDF.addImage() necesita un dataURL ya listo, no puede ir a buscar una URL remota solo.
 // Mismo patron de grid que pagina06c, pero con filas calculadas segun cuantas imagenes
 // hay (recibo/verificacion normalmente son 1-3 paginas, no caben en una sola fila fija).
-function paginaDocumentoAdjunto(doc, r, numero, titulo, imagenes) {
+function paginaDocumentoAdjunto(doc, r, numero, titulo, imagenes, seccionEl) {
   let y = encabezado(doc, numero, titulo, r.titular);
-  y = bodyX(doc, y, 'Documento adjunto a esta cotización, tal como se subió -- no se extrajo ningún dato nuevo ' +
-    'de él aquí (ver la sección de "Su recibo: datos comprobados" para la trazabilidad de cada dato).');
-  y = spacer(y, 8);
+  // Lee el parrafo explicativo del DOM (con su edicion/ocultado real aplicado) en vez
+  // de usar texto fijo -- bug real reportado por el usuario, 2026-11-09: en pantalla
+  // este parrafo SI tiene los controles ✓/🙈 (ver s22/s23 en secciones.js -- s22 usa
+  // avisoCream(), s23 usa p() cuando SI hay archivo adjunto; los dos quedan con clase
+  // 'texto-editable' igual, ver campoEditableConId(), por eso basta ese selector para
+  // los dos casos sin distinguir cual es), pero como esta pagina nunca lo leia,
+  // editarlo u ocultarlo no tenia ningun efecto en el PDF -- confuso, porque los
+  // controles se ven identicos a los de cualquier otro parrafo que SI funciona.
+  // filaArchivo() (la lista de archivos de .documentos-grid) no tiene ningun nodo
+  // '.texto-editable' propio, asi que no hay riesgo de que este selector agarre el
+  // nombre de un archivo por error.
+  // OJO: crearSeccion() SIEMPRE agrega 2 '.texto-editable' en el header de CUALQUIER
+  // seccion, ANTES del parrafo que de verdad queremos -- el titulo
+  // ('.titulo-seccion-grande', tituloEditable()) y la "pregunta"
+  // ('.seccion-pregunta', campoEditableConId() en crearSeccion()). Sin excluirlos,
+  // '.texto-editable' solo (probado en vivo, bug real encontrado en la propia revision
+  // de este fix) agarraba el TITULO de la seccion en vez del parrafo explicativo.
+  // 'oculto' = el usuario lo apago, se omite igual que cualquier otro parrafo oculto en
+  // el resto del PDF. 'no-encontrado' (seccionEl no se paso, o la estructura de
+  // s22/s23 cambio) cae al texto de respaldo de siempre, para no dejar la pagina sin
+  // ninguna explicacion.
+  const resultado = textoVisibleDe(seccionEl, '.texto-editable:not(.titulo-seccion-grande):not(.seccion-pregunta)');
+  if (resultado !== 'oculto') {
+    const texto = resultado === 'no-encontrado'
+      ? 'Documento adjunto a esta cotización, tal como se subió -- no se extrajo ningún dato nuevo ' +
+        'de él aquí (ver la sección de "Su recibo: datos comprobados" para la trazabilidad de cada dato).'
+      : resultado;
+    y = bodyX(doc, y, texto);
+    y = spacer(y, 8);
+  }
   const cols = imagenes.length <= 2 ? imagenes.length : 2;
   const filas = Math.ceil(imagenes.length / cols);
   const gap = 10;
@@ -349,11 +376,16 @@ function paginaDocumentoAdjunto(doc, r, numero, titulo, imagenes) {
     doc.addImage(img.dataUrl, 'JPEG', xImg, yImg, wImg, hImg);
   });
 }
-export function paginaDocumentoRecibo(doc, r, numero) {
-  paginaDocumentoAdjunto(doc, r, numero, 'Documento: recibo original de CFE', r._archivosReciboImgs || []);
+// `seccionEl` opcional: solo lo manda generarPdfCompletaDesdeVista (que SI tiene el
+// DOM ya renderizado a la mano). El generador viejo generarPdf() (texto fijo, ver mas
+// abajo, PAGINAS) llama estas mismas 2 funciones sin ese parametro -- ahi
+// textoVisibleDe(undefined, ...) cae solo a 'no-encontrado' y usa el texto de
+// respaldo de siempre, comportamiento identico al que ya tenia antes de este fix.
+export function paginaDocumentoRecibo(doc, r, numero, seccionEl) {
+  paginaDocumentoAdjunto(doc, r, numero, 'Documento: recibo original de CFE', r._archivosReciboImgs || [], seccionEl);
 }
-export function paginaDocumentoVerificacion(doc, r, numero) {
-  paginaDocumentoAdjunto(doc, r, numero, 'Documento: verificación en sitio', r._archivosVerificacionImgs || []);
+export function paginaDocumentoVerificacion(doc, r, numero, seccionEl) {
+  paginaDocumentoAdjunto(doc, r, numero, 'Documento: verificación en sitio', r._archivosVerificacionImgs || [], seccionEl);
 }
 
 // ---------- Proyecto segun verificacion en sitio / comparativo (secciones 19/20
@@ -828,8 +860,8 @@ export function generarPdfCompletaDesdeVista(r) {
     const numero = Number((seccionEl.id || '').replace('seccion-', ''));
     if (i > 0) doc.addPage();
     const pag = doc.getNumberOfPages();
-    if (numero === 17 && r._archivosReciboImgs && r._archivosReciboImgs.length) paginaDocumentoRecibo(doc, r, pag);
-    else if (numero === 18 && r._archivosVerificacionImgs && r._archivosVerificacionImgs.length) paginaDocumentoVerificacion(doc, r, pag);
+    if (numero === 17 && r._archivosReciboImgs && r._archivosReciboImgs.length) paginaDocumentoRecibo(doc, r, pag, seccionEl);
+    else if (numero === 18 && r._archivosVerificacionImgs && r._archivosVerificacionImgs.length) paginaDocumentoVerificacion(doc, r, pag, seccionEl);
     else dibujarSeccionGenerica(doc, seccionEl);
   });
 

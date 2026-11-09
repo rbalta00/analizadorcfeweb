@@ -3162,6 +3162,35 @@ async function verificarEdicionesEnPdf() {
 }
 window.verificarEdicionesEnPdf = verificarEdicionesEnPdf;
 
+// Boton visible (ademas de la consola) -- pedido implicito del usuario, 2026-11-09:
+// pedir "correlo en la consola" no es realista para alguien sin conocimientos
+// tecnicos. Mismo resultado de verificarEdicionesEnPdf(), mostrado en una lista
+// legible en pantalla en vez de requerir abrir las herramientas de desarrollador.
+$('btnVerificarPdf').addEventListener('click', async () => {
+  if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  const boton = $('btnVerificarPdf');
+  const panel = $('panelVerificacionPdf');
+  boton.disabled = true;
+  const textoOriginal = boton.textContent;
+  boton.textContent = 'Verificando…';
+  panel.hidden = false;
+  panel.innerHTML = '<p class="nota">Generando el PDF y comparando contra tus ediciones/apagados…</p>';
+  try {
+    const { ok, problemas } = await verificarEdicionesEnPdf();
+    const resumen = problemas.length
+      ? `<p class="aviso" style="color:var(--rojo, #b3413a); font-weight:600;">⚠️ ${problemas.length} problema(s) encontrado(s) -- esto NO deberías verlo en el PDF que generes:</p>
+         <ul>${problemas.map((l) => `<li>${l}</li>`).join('')}</ul>`
+      : '<p class="aviso" style="color:var(--verde, #3a7d5c); font-weight:600;">✓ Todo lo que editaste/ocultaste en pantalla se refleja correctamente en el PDF.</p>';
+    panel.innerHTML = resumen +
+      `<details><summary>Ver también lo que sí está correcto (${ok.length})</summary><ul>${ok.map((l) => `<li>${l}</li>`).join('')}</ul></details>`;
+  } catch (err) {
+    panel.innerHTML = `<p class="aviso" style="color:var(--rojo, #b3413a);">No se pudo verificar: ${err.message}</p>`;
+  } finally {
+    boton.disabled = false;
+    boton.textContent = textoOriginal;
+  }
+});
+
 // =====================================================================
 // Arranque
 // =====================================================================
