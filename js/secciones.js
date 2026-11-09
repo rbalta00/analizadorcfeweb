@@ -1717,8 +1717,13 @@ function s11(r, _leido, onToggle) {
 // ---------- 12: detalle presupuesto ----------
 function s12(r, _leido, onToggle) {
   const art = crearSeccion(12, 'Detalle del presupuesto', '¿Qué partidas específicas componen el presupuesto?', r, onToggle);
-  art.append(graficoToggle('g12-detalle-presupuesto', 'Tabla de detalle del presupuesto', tabla(['Concepto', 'Cantidad prevista', 'Importe sin IVA'],
-    r.materiales.map(m => [m.partida, `${m.cantidad.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${m.unidad}`, M(m.importeMxn)]), { small: true, id: 'g12-detalle-presupuesto' })));
+  // Columna "Precio unitario" agregada a peticion del usuario (2026-11-09, "revisa si
+  // falta algun calculo o desarrollo de las operaciones"): antes la tabla solo mostraba
+  // cantidad e importe final, sin la operacion real (cantidad x precio unitario =
+  // importe) -- el dato (m.unitarioMxn, ya calculado en motor.js tras distribuirMarkup)
+  // existia pero no se mostraba en ningun lado.
+  art.append(graficoToggle('g12-detalle-presupuesto', 'Tabla de detalle del presupuesto', tabla(['Concepto', 'Cantidad prevista', 'Precio unitario', 'Importe sin IVA'],
+    r.materiales.map(m => [m.partida, `${m.cantidad.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${m.unidad}`, M(m.unitarioMxn), M(m.importeMxn)]), { small: true, id: 'g12-detalle-presupuesto' })));
   const sumaPartidas = r.materiales.reduce((s, m) => s + m.importeMxn, 0);
   art.append(p(`Subtotal: ${M(r.ventaSinIva)} · IVA: ${M(r.iva)} · Inversión con IVA: ${M(r.investment)}.`));
   art.append(detalle('Ver detalle', p(

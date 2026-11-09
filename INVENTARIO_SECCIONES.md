@@ -15,14 +15,14 @@ funcion `function sNN(r, _leido, onToggle) { ... }`.
 
 | # | Titulo | Parrafos editables (aprox.) | "Como se calculo" | Tarjetas | Graficas/tablas con toggle propio |
 |---|---|---|---|---|---|
-| 1 | Su proyecto, explicado en una página | 8 | no | si | `g01-comparativo-verificacion` |
+| 1 | Su proyecto, explicado en una página | 8 | no | si | `g01-tarjetas-principales`<br>`g01-tarjetas-sistema`<br>`g01-tarjetas-verificado-principales`<br>`g01-tarjetas-verificado-sistema`<br>`g01-comparativo-verificacion` |
 | 2 | Su recibo: datos comprobados | 4 | si | no | `g02-datos-recibo`<br>`g02-calc-mapa`<br>`g02-calc-trazabilidad` |
 | 3 | Cómo se forma lo que paga a CFE | 4 | si | no | `g03-cargos`<br>`g03-calc-franjas`<br>`g03-calc-pasos`<br>`g03-calc-tramos` |
 | 4 | Qué cargos pueden disminuir | 5 | si | no | `g04-reducibles`<br>`g04-calc-clasificacion` |
 | 5 | Consumo anual: base disponible | 5 | si | no | `g05-historial`<br>`g05-historial-tabla`<br>`g05-base-trabajo`<br>`g05-calc-periodos`<br>`g05-calc-formula` |
-| 6 | Sistema propuesto: ${r.n} paneles de ${r.moduloWp} W | 10 | si | no | `g06-sistema`<br>`g06-inmueble`<br>`g06-calc-formula` |
-| 7 | Cuánta electricidad podría producir | 7 | si | si | `g07-historial`<br>`g07-extrapolado`<br>`g07-calc-formula` |
-| 8 | Impacto ambiental estimado | 1 | si | si | `g08-calc-formula` |
+| 6 | Sistema propuesto: ${r.n} paneles de ${r.moduloWp} W | 10 | si | no | `g06-esquema`<br>`g06-sistema`<br>`g06-inmueble`<br>`g06-calc-formula` |
+| 7 | Cuánta electricidad podría producir | 7 | si | si | `g07-tarjetas-promedios`<br>`g07-tarjetas-rendimiento`<br>`g07-historial`<br>`g07-extrapolado`<br>`g07-calc-formula` |
+| 8 | Impacto ambiental estimado | 1 | si | si | `g08-tarjetas-impacto`<br>`g08-calc-formula` |
 | 9 | Cómo se obtiene el ahorro que se presenta | 1 | no | no | `g09-criterios` |
 | 10 | Cuánto pagaría y cuánto ahorraría | 3 | si | no | `g10-anual`<br>`g10-tabla-comparativa`<br>`g10-calc-mensual` |
 | 11 | Presupuesto y alcance económico | 2 | si | no | `g11-resumen-venta`<br>`g11-presupuesto`<br>`g11-calc-formula` |
@@ -33,8 +33,8 @@ funcion `function sNN(r, _leido, onToggle) { ... }`.
 | 16 | Qué tan cerca se puede llegar al 100% de ahorro | 5 | si | no | `g16-gauge` |
 | 17 | Documento: recibo original de CFE | 1 | no | no | — |
 | 18 | Documento: verificación en sitio | 0 | no | no | — |
-| 19 | Su proyecto según la verificación en sitio | 2 | si | si | `g19-indicador-adicional`<br>`g19-calc-formula` |
-| 20 | Comparativo: calculado vs. verificación en sitio | 3 | si | si | `g20-calc-formula` |
+| 19 | Su proyecto según la verificación en sitio | 2 | si | si | `g19-tarjetas-principales`<br>`g19-tarjetas-sistema`<br>`g19-indicador-adicional`<br>`g19-calc-formula` |
+| 20 | Comparativo: calculado vs. verificación en sitio | 3 | si | si | `g20-tarjetas-calculado`<br>`g20-tarjetas-verificado`<br>`g20-calc-formula` |
 | 21 | Qué hace falta para cerrar el ahorro | 3 | no | no | `g21-pendientes` |
 | 22 | Alcance, exclusiones y condiciones comerciales | 1 | no | no | `g22-condiciones-pago` |
 | 23 | Entrega, mantenimiento y comprobación del ahorro | 2 | no | no | `g23-entrega` |
@@ -51,6 +51,10 @@ funcion `function sNN(r, _leido, onToggle) { ... }`.
 - Bloque "Como se calculo" (detalle tecnico, toggle independiente): no
 - Tarjetas de metricas (`tarjetas()`, valor protegido / etiqueta editable): si
 - Graficas/tablas con su propio toggle "Mostrar: ..." (id compartido pantalla<->PDF):
+  - `g01-tarjetas-principales` -- Tarjetas: inversión, recuperación y ahorro año 1
+  - `g01-tarjetas-sistema` -- Tarjetas: paneles, ahorro neto y % de ahorro
+  - `g01-tarjetas-verificado-principales` -- Tarjetas: inversión, recuperación y ahorro año 1 (verificación en sitio)
+  - `g01-tarjetas-verificado-sistema` -- Tarjetas: paneles, ahorro neto y % de ahorro (verificación en sitio)
   - `g01-comparativo-verificacion` -- Tabla comparativa calculado vs. verificación en sitio
 - Tablas con celdas editables (id pasado a `tabla()`, columnas/filas ocultables):
   - `g01-comparativo-verificacion`
@@ -130,6 +134,7 @@ funcion `function sNN(r, _leido, onToggle) { ... }`.
 - Bloque "Como se calculo" (detalle tecnico, toggle independiente): si
 - Tarjetas de metricas (`tarjetas()`, valor protegido / etiqueta editable): no
 - Graficas/tablas con su propio toggle "Mostrar: ..." (id compartido pantalla<->PDF):
+  - `g06-esquema` -- Esquema Paneles → Inversor → Inmueble ↔ Red CFE
   - `g06-sistema` -- Tabla de partes del sistema propuesto
   - `g06-inmueble` -- Tabla de condiciones actuales del inmueble
   - `g06-calc-formula` -- Tabla de fórmula de dimensionamiento
@@ -146,6 +151,8 @@ funcion `function sNN(r, _leido, onToggle) { ... }`.
 - Bloque "Como se calculo" (detalle tecnico, toggle independiente): si
 - Tarjetas de metricas (`tarjetas()`, valor protegido / etiqueta editable): si
 - Graficas/tablas con su propio toggle "Mostrar: ..." (id compartido pantalla<->PDF):
+  - `g07-tarjetas-promedios` -- Tarjetas: comparación de promedios mensuales
+  - `g07-tarjetas-rendimiento` -- Tarjetas: producción anual y rendimiento
   - `g07-historial` -- Generación vs. su consumo REAL del historial
   - `g07-extrapolado` -- Generación vs. consumo EXTRAPOLADO (los 12 meses)
   - `g07-calc-formula` -- Tabla de fórmula de generación anual
@@ -161,6 +168,7 @@ funcion `function sNN(r, _leido, onToggle) { ... }`.
 - Bloque "Como se calculo" (detalle tecnico, toggle independiente): si
 - Tarjetas de metricas (`tarjetas()`, valor protegido / etiqueta editable): si
 - Graficas/tablas con su propio toggle "Mostrar: ..." (id compartido pantalla<->PDF):
+  - `g08-tarjetas-impacto` -- Tarjetas: CO2 evitado y equivalente en árboles
   - `g08-calc-formula` -- Tabla de fórmulas de impacto ambiental
 - Tablas con celdas editables (id pasado a `tabla()`, columnas/filas ocultables):
   - `g08-calc-formula`
@@ -297,6 +305,8 @@ funcion `function sNN(r, _leido, onToggle) { ... }`.
 - Bloque "Como se calculo" (detalle tecnico, toggle independiente): si
 - Tarjetas de metricas (`tarjetas()`, valor protegido / etiqueta editable): si
 - Graficas/tablas con su propio toggle "Mostrar: ..." (id compartido pantalla<->PDF):
+  - `g19-tarjetas-principales` -- Tarjetas: inversión, recuperación y ahorro año 1
+  - `g19-tarjetas-sistema` -- Tarjetas: paneles, ahorro neto y % de ahorro
   - `g19-indicador-adicional` -- Tabla de indicadores adicionales (VAN, TIR)
   - `g19-calc-formula` -- Tabla de fórmula del escenario verificado
 - Tablas con celdas editables (id pasado a `tabla()`, columnas/filas ocultables):
@@ -311,6 +321,8 @@ funcion `function sNN(r, _leido, onToggle) { ... }`.
 - Bloque "Como se calculo" (detalle tecnico, toggle independiente): si
 - Tarjetas de metricas (`tarjetas()`, valor protegido / etiqueta editable): si
 - Graficas/tablas con su propio toggle "Mostrar: ..." (id compartido pantalla<->PDF):
+  - `g20-tarjetas-calculado` -- Tarjetas: resumen calculado por este sistema
+  - `g20-tarjetas-verificado` -- Tarjetas: resumen según la verificación en sitio
   - `g20-calc-formula` -- Tabla de fórmula de la diferencia
 - Tablas con celdas editables (id pasado a `tabla()`, columnas/filas ocultables):
   - `g20-calc-formula`

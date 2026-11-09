@@ -567,9 +567,11 @@ function pagina11(doc, r, numero) {
 function pagina12(doc, r, numero) {
   let y = encabezado(doc, numero, 'Detalle del presupuesto', r.titular);
   if (graficoIncluido(r, 'g12-detalle-presupuesto')) {
-    y = tablaF(doc, y, 'g12-detalle-presupuesto', r, ['Concepto', 'Cantidad prevista', 'Importe sin IVA'],
-      r.materiales.map(m => [m.partida, `${m.cantidad.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${m.unidad}`, M(m.importeMxn)]),
-      { widths: [CONTENT_W * 0.5, CONTENT_W * 0.25, CONTENT_W * 0.25], small: true });
+    // Columna "Precio unitario" agregada 2026-11-09 -- mismo fix que en secciones.js,
+    // para que este generador viejo (usado por "Enviar por WhatsApp") no se desfase.
+    y = tablaF(doc, y, 'g12-detalle-presupuesto', r, ['Concepto', 'Cantidad prevista', 'Precio unitario', 'Importe sin IVA'],
+      r.materiales.map(m => [m.partida, `${m.cantidad.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${m.unidad}`, M(m.unitarioMxn), M(m.importeMxn)]),
+      { widths: [CONTENT_W * 0.4, CONTENT_W * 0.2, CONTENT_W * 0.2, CONTENT_W * 0.2], small: true });
     y = spacer(y, 8);
   }
   y = bodyX(doc, y, `Subtotal: ${M(r.ventaSinIva)} · IVA: ${M(r.iva)} · Inversión con IVA: ${M(r.investment)}.`);
