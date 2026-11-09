@@ -3027,6 +3027,142 @@ $('btnInstalar').addEventListener('click', async () => {
 window.addEventListener('appinstalled', () => { $('btnInstalar').hidden = true; actualizarEstadoInstalacion(); });
 
 // =====================================================================
+// Herramienta de diagnostico: ¿el PDF realmente refleja mis ediciones/apagados?
+// =====================================================================
+// Pedido explicito del usuario (2026-11-09), tras reportar que al editar un texto y
+// apagar una seccion, el PDF generado no traia esos cambios. La reproduccion manual
+// (cliente de prueba, editar + apagar + generar) SI reflejo todo correctamente -- la
+// hipotesis mas probable es cache vieja de la PWA en su navegador (ya paso antes en
+// este proyecto). Esta funcion queda como herramienta reusable para la proxima vez:
+// genera el PDF real con el estado actual, lo lee con pdf.js (ya vendorizado, mismo
+// patron de otras auditorias de este proyecto), y compara contra lo que
+// proyectoActual dice que deberia estar editado/apagado. Se corre a mano desde la
+// consola del navegador: verificarEdicionesEnPdf()  (requiere haber calculado antes).
+async function verificarEdicionesEnPdf() {
+  if (!ultimoResultado) { console.error('Calcula primero.'); return; }
+  const problemas = [];
+  const ok = [];
+
+  // 1) Generar el PDF real (mismo camino que el boton "Cotizacion completa") y leer
+  // su texto completo con pdf.js.
+  await prepararDocumentosAdjuntosParaPdf(ultimoResultado);
+  const doc = generarPdfCompletaDesdeVista(ultimoResultado);
+  const buffer = doc.output('arraybuffer');
+  const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+  let textoPdf = '';
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const pagina = await pdf.getPage(p);
+    const contenido = await pagina.getTextContent();
+    textoPdf += contenido.items.map((it) => it.str).join(' ') + '\n';
+  }
+
+  // 2) Textos editados (proyectoActual.textosEditados): cada uno deberia aparecer
+  // literal en el PDF, A MENOS que su seccion este completamente apagada (ahi es
+  // correcto que no aparezca). Limitacion conocida: el id solo trae el numero de
+  // seccion cuando empieza con "sN-" (parrafos/titulos); las celdas de tabla usan el
+  // id de la propia tabla (ej. "g04-calc-clasificacion-h0", sin el prefijo "sN-"), asi
+  // que esta exencion no aplica ahi -- si editas una celda DENTRO de una seccion
+  // apagada, esta funcion la va a reportar como "problema" aunque sea el
+  // comportamiento correcto. No se resolvio por tiempo -- revisar a mano si pasa.
+  const seccionesApagadas = new Set(proyectoActual.seccionesExcluidas || []);
+  Object.entries(proyectoActual.textosEditados || {}).forEach(([id, texto]) => {
+    const numeroSeccion = Number((id.match(/^s(\d+)-/) || [])[1]);
+    if (seccionesApagadas.has(numeroSeccion)) return; // su seccion esta apagada, correcto que no salga
+    const extracto = String(texto).slice(0, 60);
+    if (textoPdf.includes(extracto)) {
+      ok.push(`✓ Texto editado "${id}" SI aparece en el PDF: "${extracto}…"`);
+    } else {
+      problemas.push(`✗ Texto editado "${id}" NO aparece en el PDF: "${extracto}…"`);
+    }
+  });
+
+  // 3) Parrafos ocultos a mano (textosOcultos) -- su texto actual en pantalla NO
+  // deberia aparecer en el PDF.
+  Object.keys(proyectoActual.textosOcultos || {}).forEach((id) => {
+    const nodo = document.querySelector(`[data-texto-id="${id}"]`);
+    if (!nodo) return;
+    const extracto = nodo.textContent.trim().slice(0, 60);
+    if (extracto && textoPdf.includes(extracto)) {
+      problemas.push(`✗ Parrafo oculto "${id}" SI aparece en el PDF (no debería): "${extracto}…"`);
+    } else if (extracto) {
+      ok.push(`✓ Parrafo oculto "${id}" correctamente ausente del PDF.`);
+    }
+  });
+
+  // 4) Secciones apagadas por completo -- su titulo NO deberia aparecer.
+  // OJO: TITULOS_SECCIONES es un arreglo 0-indexado (TITULOS_SECCIONES[0] es la
+  // seccion 1) -- hay que restar 1 al numero de seccion, si no se compara contra el
+  // titulo de la seccion siguiente.
+  (proyectoActual.seccionesExcluidas || []).forEach((numero) => {
+    const titulo = TITULOS_SECCIONES[numero - 1];
+    if (!titulo) return;
+    if (textoPdf.includes(titulo)) {
+      problemas.push(`✗ Sección ${numero} ("${titulo}") está apagada pero SÍ aparece en el PDF.`);
+    } else {
+      ok.push(`✓ Sección ${numero} ("${titulo}") correctamente ausente del PDF.`);
+    }
+  });
+
+  // 5) Graficas/tablas apagadas individualmente (graficosExcluidos) -- el wrapper que
+  // arma graficoToggle() no trae un id/data-attr propio en el DOM (solo existe dentro
+  // de un closure de secciones.js), asi que no se puede ubicar por id. En vez de eso:
+  // se cuentan los contenedores .grafico-togglable.grafico-apagado que SI estan en el
+  // DOM ahora mismo y se confirma que ninguno de sus textos aparece en el PDF -- un
+  // chequeo mas tosco (no dice CUAL id especifico), pero cubre el caso real sin
+  // inventar un selector que no existe.
+  const apagadosEnDom = Array.from(document.querySelectorAll('.grafico-togglable.grafico-apagado'));
+  if ((proyectoActual.graficosExcluidos || []).length !== apagadosEnDom.length) {
+    problemas.push(`✗ proyectoActual.graficosExcluidos tiene ${(proyectoActual.graficosExcluidos || []).length} id(s), pero el DOM solo muestra ${apagadosEnDom.length} gráfica(s)/tabla(s) atenuada(s) -- revisar si el toggle se guardó pero no se volvió a renderizar (o viceversa).`);
+  } else {
+    ok.push(`✓ ${apagadosEnDom.length} gráfica(s)/tabla(s) apagada(s) coinciden entre proyectoActual y el DOM renderizado.`);
+  }
+  apagadosEnDom.forEach((nodo, i) => {
+    const texto = nodo.textContent.trim().slice(0, 40).replace(/\s+/g, ' ');
+    if (!texto) return;
+    if (textoPdf.includes(texto)) {
+      problemas.push(`✗ Una gráfica/tabla apagada (#${i + 1} en el DOM) SÍ aparece en el PDF: "${texto}…"`);
+    } else {
+      ok.push(`✓ Gráfica/tabla apagada #${i + 1} correctamente ausente del PDF.`);
+    }
+  });
+
+  // 6) Columnas/filas ocultas de tablas -- su encabezado no deberia aparecer en el
+  // PDF. La tabla no trae un id propio en el DOM (solo lo usan internamente las
+  // celdas editables, ver celdaEditable()), asi que se ubica por la celda del
+  // encabezado de la columna 0 (siempre editable cuando la tabla tiene id), con el
+  // patron de id real `${tablaId}-h0` que usa celdaEditable().
+  Object.entries(proyectoActual.tablaColumnasOcultas || {}).forEach(([tablaId, indices]) => {
+    if (!indices.length) return;
+    const celdaH0 = document.querySelector(`[data-texto-id="${tablaId}-h0"]`);
+    const tabla = celdaH0 ? celdaH0.closest('table') : null;
+    if (!tabla) { ok.push(`(sin verificar) tabla "${tablaId}" con columnas ocultas, no se encontró en el DOM actual.`); return; }
+    const ths = tabla.querySelectorAll('thead th');
+    indices.forEach((i) => {
+      const th = ths[i];
+      if (!th) return;
+      const texto = th.textContent.trim().replace(/[✓✕↺🌐]/g, '').trim();
+      if (!texto) return;
+      if (textoPdf.includes(texto)) {
+        problemas.push(`✗ Columna oculta "${texto}" de la tabla "${tablaId}" SÍ aparece en el PDF.`);
+      } else {
+        ok.push(`✓ Columna oculta "${texto}" de la tabla "${tablaId}" correctamente ausente del PDF.`);
+      }
+    });
+  });
+
+  console.log(`%cVerificación de ediciones/apagados en el PDF (${ok.length} ok, ${problemas.length} problemas)`, 'font-weight:bold');
+  ok.forEach((l) => console.log(l));
+  if (problemas.length) {
+    console.warn('--- PROBLEMAS ENCONTRADOS ---');
+    problemas.forEach((l) => console.warn(l));
+  } else {
+    console.log('%cTodo lo editado/apagado en pantalla se refleja correctamente en el PDF.', 'color:green;font-weight:bold');
+  }
+  return { ok, problemas };
+}
+window.verificarEdicionesEnPdf = verificarEdicionesEnPdf;
+
+// =====================================================================
 // Arranque
 // =====================================================================
 renderListaClientes();
