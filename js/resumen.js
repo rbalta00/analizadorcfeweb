@@ -61,7 +61,12 @@ export function generarResumenEjecutivo(r) {
     ], { widths: [CONTENT_W * 0.4, CONTENT_W * 0.6] });
     y = spacer(y, 10);
 
-    notice(doc, y, clasif + escTxt + ' Presupuesto preliminar: precios y levantamiento en sitio pendientes de confirmar.');
+    // El renglon "Presupuesto preliminar: precios y levantamiento en sitio pendientes de
+    // confirmar" se quito a peticion explicita del usuario (2026-11-09) -- es el mismo
+    // aviso que ya se quito del pie de pagina global en pdfComponents.js, pero aqui
+    // vivia ademas pegado como texto FIJO dentro del cuerpo de esta pagina (no por
+    // dibujarHeaderFooter), por eso seguia apareciendo pese al primer fix.
+    notice(doc, y, clasif + escTxt);
   }
 
   return buildPdf(`Resumen ejecutivo · ${r.titular}`, 'GESTORIA Y PROYECTOS SOELRB',
