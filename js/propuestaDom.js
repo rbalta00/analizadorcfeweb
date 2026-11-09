@@ -238,13 +238,28 @@ function dibujarTabla(doc, tabla, y) {
   return spacer(y, 8);
 }
 
+// Lee el textContent de un nodo quitando cualquier <button> descendiente -- el icono
+// ✓/🌐✕ de textoChico()/etiquetaTarjeta() (secciones.js) viaja DENTRO del mismo nodo
+// que el texto editable, asi que un simple ".textContent" sobre el contenedor lo pega
+// al final del texto real. Bug real encontrado 2026-11-09 (reportado por el usuario
+// sobre un elemento distinto, encontrado por auditoria del resto del codigo de PDF):
+// "Inversion total✓" en vez de "Inversion total" en tarjetas/leyendas/gauge del PDF.
+// Mismo criterio que textoPlano() en charts.js (usado ahi solo para el atributo title),
+// pero generalizado aqui para cualquier nodo que se lea por su textContent completo.
+function textoSinIconos(nodo) {
+  if (!nodo) return '';
+  const clon = nodo.cloneNode(true);
+  clon.querySelectorAll('button').forEach((b) => b.remove());
+  return clon.textContent.trim();
+}
+
 function dibujarTarjetas(doc, cont, y) {
   const metricas = Array.from(cont.querySelectorAll(':scope > .metrica'));
   if (!metricas.length) return y;
   const items = metricas.map((m) => {
     const valor = m.querySelector('.valor');
-    const etiqueta = m.querySelector('.texto-editable-chico, .etiqueta');
-    return [valor ? limpiarParaPdf(valor.textContent) : '', etiqueta ? limpiarParaPdf(etiqueta.textContent) : ''];
+    const etiqueta = m.querySelector('.etiqueta');
+    return [valor ? limpiarParaPdf(valor.textContent) : '', etiqueta ? limpiarParaPdf(textoSinIconos(etiqueta)) : ''];
   });
   // cardsRow() dibuja siempre en filas de 3 -- si hay mas de 3 tarjetas, se agrupan.
   // Altura FIJA de cardsRow (56) + spacer(8) = 64, no una estimacion.
@@ -266,21 +281,21 @@ function dibujarGraficaComoTabla(doc, cont, y) {
   let filas = [];
   if (cont.classList.contains('grafica-h')) {
     filas = Array.from(cont.querySelectorAll('.grafica-h-fila')).map((f) => [
-      f.querySelector('.grafica-h-etq')?.textContent.trim() || '',
-      f.querySelector('.grafica-h-val')?.textContent.trim() || '',
+      textoSinIconos(f.querySelector('.grafica-h-etq')),
+      textoSinIconos(f.querySelector('.grafica-h-val')),
     ]);
   } else if (cont.classList.contains('grafica-agrupada')) {
-    const leyenda = Array.from(cont.querySelectorAll('.grafica-leyenda > *')).map((n) => n.textContent.trim()).filter(Boolean);
+    const leyenda = Array.from(cont.querySelectorAll('.grafica-leyenda > *')).map((n) => textoSinIconos(n)).filter(Boolean);
     const [s1 = 'Serie 1', s2 = 'Serie 2'] = leyenda;
     filas = Array.from(cont.querySelectorAll('.grafica-agrupada-grupo')).map((g) => {
-      const cat = g.querySelector('.grafica-agrupada-etq')?.textContent.trim() || '';
+      const cat = textoSinIconos(g.querySelector('.grafica-agrupada-etq'));
       const [b1, b2] = g.querySelectorAll('.grafica-agrupada-barra-1, .grafica-agrupada-barra-2');
       return [cat, b1?.title.split(':').slice(1).join(':').trim() || '', b2?.title.split(':').slice(1).join(':').trim() || ''];
     });
     if (filas.length) filas.unshift([`(${s1} / ${s2})`, '', '']);
   } else if (cont.classList.contains('grafica-gauge')) {
-    const label = cont.querySelector('.grafica-gauge-label')?.textContent.trim();
-    const valor = cont.querySelector('.grafica-gauge-ejes strong')?.textContent.trim() || '';
+    const label = textoSinIconos(cont.querySelector('.grafica-gauge-label'));
+    const valor = textoSinIconos(cont.querySelector('.grafica-gauge-ejes strong'));
     filas = [[label || 'Avance', valor]];
   } else if (cont.classList.contains('grafica-curva')) {
     // La curva mezcla texto fijo + numero en el mismo <text> del SVG (ver charts.js) --

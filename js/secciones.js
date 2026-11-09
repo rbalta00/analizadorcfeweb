@@ -752,16 +752,16 @@ function s01(r, _leido, onToggle) {
   art.append(avisoCream(`Esta cotización es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días). Los ` +
     'precios de materiales son una provisión de mercado, no una cotización fija de proveedor -- después de esa ' +
     'fecha hay que revisarlos antes de confirmar.'));
-  art.append(tarjetas([
+  art.append(graficoToggle('g01-tarjetas-principales', 'Tarjetas: inversión, recuperación y ahorro año 1', tarjetas([
     [M(r.investment), 'Lo que cuesta el sistema, IVA incluido'],
     [r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se paga solo'],
     [M(r.ahorroAnual), 'Lo que ahorraría en el primer año'],
-  ]));
-  art.append(tarjetas([
+  ])));
+  art.append(graficoToggle('g01-tarjetas-sistema', 'Tarjetas: paneles, ahorro neto y % de ahorro', tarjetas([
     [`${r.n} paneles`, `${r.moduloWp} W por módulo / ${r.kwp.toFixed(2)} kWp`],
     [M(r.ahorroAnual - r.om1), 'Ahorro neto año 1, tras mantenimiento'],
     [PCT(r.pctAhorro), 'Porcentaje de la factura que ahorraría'],
-  ]));
+  ])));
   // Hallazgo 12, auditoria 2026-11-06: con consumo muy bajo, el mantenimiento (1% de la
   // inversión) puede superar el ahorro bruto del primer año -- la tarjeta de arriba
   // mostraba el numero negativo sin ningun aviso que explicara por que, facil de leer
@@ -800,16 +800,16 @@ function s01(r, _leido, onToggle) {
     art.append(subtitulo(1, 'verificacion-sitio', `Su proyecto según la verificación en sitio (ver sección ${refSeccion(19, r)})`));
     art.append(p(`Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la verificación en ` +
       `campo, en vez de los ${r.n} que calcula este sistema a partir del consumo real.`));
-    art.append(tarjetas([
+    art.append(graficoToggle('g01-tarjetas-verificado-principales', 'Tarjetas: inversión, recuperación y ahorro año 1 (verificación en sitio)', tarjetas([
       [M(ev.investment), 'Lo que costaría el sistema, IVA incluido'],
       [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se pagaría solo'],
       [M(ev.ahorroAnual), 'Lo que ahorraría en el primer año'],
-    ]));
-    art.append(tarjetas([
+    ])));
+    art.append(graficoToggle('g01-tarjetas-verificado-sistema', 'Tarjetas: paneles, ahorro neto y % de ahorro (verificación en sitio)', tarjetas([
       [`${ev.n} paneles`, `${r.moduloWp} W por módulo / ${ev.kwp.toFixed(2)} kWp`],
       [M(ev.ahorroAnual - ev.om1), 'Ahorro neto año 1, tras mantenimiento'],
       [PCT(ev.pctAhorro), 'Porcentaje de la factura que ahorraría'],
-    ]));
+    ])));
     const dif = ev.diferenciaPaneles;
     art.append(subtitulo(1, 'comparativo-verificacion', `Comparativo: calculado vs. verificación en sitio (ver sección ${refSeccion(20, r)})`));
     art.append(graficoToggle('g01-comparativo-verificacion', 'Tabla comparativa calculado vs. verificación en sitio', tabla(['Concepto comparable', `Nuestro cálculo (sección ${refSeccion(1, r)})`, `Verificación en sitio (sección ${refSeccion(19, r)})`, 'Diferencia'], [
@@ -1025,16 +1025,16 @@ function s24(r, _leido, onToggle) {
   art.append(p(`${r.titular} · ${r.domicilio || 'domicilio por confirmar'}`));
   art.append(avisoCream(`Este escenario usa el número de paneles de la verificación en campo, NO el calculado por ` +
     `el consumo del recibo (ver sección ${refSeccion(1, r)} para ese otro escenario, y sección ${refSeccion(20, r)} para la comparación lado a lado).`));
-  art.append(tarjetas([
+  art.append(graficoToggle('g19-tarjetas-principales', 'Tarjetas: inversión, recuperación y ahorro año 1', tarjetas([
     [M(ev.investment), 'Lo que cuesta el sistema, IVA incluido'],
     [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se paga solo'],
     [M(ev.ahorroAnual), 'Lo que ahorraría en el primer año'],
-  ]));
-  art.append(tarjetas([
+  ])));
+  art.append(graficoToggle('g19-tarjetas-sistema', 'Tarjetas: paneles, ahorro neto y % de ahorro', tarjetas([
     [`${ev.n} paneles`, `${r.moduloWp} W por módulo / ${ev.kwp.toFixed(2)} kWp`],
     [M(ev.ahorroAnual - ev.om1), 'Ahorro neto año 1, tras mantenimiento'],
     [PCT(ev.pctAhorro), 'Porcentaje de la factura que ahorraría'],
-  ]));
+  ])));
   if (ev.van != null || ev.tir != null) {
     art.append(graficoToggle('g19-indicador-adicional', 'Tabla de indicadores adicionales (VAN, TIR)', tabla(['Indicador adicional', 'Valor'], [
       ['VAN (valor actual neto) al 10%', M(ev.van)],
@@ -1076,21 +1076,21 @@ function s25(r, _leido, onToggle) {
     `que propone el documento de verificación en campo (${ev.n} paneles) -- ambos escenarios usan el mismo recibo, ` +
     'la misma tarifa y los mismos costos, solo cambia el número de paneles.'));
   art.append(textoEditable('h5', null, `Calculado por este sistema (sección ${refSeccion(1, r)})`));
-  art.append(tarjetas([
+  art.append(graficoToggle('g20-tarjetas-calculado', 'Tarjetas: resumen calculado por este sistema', tarjetas([
     [M(r.investment), 'Inversión estimada, IVA incluido'],
     [`${r.n} paneles`, `${r.moduloWp} W por módulo / ${r.kwp.toFixed(2)} kWp`],
     [M(r.ahorroAnual), 'Ahorro estimado de factura, año 1'],
     [r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', 'Recuperación simple estimada'],
     [PCT(r.pctAhorro), 'Ahorro anual de factura estimado'],
-  ]));
+  ])));
   art.append(textoEditable('h5', null, `Propuesta de la verificación en campo (sección ${refSeccion(19, r)})`));
-  art.append(tarjetas([
+  art.append(graficoToggle('g20-tarjetas-verificado', 'Tarjetas: resumen según la verificación en sitio', tarjetas([
     [M(ev.investment), 'Inversión estimada, IVA incluido'],
     [`${ev.n} paneles`, `${r.moduloWp} W por módulo / ${ev.kwp.toFixed(2)} kWp`],
     [M(ev.ahorroAnual), 'Ahorro estimado de factura, año 1'],
     [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'Recuperación simple estimada'],
     [PCT(ev.pctAhorro), 'Ahorro anual de factura estimado'],
-  ]));
+  ])));
   const dif = ev.diferenciaPaneles;
   art.append(p(dif === 0
     ? 'El número de paneles calculado por el consumo real coincide con lo que sugirió la verificación en campo -- ambos escenarios salen iguales.'
@@ -1396,6 +1396,12 @@ function s06(r, _leido, onToggle) {
   // Cada chip del esquema es editable (textoChico) -- hueco real encontrado en el
   // barrido final de 2026-11-05 continuacion 9 (antes era innerHTML crudo). Las
   // flechas (→/↔) son solo conectores visuales, se quedan fijas.
+  // Envuelto en graficoToggle() -- bug real reportado por el usuario, 2026-11-09,
+  // insistido varias veces ("ya van como 10 veces que te digo que esto lo apague"):
+  // este esquema NUNCA tuvo ningun control de apagado, a diferencia de CUALQUIER otra
+  // grafica/tabla de este proyecto -- no es que el boton no funcionara, es que no
+  // existia ningun boton. Mismo mecanismo probado (graficoToggle + CLASES_OMITIR en
+  // propuestaDom.js) que ya usa el resto de la seccion, en vez de inventar algo nuevo.
   const esquema = el('div', 'esquema-sistema');
   esquema.append(
     el('span', null, textoChico('☀️ Paneles')), el('span', 'flecha', '→'),
@@ -1403,7 +1409,7 @@ function s06(r, _leido, onToggle) {
     el('span', null, textoChico('🏠 Inmueble')), el('span', 'flecha-doble', '↔'),
     el('span', null, textoChico('🔌 Red CFE')),
   );
-  art.append(esquema);
+  art.append(graficoToggle('g06-esquema', 'Esquema Paneles → Inversor → Inmueble ↔ Red CFE', esquema));
   const acKw = r.kwp / 1.2;
   art.append(graficoToggle('g06-sistema', 'Tabla de partes del sistema propuesto', tabla(['Parte del sistema', 'Cantidad y función'], [
     ['Paneles', `${r.n} módulos de ${r.moduloWp} W: ${r.kwp.toFixed(2)} kWp de potencia nominal. Marca y modelo por confirmar.`],
@@ -1525,20 +1531,20 @@ function s07(r, _leido, onToggle) {
   const consumoMensualProm = r.annualKwh / 12;
   const difMensual = genMensualProm - consumoMensualProm;
   art.append(subtituloChico(7, 'promedios-mensuales', 'Comparación de promedios mensuales'));
-  art.append(tarjetas([
+  art.append(graficoToggle('g07-tarjetas-promedios', 'Tarjetas: comparación de promedios mensuales', tarjetas([
     [`${genMensualProm.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Generación promedio mensual estimada (con los paneles propuestos)'],
     [`${consumoMensualProm.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Consumo promedio mensual (de su recibo)'],
     [`${difMensual >= 0 ? '+' : ''}${difMensual.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, difMensual >= 0 ? 'Excedente promedio mensual estimado' : 'Déficit promedio mensual estimado'],
-  ]));
+  ])));
   art.append(p(`El consumo promedio mensual sale de ${r.basisConsumo || 'el período facturado'} (ver sección ${refSeccion(5, r)}). La ` +
     'generación promedio mensual es la misma cifra fija en los 12 meses (criterio de horas-sol, no varía por mes -- ' +
     'ver aviso abajo). Esta comparación es de PROMEDIOS; para ver mes por mes contra su historial real, baja a la ' +
     'gráfica de abajo.'));
-  art.append(tarjetas([
+  art.append(graficoToggle('g07-tarjetas-rendimiento', 'Tarjetas: producción anual y rendimiento', tarjetas([
     [`${r.gen.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Producción anual regional estimada'],
     [(r.gen / r.kwp).toLocaleString('en-US', { maximumFractionDigits: 2 }), 'kWh por kWp al año de referencia'],
     [`${r.kwp.toFixed(2)} kWp`, 'Potencia nominal de cálculo'],
-  ]));
+  ])));
   art.append(p('El segundo número (kWh por kWp al año) es un indicador de rendimiento. Con el criterio fijo de ' +
     'horas-sol que se explica abajo, ese número sale prácticamente igual sin importar el predio o el tamaño del ' +
     'sistema — no es un error de cálculo ni algo específico de este inmueble.'));
@@ -1608,11 +1614,11 @@ function s08(r, _leido, onToggle) {
   const co2Kg = r.gen * FACTOR_CO2_KG_KWH, co2Ton = co2Kg / 1000, arboles = co2Kg / CO2_KG_POR_ARBOL_ANIO;
   art.append(p('Generar su propia electricidad con el sol, en vez de tomarla de la red (que en México todavía se ' +
     'produce en buena parte quemando combustibles), evita que se emita cierta cantidad de CO2 cada año que el sistema esté funcionando.'));
-  art.append(tarjetas([
+  art.append(graficoToggle('g08-tarjetas-impacto', 'Tarjetas: CO2 evitado y equivalente en árboles', tarjetas([
     [`${co2Ton.toLocaleString('en-US', { maximumFractionDigits: 1 })} ton`, 'CO2 evitado estimado, cada año'],
     [`${arboles.toLocaleString('en-US', { maximumFractionDigits: 0 })} árboles`, 'Equivalente en árboles urbanos durante un año'],
     [`${(co2Ton * 25).toLocaleString('en-US', { maximumFractionDigits: 0 })} ton`, 'CO2 evitado acumulado en 25 años (sin degradación)'],
-  ]));
+  ])));
   art.append(badgeEstado('supuesto'));
   art.append(avisoCream(`Estimación de referencia: ${FACTOR_CO2_KG_KWH} kg de CO2 evitado por cada kWh generado ` +
     '(factor de emisión del Sistema Eléctrico Nacional, varía por año según lo publicado por SEMARNAT/CFE) y ~' +
