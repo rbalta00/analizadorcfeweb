@@ -773,6 +773,149 @@ se reinventa una formula aqui, solo se traduce.
   el aviso de distribución conceptual → "Guardar" → aparece en la sección 6 en
   pantalla y el PDF se generó sin errores.
 
+### Reencuadre: "Analizador de sistemas fotovoltaicos" + pasos de entrega + numeración de todo lo editable (2026-11-09, noche)
+- El usuario aclaró el propósito real de la app a lo largo de la sesión: no es un
+  "cotizador", es un analista/diseñador de sistemas fotovoltaicos (industrial,
+  comercial, residencial, las 6 tarifas CFE) -- la cotización es un SUBPRODUCTO del
+  análisis, no la identidad de la herramienta. También pidió, en una sola sesión larga
+  y por mensajes sueltos: (1) poder seguir editando él mismo a su conveniencia todo lo
+  que ya está construido, sin que se le restrinja; (2) numeración visible de cada
+  elemento editable para poder reportar "el número N no funciona" en vez de describir
+  texto; (3) revisar botones redundantes y simplificar; (4) poder trabajar "a pasos" --
+  entregar un análisis preliminar mientras avanza la negociación, SIN perder ni
+  duplicar la cotización ya validada como completa, y poder usar esa validada como
+  machote para clientes nuevos.
+- **Rebranding** (`index.html`, `manifest.json`): título/h1/descripción/nombre de la
+  PWA cambiados de "Cotizador FV CFE" a "Analizador FV CFE" / "Analizador de sistemas
+  fotovoltaicos — CFE", con la leyenda "la cotización sale del análisis, no al revés".
+  `cliente.html` (la página pública para el cliente final) NO se tocó -- ya estaba
+  enfocada en la acción ("Envía los datos de tu recibo CFE"), no en el nombre de la
+  herramienta interna. Cache del service worker bumpeado a `v25` para que la PWA
+  instalada tome el titulo/manifest nuevos.
+- **Pasos de entrega** (nuevo, `js/clientes.js`): cada cotización ahora guarda
+  `proyecto.pasos` (`{id: {nombre, seccionesExcluidas, graficosExcluidos,
+  tablaColumnasOcultas, tablaFilasOcultas}}`) + `proyecto.pasoActivo`. Es una capa de
+  PERSISTENCIA encima de los 4 campos sueltos que YA existían y que YA lee toda la app
+  (secciones.js/propuesta.js nunca se enteran de que "pasos" existe) -- cada paso es
+  solo una foto de qué se muestra/exporta, el contenido (textos, cifras calculadas)
+  es siempre el mismo. "Análisis completo" se crea siempre como primer paso y nunca se
+  puede borrar (protegido en la función `eliminarPaso` y en la UI). Nuevo panel
+  "📑 Paso de entrega de esta cotización" (encima de las secciones, en `index.html`):
+  selector de paso + "+ Nuevo paso desde aquí" (copia el estado actual con un nombre
+  nuevo, ej. "Análisis preliminar", sin tocar el paso de origen) + renombrar + eliminar
+  (deshabilitado para "Análisis completo" o si solo queda un paso). El botón
+  "Cotización completa" ahora muestra una leyenda ("📑 Vas a generar: ...") con el
+  nombre del paso activo, para que nunca sea ambiguo qué se está exportando.
+  Proyectos guardados ANTES de esto se migran solos (`asegurarPasos`, llamada al abrir
+  cualquier proyecto) sin perder lo que ya tuvieran apagado.
+- **"Desde cotización ya validada" ahora también clona los pasos** (no solo la tarifa/
+  cargos, que ya clonaba desde el 2026-11-06): al usar una cotización marcada como
+  buena como machote para un cliente nuevo, el cliente nuevo arranca con los mismos
+  pasos ya armados (ej. ya trae listo "Análisis preliminar" + "Análisis completo"),
+  solo falta su recibo real.
+- **Numeración visible de TODO el contenido editable** (nuevo,
+  `numerarContenidoEditable()` en `js/app.js`, corre dentro de `renderSecciones()`
+  cada vez que se renderiza): no fue necesario mantener una lista nueva -- cada
+  párrafo/título/subtítulo (`campoEditableConId`), celda de tabla (`celdaEditable`) y
+  etiqueta de tarjeta/leyenda de gráfica (`textoChico`) YA le pone a su elemento
+  `dataset.textoId` desde hace semanas; solo se recorren en orden de aparición y se
+  les pega un número correlativo visible (№1, №2...) justo antes de cada uno
+  (`.badge-num-editable`, CSS nuevo). El número NO se guarda -- se recalcula desde 1
+  sobre lo que está VISIBLE en cada render, así que apagar una sección o cambiar de
+  paso simplemente renumera lo que queda, nunca deja huecos. Contador total visible
+  junto al índice de secciones (`#contadorEditables`).
+- **Botones revisados y reorganizados, sin quitar funciones** (pantalla Clientes,
+  `index.html`): los 7 botones que vivían en una sola fila sin orden ("+ Nuevo
+  cliente", dashboard, definitivas, envíos, WhatsApp, formulario, guía) se agruparon
+  en 3 bloques con su propio `<h4>` -- "Cliente nuevo" / "Captar un cliente (antes de
+  registrarlo)" / "Revisar / organizar lo ya capturado" -- más el bloque de "Respaldo
+  entre dispositivos" que ya existía aparte. Ningún id ni función se quitó -- todos
+  hacían algo real y distinto (confirmado contra este mismo archivo), el problema era
+  de agrupación/etiquetado, no de redundancia. En la pestaña de exportar PDF se agregó
+  una nota explícita: solo "Cotización completa" cambia según el paso activo;
+  "Resumen ejecutivo" y "Anexo trámite CFE" son documentos de formato fijo, siempre
+  iguales sin importar qué esté apagado.
+- **Deliberadamente NO se tocó**: `motor.js`, `resultado.js`, `recibo.js` (todo el
+  cálculo y la clasificación por tarifa) -- todo lo de esta sesión es una capa de
+  presentación/persistencia encima de lo ya calculado. `node js/test_motor.mjs` y
+  `node js/test_recibo.mjs` siguen en verde sin cambios, confirmando que no se
+  rompió ningún número ya validado de ninguna tarifa.
+- **Pendiente de verificación real**: la extensión de Chrome in Chrome no se conectó
+  esta sesión (`tabs_context_mcp` devolvió "Browser extension is not connected" dos
+  veces) -- todo lo de arriba se verificó por lectura de código, cruce de ids entre
+  `index.html`/`js/app.js`, `node --check` en los 5 archivos JS tocados, balance de
+  llaves de `css/styles.css`, y las 2 suites de prueba (`test_motor.mjs`/
+  `test_recibo.mjs`) en verde -- pero NO se hizo clic real en el navegador sobre el
+  selector de pasos ni sobre la numeración. Queda pendiente que el usuario (o una
+  sesión futura con la extensión conectada) confirme en vivo: crear un paso nuevo,
+  cambiar entre pasos, que el PDF "Cotización completa" refleje el paso activo, y que
+  los números aparezcan y se recorran bien al apagar/prender secciones.
+
+### Continuación misma sesión: 2 botones por elemento, número de página, blindaje contra que la numeración se cuele al PDF (2026-11-09, más tarde)
+- Se creó `VISION_Y_REQUISITOS.md` -- transcribe, por tema y con citas textuales, todo lo
+  que el usuario fue dictando esta sesión larga (identidad del producto, flujo de
+  trabajo, principio de edición, pasos de entrega, numeración solo-editor, separación
+  editor/PDF, 2 botones, coherencia por tarifa, formato del PDF). Léerlo antes de tocar
+  cualquiera de estas funciones en una sesión futura -- explica el "por qué", no solo
+  el "qué".
+- **Exactamente 2 botones por elemento editable** (pedido explícito: "uno de apagar y
+  otro de guardar... el de guardar... esa versión se pueda usar como machote"). En
+  `js/secciones.js` (`campoEditableConId`/`celdaEditable`/`textoChico`) se quitaron
+  los controles sueltos que había (↺ restaurar, ✓/✕ aplicar/quitar de todas) y quedan
+  **🙈/👁 Apagar/Mostrar** + **💾 Guardar**. `onGuardarTextoGlobal()` (`js/app.js`) ahora
+  hace las 2 cosas en un clic: guarda el override para esta cotización Y lo promueve
+  como predeterminado global/machote. Vaciar el texto y guardar revierte ambos lados.
+  CSS: `.btn-guardar-texto`(-chico/-celda) reemplaza a `.btn-icono-global`/
+  `.btn-restaurar-texto` (eliminadas, ya no usadas).
+- **Bug real encontrado y corregido en la propia revisión de este cambio**: el número
+  del editor (`.badge-num-editable`) NO estaba excluido del lector de texto del PDF
+  (`js/propuestaDom.js`) -- se habría colado como "№12Distribución" en el documento
+  generado, violando directamente lo que el usuario pidió ("la numeración es solo en
+  el editor, en el PDF solo está enumerado las secciones"). 3 puntos de contaminación
+  encontrados y corregidos: `CLASES_OMITIR` (excluye el badge si aparece como nodo
+  propio), `textoSinIconos()` (ahora también quita `.badge-num-editable`, no solo
+  `<button>`, al leer el texto completo de un contenedor -- tarjetas/leyendas/gauge),
+  y `dibujarTabla()` (headers/celdas de tabla genérica ahora usan `textoSinIconos()`
+  en vez de `.textContent` directo, mismo motivo).
+- **Número de página regresado al PDF** (pedido explícito: "ponle número de página al
+  PDF resultante") -- `dibujarHeaderFooter()` en `js/pdfComponents.js` ahora dibuja
+  "Página N de M" centrado abajo de cada hoja, SIN reintroducir el aviso legal que se
+  quitó a propósito en una sesión anterior (`aviso` se sigue ignorando).
+- **Verificado en navegador real** (servidor local efímero, puerto nuevo cada vez por
+  el cacheo agresivo de módulos ES ya documentado; cliente de prueba `TEST-PASOS-NUM`,
+  tarifa GDMTO con los datos reales de Abue, `localStorage` de un puerto que nunca
+  tocó datos reales del usuario):
+  - Cada párrafo mostró exactamente 2 botones ("💾 Guardar" + "🙈 Apagar"); cada celda
+    de tabla mostró "💾" junto al "✕" de ocultar columna/fila (botón distinto, no
+    redundante).
+  - Clic real en "💾 Guardar" sobre un párrafo editado confirmó -- leyendo
+    `localStorage` directo, no solo la pantalla -- que el texto quedó guardado TANTO
+    en `proyecto.textosEditados` COMO en `cfe_textos_globales_v1` (el machote) con un
+    solo clic.
+  - Clic real en "🙈 Apagar"/"👁 Mostrar" confirmó el toggle funcionando.
+  - Se generó el PDF "Cotización completa" real (32 páginas) y se leyó con `pdf.js`
+    (ya vendorizado en el proyecto): las 32 páginas traen "Página N de 32"; **cero**
+    apariciones de "№" en todo el documento (confirma el fix de contaminación);
+    el texto editado y guardado SÍ aparece en el PDF cuando el párrafo está visible,
+    y correctamente NO aparece cuando se apaga (probado explícitamente alternando
+    ambos estados sobre el mismo párrafo).
+  - Revisión de márgenes/cortes (pedido explícito: "revisa el formato de las
+    secciones que no se corte que tenga sus márgenes bien") -- barrido programático
+    de la posición de CADA elemento de texto en las 32 páginas contra los límites de
+    contenido reales (`MARGIN_L`/`MARGIN_R`/`CONTENT_BOTTOM` de `pdfComponents.js`):
+    **0 elementos** se salen del margen horizontal, **0 elementos** se desbordan del
+    margen inferior. Inspección visual adicional de la página 1 (renderizada a canvas
+    con `pdf.js`): tarjetas de métricas alineadas, texto completo, sin cortes.
+    **No se revisaron visualmente las 32 páginas una por una** (solo la 1, más el
+    barrido programático de las 32) -- si el usuario ve un caso puntual de corte real
+    en una tabla específica, pedir cuál página/sección para revisarla a fondo.
+  - `node js/test_motor.mjs` y `node js/test_recibo.mjs` en verde antes y después de
+    todo este bloque -- no se tocó el motor de cálculo en ningún momento.
+- Cache del service worker bumpeado a `v27` (cubre este bloque completo, sobre el
+  `v26` de los números de página).
+- **Rebranding** ("Analizador FV CFE") y **pasos de entrega** (análisis completo/
+  preliminar) documentados en la entrada anterior de esta misma fecha, más arriba.
+
 ## Como probarlo en el navegador
 ```
 cd web

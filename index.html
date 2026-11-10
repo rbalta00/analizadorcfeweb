@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Cotizador FV CFE</title>
-  <meta name="description" content="Cotizador fotovoltaico CFE de Gestoria y Proyectos SOELRB." />
+  <title>Analizador FV CFE</title>
+  <meta name="description" content="Analizador y diseñador de sistemas fotovoltaicos (industrial, comercial y residencial) para las tarifas de CFE -- de aquí también salen las cotizaciones. Gestoria y Proyectos SOELRB." />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
   <meta name="theme-color" content="#163b4c" />
@@ -12,8 +12,8 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>Cotizador fotovoltaico CFE</h1>
-    <p class="subtitulo">GESTORIA Y PROYECTOS SOELRB</p>
+    <h1>Analizador de sistemas fotovoltaicos — CFE</h1>
+    <p class="subtitulo">GESTORIA Y PROYECTOS SOELRB · la cotización sale del análisis, no al revés</p>
     <div class="topbar-acciones">
       <button id="btnRefrescar" class="btn-refrescar" title="Actualiza la app a la última versión y vuelve a leer tus clientes, proyectos y cotizaciones guardados">⟳ Actualizar</button>
       <button id="btnInstalar" class="btn-instalar" hidden>Instalar en esta PC</button>
@@ -36,15 +36,28 @@
           </select>
         </label>
       </div>
-      <div class="acciones acciones-pdf">
+      <h4>Cliente nuevo</h4>
+      <div class="acciones">
         <button id="btnCrearCliente" class="btn-primario">+ Nuevo cliente</button>
-        <button id="btnAbrirDashboard" class="btn-secundario">🕐 Historial / Dashboard</button>
-        <button id="btnAbrirDefinitivasPorTarifa" class="btn-secundario">✅ Definitivas por tarifa</button>
-        <button id="btnAbrirEnvios" class="btn-secundario">📥 Envíos de clientes <span id="contadorEnvios"></span></button>
+      </div>
+
+      <h4>Captar un cliente (antes de registrarlo)</h4>
+      <p class="nota">Manda el formulario público para que el cliente suba su propio recibo -- cuando lo haga,
+        aparece en "Envíos de clientes" para asignarlo a un cliente nuevo o uno ya existente.</p>
+      <div class="acciones">
         <button id="btnEnviarFormularioWhatsapp" class="btn-whatsapp">💬 Enviar formulario por WhatsApp</button>
         <a href="cliente.html" target="_blank" id="btnAbrirFormulario" class="btn-secundario">📄 Abrir formulario</a>
+        <button id="btnAbrirEnvios" class="btn-secundario">📥 Envíos de clientes <span id="contadorEnvios"></span></button>
+      </div>
+
+      <h4>Revisar / organizar lo ya capturado</h4>
+      <div class="acciones">
+        <button id="btnAbrirDashboard" class="btn-secundario">🕐 Historial / Dashboard</button>
+        <button id="btnAbrirDefinitivasPorTarifa" class="btn-secundario">✅ Definitivas por tarifa</button>
         <button id="btnGuiaPresentacionGeneral" class="btn-secundario">📖 Guía para presentar (genérica)</button>
       </div>
+
+      <h4>Respaldo entre dispositivos</h4>
       <p class="nota">Tus clientes y cotizaciones se guardan solo en este navegador/dispositivo -- si quieres
         verlos también desde otra computadora o celular, sube una copia a la nube aquí y luego tráela allá.</p>
       <div class="acciones">
@@ -258,11 +271,36 @@
       <button id="btnToggleIndice" class="btn-toggle-indice">☰ Índice de secciones</button>
       <div id="indiceLista" class="indice-lista"></div>
     </nav>
+    <p class="nota" id="contadorEditables"></p>
 
     <nav id="plantillasTarifa" class="indice-secciones">
       <button id="btnTogglePlantillas" class="btn-toggle-indice">🏷️ Plantilla final revisada por tarifa</button>
       <div id="plantillasLista" class="indice-lista"></div>
     </nav>
+
+    <section class="tarjeta" id="barraPasosEntrega">
+      <h3>📑 Paso de entrega de esta cotización</h3>
+      <p class="nota">Elige qué tanto vas a mostrar/entregar ahora -- todos los pasos comparten exactamente los
+        mismos datos y cálculos, solo cambia qué secciones/gráficas/tablas se ven en pantalla y se incluyen en el
+        PDF. <strong>"Análisis completo" nunca se borra</strong> -- siempre representa el estudio íntegro, aunque
+        crees otros pasos (ej. "Análisis preliminar") para entregar menos mientras avanza la negociación.</p>
+      <div class="fila fila-pasos">
+        <label>Paso activo
+          <select id="selectorPasoEntrega"></select>
+        </label>
+        <button type="button" id="btnNuevoPasoEntrega" class="btn-secundario">+ Nuevo paso desde aquí</button>
+        <button type="button" id="btnRenombrarPasoEntrega" class="btn-link">✏️ Renombrar</button>
+        <button type="button" id="btnEliminarPasoEntrega" class="btn-link">🗑 Eliminar este paso</button>
+      </div>
+      <div class="fila fila-nuevo-paso" id="formNuevoPasoEntrega" hidden>
+        <label>Nombre del paso nuevo
+          <input type="text" id="inputNombreNuevoPaso" placeholder="Ej. Análisis preliminar">
+        </label>
+        <button type="button" id="btnConfirmarNuevoPaso" class="btn-primario">Crear y activar</button>
+        <button type="button" id="btnCancelarNuevoPaso" class="btn-link">Cancelar</button>
+      </div>
+      <p class="nota" id="notaPasoActivo"></p>
+    </section>
 
     <section class="tarjeta" id="tabCaptura">
       <h2>Datos y recibo</h2>
@@ -537,10 +575,13 @@
     </div>
 
     <!-- Las 21 secciones se insertan aquí dinámicamente tras calcular -->
-    <p class="nota nota-ayuda-edicion" id="ayudaEdicion" hidden>✎ Los párrafos y avisos de cada sección se
-      pueden editar: haz clic directo en el texto, escribe, y clic afuera para guardar (se marca en dorado).
-      Borra todo el texto para restaurar el original. "Cotización completa" lee esta misma vista -- tus
-      ediciones y lo que apagues sí se incluyen en el PDF que se genera.</p>
+    <p class="nota nota-ayuda-edicion" id="ayudaEdicion" hidden>✎ Todo el texto, cada celda de tabla y cada
+      etiqueta de tarjeta/gráfica es editable: haz clic directo, escribe, y clic afuera para guardar (se marca
+      en dorado). Borra todo el texto para restaurar el original. Cada elemento editable lleva un número chico
+      <span class="badge-num-editable" style="opacity:.6">№</span> justo antes -- úsalo si necesitas avisar que
+      algo específico no funciona. "Cotización completa" lee esta misma vista para el <strong>paso de entrega
+      activo</strong> (arriba): tus ediciones y lo que apagues/enciendas ahí sí se incluyen en el PDF que se
+      genera.</p>
     <div id="contenedorSecciones"></div>
 
     <section class="tarjeta" id="tabEditorPrecios" hidden>
@@ -634,15 +675,20 @@
         marca con ✅ en el historial de este cliente, para distinguirla de versiones de prueba/comparación.</p>
 
       <h2>2. Genera el PDF ya guardado</h2>
-      <p class="nota">Usa las mismas secciones activadas arriba. "Cotización completa" lee directo lo que ves en
-        pantalla -- incluye tus ediciones de texto/tablas, el "Recibo original", la "Verificación en sitio" y el
-        comparativo calculado-vs-verificación (lo que aplique). Revisa el documento antes de enviarlo al cliente.</p>
+      <p class="nota" id="etiquetaPasoActivoPdf"></p>
+      <p class="nota">"Cotización completa" lee directo lo que ves en pantalla para el <strong>paso activo</strong>
+        elegido arriba -- incluye tus ediciones de texto/tablas, el "Recibo original", la "Verificación en sitio" y
+        el comparativo calculado-vs-verificación (lo que aplique y esté encendido en este paso). Revisa el
+        documento antes de enviarlo al cliente.</p>
       <div class="acciones acciones-pdf">
-        <button id="btnGenerarPdf" class="btn-primario">Cotización completa</button>
-        <button id="btnResumenEjecutivo" class="btn-secundario">Resumen ejecutivo (1 página)</button>
-        <button id="btnAnexoInterconexion" class="btn-secundario">📐 Anexo trámite CFE</button>
+        <button id="btnGenerarPdf" class="btn-primario">Cotización completa (paso activo)</button>
+        <button id="btnResumenEjecutivo" class="btn-secundario">Resumen ejecutivo (1 página, fijo)</button>
+        <button id="btnAnexoInterconexion" class="btn-secundario">📐 Anexo trámite CFE (fijo)</button>
         <button id="btnEnviarWhatsapp" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
       </div>
+      <p class="nota">Solo <strong>"Cotización completa"</strong> cambia según el paso de entrega activo (arriba).
+        "Resumen ejecutivo" y "Anexo trámite CFE" son documentos aparte, de formato fijo -- siempre traen el mismo
+        contenido sin importar qué secciones hayas apagado.</p>
       <p class="nota" id="notaAdjuntoWhatsapp">El botón de WhatsApp intenta adjuntar el PDF directo al compartir
         (funciona en celular/Android con Chrome, y algunos navegadores de escritorio recientes); si tu navegador no
         lo permite, abre el chat solo con el texto y hay que adjuntar el PDF a mano (ya descargado arriba).</p>

@@ -6,6 +6,7 @@ import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo, listarClientes,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
   crearProyectoDesdeOrigen,
+  asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
 import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
@@ -63,6 +64,10 @@ alGuardar((ok) => (ok ? ocultarAvisoErrorGuardado() : mostrarAvisoErrorGuardado(
 
 let clienteActual = null;
 let proyectoActual = null;
+// 'crear' | 'renombrar' -- que accion hace btnConfirmarNuevoPaso, segun si se abrio el
+// formulario desde "+ Nuevo paso desde aqui" o desde "✏️ Renombrar" (mismo formulario
+// chico reutilizado para las 2 acciones, ver conectarEventosPasosEntrega).
+let modoFormularioPaso = 'crear';
 // Copia completa (deep clone) de proyectoActual tal como estaba AL ABRIRLO -- ver
 // guardarProyectoRespetandoRenombre() mas abajo. Necesaria porque Calcular ya autoguarda
 // (guardarProyecto dentro de calcularYRenderizar) ANTES de que el usuario llegue a
@@ -943,6 +948,10 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   clienteActual = obtenerCliente(clienteId);
   proyectoActual = clienteActual ? obtenerProyecto(clienteActual, proyectoId) : null;
   if (!clienteActual || !proyectoActual) { mostrarPantallaProyectos(clienteId); return; }
+  // Pasos de entrega: proyectos guardados antes de que esto existiera se migran solos
+  // aqui (ver asegurarPasos en clientes.js) -- nunca pierden lo que ya tuvieran apagado.
+  asegurarPasos(proyectoActual);
+  renderSelectorPasos();
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
@@ -2045,6 +2054,7 @@ conectarTogglePanel('chkPanelEditorPrecios', 'contenidoEditorPrecios', 'editorPr
 conectarTogglePanel('chkPanelFinanciamiento', 'contenidoFinanciamiento', 'financiamiento');
 conectarTogglePanel('chkPanelComparacion', 'contenidoComparacion', 'comparacion');
 conectarTogglePanel('chkPanelSeguimiento', 'contenidoSeguimiento', 'seguimiento');
+conectarEventosPasosEntrega();
 
 function renderEditorPrecios(r) {
   aplicarEstadoPanel('chkPanelEditorPrecios', 'contenidoEditorPrecios', 'editorPrecios');
@@ -2172,6 +2182,92 @@ $('btnAgregarNotaSeguimiento').addEventListener('click', () => {
   renderNotasSeguimiento();
 });
 
+// ---------------- Pasos de entrega (ver asegurarPasos/aplicarPaso/crearPasoDesdeActual/
+// renombrarPaso/eliminarPaso en clientes.js) ----------------
+function _reflejarPasoEnResultado() {
+  if (!ultimoResultado || !proyectoActual) return;
+  ultimoResultado.seccionesExcluidas = proyectoActual.seccionesExcluidas;
+  ultimoResultado.graficosExcluidos = proyectoActual.graficosExcluidos;
+  ultimoResultado.tablaColumnasOcultas = proyectoActual.tablaColumnasOcultas;
+  ultimoResultado.tablaFilasOcultas = proyectoActual.tablaFilasOcultas;
+  renderSecciones(ultimoResultado);
+}
+
+function renderSelectorPasos() {
+  if (!proyectoActual) return;
+  const sel = $('selectorPasoEntrega');
+  const pasos = proyectoActual.pasos || {};
+  sel.innerHTML = '';
+  Object.entries(pasos).forEach(([id, paso]) => {
+    const op = document.createElement('option');
+    op.value = id;
+    op.textContent = paso.nombre + (id === 'completo' ? ' (no se puede borrar)' : '');
+    sel.appendChild(op);
+  });
+  sel.value = proyectoActual.pasoActivo;
+  const activo = pasos[proyectoActual.pasoActivo];
+  const nApagadas = (proyectoActual.seccionesExcluidas || []).length;
+  const nGraficos = (proyectoActual.graficosExcluidos || []).length;
+  $('notaPasoActivo').textContent = activo
+    ? `Paso activo: "${activo.nombre}" -- ${nApagadas} sección(es) apagada(s) suelta(s) y ${nGraficos} gráfica(s)/tabla(s) apagada(s) dentro de secciones activas en este paso (además de lo que esté apagado por bloque completo en el índice).`
+    : '';
+  $('btnEliminarPasoEntrega').disabled = proyectoActual.pasoActivo === 'completo' || Object.keys(pasos).length <= 1;
+  const etiquetaPdf = $('etiquetaPasoActivoPdf');
+  if (etiquetaPdf) {
+    etiquetaPdf.textContent = activo
+      ? `📑 Vas a generar: "${activo.nombre}". Cambia el paso activo arriba si necesitas entregar otra versión (ej. preliminar vs. completa).`
+      : '';
+  }
+}
+
+function conectarEventosPasosEntrega() {
+  $('selectorPasoEntrega').addEventListener('change', () => {
+    if (!proyectoActual) return;
+    aplicarPaso(proyectoActual, $('selectorPasoEntrega').value);
+    guardarProyecto(clienteActual, proyectoActual);
+    renderSelectorPasos();
+    _reflejarPasoEnResultado();
+  });
+  $('btnNuevoPasoEntrega').addEventListener('click', () => {
+    modoFormularioPaso = 'crear';
+    $('formNuevoPasoEntrega').hidden = false;
+    $('inputNombreNuevoPaso').value = '';
+    $('btnConfirmarNuevoPaso').textContent = 'Crear y activar';
+    $('inputNombreNuevoPaso').focus();
+  });
+  $('btnRenombrarPasoEntrega').addEventListener('click', () => {
+    if (!proyectoActual) return;
+    modoFormularioPaso = 'renombrar';
+    $('formNuevoPasoEntrega').hidden = false;
+    $('inputNombreNuevoPaso').value = proyectoActual.pasos?.[proyectoActual.pasoActivo]?.nombre || '';
+    $('btnConfirmarNuevoPaso').textContent = 'Renombrar';
+    $('inputNombreNuevoPaso').focus();
+  });
+  $('btnCancelarNuevoPaso').addEventListener('click', () => { $('formNuevoPasoEntrega').hidden = true; });
+  $('btnConfirmarNuevoPaso').addEventListener('click', () => {
+    if (!proyectoActual) return;
+    const nombre = $('inputNombreNuevoPaso').value.trim();
+    if (!nombre) { $('inputNombreNuevoPaso').focus(); return; }
+    if (modoFormularioPaso === 'renombrar') {
+      renombrarPaso(proyectoActual, proyectoActual.pasoActivo, nombre);
+    } else {
+      crearPasoDesdeActual(proyectoActual, nombre);
+    }
+    guardarProyecto(clienteActual, proyectoActual);
+    $('formNuevoPasoEntrega').hidden = true;
+    renderSelectorPasos();
+    _reflejarPasoEnResultado();
+  });
+  $('btnEliminarPasoEntrega').addEventListener('click', () => {
+    if (!proyectoActual || proyectoActual.pasoActivo === 'completo') return;
+    if (!confirm(`¿Eliminar el paso "${proyectoActual.pasos[proyectoActual.pasoActivo]?.nombre}"? No se borra ningún texto ni cálculo, solo esta combinación de qué se muestra.`)) return;
+    eliminarPaso(proyectoActual, proyectoActual.pasoActivo);
+    guardarProyecto(clienteActual, proyectoActual);
+    renderSelectorPasos();
+    _reflejarPasoEnResultado();
+  });
+}
+
 // ---------------- 21 secciones: render + navegacion ----------------
 // Apaga/prende UNA seccion individual (numero 1-25), no el bloque completo -- pedido
 // explicito del usuario, 2026-11-05: "todo todo, secciones... se puedan apagar".
@@ -2191,6 +2287,7 @@ function onToggleSeccion(numero, activo) {
     excl.add(numero);
   }
   proyectoActual.seccionesExcluidas = [...excl];
+  sincronizarPasoActivoDesdeFlat(proyectoActual);
   guardarProyecto(clienteActual, proyectoActual);
   if (ultimoResultado) {
     ultimoResultado.seccionesActivas = proyectoActual.seccionesActivas;
@@ -2217,6 +2314,7 @@ function onToggleBloqueCompleto(bloque, activo) {
     setBloques.delete(bloque);
   }
   proyectoActual.seccionesActivas = [...setBloques];
+  sincronizarPasoActivoDesdeFlat(proyectoActual);
   guardarProyecto(clienteActual, proyectoActual);
   if (ultimoResultado) {
     ultimoResultado.seccionesActivas = proyectoActual.seccionesActivas;
@@ -2234,6 +2332,7 @@ function onToggleGrafico(id, activo) {
   const set = new Set(proyectoActual.graficosExcluidos || []);
   if (activo) set.delete(id); else set.add(id);
   proyectoActual.graficosExcluidos = [...set];
+  sincronizarPasoActivoDesdeFlat(proyectoActual);
   guardarProyecto(clienteActual, proyectoActual);
   if (ultimoResultado) { ultimoResultado.graficosExcluidos = proyectoActual.graficosExcluidos; renderSecciones(ultimoResultado); }
 }
@@ -2250,6 +2349,7 @@ function onToggleColumna(tablaId, indice, activa) {
   if (activa) set.delete(indice); else set.add(indice);
   mapa[tablaId] = [...set];
   proyectoActual.tablaColumnasOcultas = mapa;
+  sincronizarPasoActivoDesdeFlat(proyectoActual);
   guardarProyecto(clienteActual, proyectoActual);
   if (ultimoResultado) { ultimoResultado.tablaColumnasOcultas = proyectoActual.tablaColumnasOcultas; renderSecciones(ultimoResultado); }
 }
@@ -2260,6 +2360,7 @@ function onToggleFila(tablaId, indice, activa) {
   if (activa) set.delete(indice); else set.add(indice);
   mapa[tablaId] = [...set];
   proyectoActual.tablaFilasOcultas = mapa;
+  sincronizarPasoActivoDesdeFlat(proyectoActual);
   guardarProyecto(clienteActual, proyectoActual);
   if (ultimoResultado) { ultimoResultado.tablaFilasOcultas = proyectoActual.tablaFilasOcultas; renderSecciones(ultimoResultado); }
 }
@@ -2310,20 +2411,29 @@ function onEditarTexto(id, valor, textoDefecto) {
   }
 }
 
-// Predeterminado GLOBAL de un texto -- aplica a TODAS las cotizaciones, no solo a
-// este cliente (ver textosGlobales.js) -- pedido explicito del usuario: poder
-// cambiar la redaccion de la app el mismo, sin pedirmelo por codigo.
-// Pedido explicito del usuario, 2026-11-05: el boton ahora es un interruptor
-// ON/OFF -- "aplicar a todas" SIEMPRE guarda cuando se activa, sin importar si el
-// texto coincide con textoDefecto. Antes se comparaba contra textoDefecto y, si
-// coincidian (parrafo sin editar), se interpretaba como "nada que guardar" y no
-// pasaba nada -- bug real reportado por el usuario ("le doy click y no me marca
-// nada"). `textoDefecto` se deja como parametro solo por compatibilidad de firma,
-// ya no se usa para decidir si guardar.
-function onGuardarTextoGlobal(id, texto, _textoDefecto) {
+// "💾 Guardar" unificado -- pedido explicito del usuario, 2026-11-09: "la edicion de
+// cualquier cosa solo tenga dos botones uno de apagar y otro de guardar... el de
+// guardar pues se guardan los cambios los textos nuevos y esa version se pueda usar
+// como machote para nuevas cotizaciones". Reemplaza los 2 controles que existian
+// (✓/✕ "aplicar a todas" + ↺ "restaurar a predeterminado") -- un solo clic hace las
+// 2 cosas: (1) deja el texto guardado para ESTA cotizacion (mismo efecto que ya hacia
+// perder el foco, por si no se habia disparado todavia) y (2) lo promueve como
+// predeterminado global para las cotizaciones futuras (el machote). Vaciar el texto y
+// guardar quita ambos (local y global), vuelve al texto de fábrica en todos lados.
+function onGuardarTextoGlobal(id, texto, textoDefecto) {
+  proyectoActual.textosEditados = proyectoActual.textosEditados || {};
+  if (texto == null || !texto.trim() || texto.trim() === textoDefecto.trim()) {
+    delete proyectoActual.textosEditados[id];
+  } else {
+    proyectoActual.textosEditados[id] = texto;
+  }
+  guardarProyecto(clienteActual, proyectoActual);
   const limpio = (texto || '').trim();
   if (!limpio) { quitarTextoGlobal(id); } else { guardarTextoGlobal(id, texto); }
-  if (ultimoResultado) renderSecciones(ultimoResultado);
+  if (ultimoResultado) {
+    ultimoResultado.textosEditados = proyectoActual.textosEditados;
+    renderSecciones(ultimoResultado);
+  }
 }
 
 function onQuitarTextoGlobal(id) {
@@ -2379,7 +2489,42 @@ function renderSecciones(r) {
   });
   renderIndice(r);
   renderPlantillasTarifa(r);
+  renderSelectorPasos();
+  numerarContenidoEditable();
   observarSecciones();
+}
+
+// ---------------- Numeracion de TODO el contenido editable (pedido explicito del
+// usuario, 2026-11-09: "ponle numeracion a cada texto editable... para poder revisar
+// que todo este bien o decirte cual no esta funcionando") ----------------
+// Funciona sobre UN SOLO hecho ya existente en secciones.js, no una lista nueva que
+// mantener: cada parrafo/titulo/subtitulo (campoEditableConId), celda de tabla
+// (celdaEditable) y etiqueta de tarjeta/leyenda de grafica (textoChico) YA le pone a su
+// elemento `dataset.textoId = <id interno>` -- aqui solo se recorren en orden de
+// aparicion en pantalla y se les pega un numero correlativo visible (№1, №2...) justo
+// antes de cada uno. El numero es solo para esta sesion/este render (no se guarda en
+// ningun lado): si se apaga una secccion o se cambia de paso, el conteo se recalcula
+// desde 1 sobre lo que queda VISIBLE -- asi "el número 47" siempre se refiere a lo que
+// Isaac esta viendo ahora, no a un indice fijo que se desfasaria cada vez que algo se
+// apaga/prende.
+function numerarContenidoEditable() {
+  const cont = $('contenedorSecciones');
+  if (!cont) return;
+  cont.querySelectorAll('.badge-num-editable').forEach((b) => b.remove());
+  const nodos = cont.querySelectorAll('[data-texto-id]');
+  nodos.forEach((nodo, i) => {
+    const badge = document.createElement('span');
+    badge.className = 'badge-num-editable';
+    badge.textContent = '№' + (i + 1);
+    badge.title = `Elemento editable №${i + 1} (id interno "${nodo.dataset.textoId}") -- usa este número si necesitas avisar que algo aquí no funciona.`;
+    nodo.parentNode.insertBefore(badge, nodo);
+  });
+  const contador = $('contadorEditables');
+  if (contador) {
+    contador.textContent = nodos.length
+      ? `${nodos.length} elementos editables numerados (№1 a №${nodos.length}) en lo que ves ahora -- apagar/prender secciones vuelve a numerar desde 1.`
+      : '';
+  }
 }
 
 // Plantilla final revisada POR TARIFA (GDMTO/GDMTH/GDBT/PDBT/01/DAC) -- pedido

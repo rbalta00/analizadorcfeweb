@@ -35,11 +35,19 @@ import {
 // "NN de XX" que el usuario usa para confirmar que no falta nada, se queda como
 // contenido real (ver el fallback generico de texto "huerfano" en recorrer()).
 const CLASES_OMITIR = [
-  'toggle-seccion', 'btn-restaurar-texto', 'btn-icono-global',
+  'toggle-seccion', 'btn-guardar-texto',
   'btn-ocultar-texto', 'nota-texto-global', 'nota-texto-oculto', 'th-accion-tabla',
   'td-accion-tabla', 'grafico-apagado', 'campo-oculto', 'col-oculta-tabla',
   'calculo-detalle-apagado',
   'fila-oculta-tabla', 'documento-adjunto-pdf',
+  // badge-num-editable: el numero chico (№1, №2...) que se le pega a cada elemento
+  // editable SOLO en el editor en pantalla (ver numerarContenidoEditable() en app.js)
+  // -- pedido explicito del usuario, 2026-11-09: "la numeracion es solo en el editor,
+  // en el pdf solo esta enumerado las secciones". Bug real encontrado en la propia
+  // revision de este archivo: como el badge es un <span> (no un <button>), el filtro
+  // de "cualquier BUTTON se omite" (ver esVisible() abajo) no lo atrapaba solo -- sin
+  // esta linea, el "№47" se habria colado como texto real dentro del PDF.
+  'badge-num-editable',
 ];
 
 function tieneClaseOmitida(nodo) {
@@ -218,11 +226,16 @@ function dibujarTabla(doc, tabla, y) {
   const filasBody = Array.from(tabla.querySelectorAll('tbody tr')).filter((tr) => !tr.classList.contains('fila-oculta-tabla'));
   if (!filasHead.length) return y;
   const celdasHead = Array.from(filasHead[0].children).filter((th) => !th.classList.contains('col-oculta-tabla') && !th.classList.contains('th-accion-tabla'));
-  const headers = celdasHead.map((th) => limpiarParaPdf(th.textContent));
+  // textoSinIconos() en vez de .textContent directo -- una celda editable
+  // (celdaEditable() en secciones.js) trae su propio boton "💾 Guardar" Y (desde
+  // 2026-11-09) el numero "№N" del editor como hermanos dentro del mismo <th>/<td>; un
+  // .textContent simple los pega al texto real ("№12Distribución"). Mismo bug/misma
+  // solucion que dibujarTarjetas() mas abajo.
+  const headers = celdasHead.map((th) => limpiarParaPdf(textoSinIconos(th)));
   const rows = filasBody.map((tr) =>
     Array.from(tr.children)
       .filter((td) => !td.classList.contains('col-oculta-tabla') && !td.classList.contains('td-accion-tabla'))
-      .map((td) => limpiarParaPdf(td.textContent))
+      .map((td) => limpiarParaPdf(textoSinIconos(td)))
   );
   if (!headers.length || !rows.length) return y;
   // table() (pdfComponents.js) no envuelve el texto del ENCABEZADO (solo el de las
@@ -250,6 +263,11 @@ function textoSinIconos(nodo) {
   if (!nodo) return '';
   const clon = nodo.cloneNode(true);
   clon.querySelectorAll('button').forEach((b) => b.remove());
+  // .badge-num-editable (el "№N" del editor, ver numerarContenidoEditable() en app.js)
+  // es un <span>, no un <button> -- sin esto se habria colado igual que el bug de
+  // arriba ("Inversion total✓"), esta vez como "№12 Inversion total". Pedido explicito
+  // del usuario, 2026-11-09: la numeracion es solo del editor, nunca del PDF.
+  clon.querySelectorAll('.badge-num-editable').forEach((b) => b.remove());
   return clon.textContent.trim();
 }
 

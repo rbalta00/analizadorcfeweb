@@ -317,11 +317,14 @@ function textoAcotado(doc, texto, maxWidth) {
 
 // Pedido explicito del usuario, 2026-11-09: sin pie de pagina (ni el aviso ni el
 // numero de pagina "N / total") en ningun PDF -- se quita, se deja solo el
-// encabezado (titulo/subtitulo/linea dorada) de cada pagina. `aviso`/`pagina`/
-// `totalPaginas` se mantienen como parametros (varios call-sites los siguen pasando)
-// para no tener que tocar cada generador de PDF, pero ya no se dibujan.
+// encabezado (titulo/subtitulo/linea dorada) de cada pagina. `aviso` se mantiene como
+// parametro (el call-site lo sigue pasando) para no tener que tocar el generador, pero
+// ya no se dibuja -- el usuario pidio quitar el pie de pagina con el texto de aviso
+// legal, 2026-11-09. `pagina`/`totalPaginas` SI vuelven a dibujarse (pedido explicito
+// del usuario, misma sesion, mas tarde: "ponle numero de pagina al pdf resultante") --
+// solo el numero de pagina, sin el aviso ni ningun otro texto de pie.
 export function dibujarHeaderFooter(doc, titulo, subtitulo, aviso, pagina, totalPaginas) {
-  void aviso; void pagina; void totalPaginas;
+  void aviso;
   setFont(doc, 10.5, true, NAVY);
   doc.text(textoAcotado(doc, titulo, CONTENT_W), MARGIN_L, 34);
   setFont(doc, 7.8, false, GREY);
@@ -329,4 +332,8 @@ export function dibujarHeaderFooter(doc, titulo, subtitulo, aviso, pagina, total
   doc.setDrawColor(GOLD);
   doc.setLineWidth(1.5);
   doc.line(MARGIN_L, 54, PAGE_W - MARGIN_R, 54);
+  if (pagina && totalPaginas) {
+    setFont(doc, 7.5, false, GREY);
+    doc.text(`Página ${pagina} de ${totalPaginas}`, PAGE_W / 2, PAGE_H - 18, { align: 'center' });
+  }
 }

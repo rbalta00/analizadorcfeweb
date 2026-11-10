@@ -236,48 +236,32 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   } else if (tieneGlobal && !tieneProyecto) {
     wrap.append(el('span', 'nota-texto-global', '🌐 Usa tu predeterminado global'));
   }
-  if (tieneProyecto) {
-    wrap.classList.add('campo-editado');
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn-restaurar-texto';
-    btn.textContent = '↺ Restaurar a predeterminado';
-    btn.addEventListener('click', () => _onEditarTextoActual(id, null, base));
-    wrap.append(btn);
-  }
-  // UN SOLO interruptor en vez de 2 botones separados (pedido explicito del usuario,
-  // 2026-11-05 -- "esta medio enredado" con "Usar este texto en todas..." y "Quitar
-  // predeterminado global..." como botones distintos). Prendido = este texto es el
-  // predeterminado global; apagado = se quito. El clic SIEMPRE guarda o quita segun
-  // el estado actual, sin comparar contra textoDefecto -- antes, si no habias editado
-  // el parrafo, "Usar este texto..." no hacia nada porque el texto ya era igual al
-  // default y el codigo lo interpretaba como "nada que guardar" (bug real reportado).
-  // Icono en vez de texto largo (pedido explicito del usuario, 2026-11-05 continuacion
-  // 7 -- "✓" para aplicar a todas, "✕" para quitar), mismo lenguaje visual compacto que
-  // ✕/↺ de ocultar fila/columna. Aqui no hay colision posible con ningun otro icono de
-  // este mismo campo-editable (↺ de "Restaurar a predeterminado" es un boton DISTINTO,
-  // y 👁/🙈 tambien son emoji distintos) -- a diferencia de celdaEditable() mas abajo,
-  // donde este mismo "✕" si choca con el de ocultar columna.
-  const btnGlobalToggle = document.createElement('button');
-  btnGlobalToggle.type = 'button';
-  btnGlobalToggle.className = 'btn-icono-global' + (tieneGlobal ? ' activo' : '');
-  btnGlobalToggle.textContent = tieneGlobal ? '✕' : '✓';
-  btnGlobalToggle.title = tieneGlobal
-    ? 'Quitar de todas las cotizaciones -- vuelve al texto original de la app.'
-    : 'Guardar esta edición para todas las cotizaciones (también afecta a otros clientes).';
-  btnGlobalToggle.setAttribute('aria-label', btnGlobalToggle.title);
-  btnGlobalToggle.addEventListener('click', () => {
-    if (tieneGlobal) _onQuitarGlobalActual(id, textoDefecto);
-    else _onGuardarGlobalActual(id, e.textContent, textoDefecto);
-  });
-  wrap.append(btnGlobalToggle);
+  if (tieneProyecto) wrap.classList.add('campo-editado');
+  // Exactamente 2 botones por elemento editable -- pedido explicito del usuario,
+  // 2026-11-09: "la edicion de cualquier cosa solo tenga dos botones uno de apagar y
+  // otro de guardar, el de apagar pues se apaga todo ya no se ve, el de guardar pues
+  // se guardan los cambios los textos nuevos y esa version se pueda usar como machote
+  // para nuevas cotizaciones". Reemplaza los 3 controles que había antes (↺ restaurar,
+  // ✓/✕ aplicar/quitar de todas) -- "Guardar" ahora hace las 2 cosas en un clic
+  // (ver onGuardarTextoGlobal en app.js): queda guardado para esta cotización Y se
+  // vuelve el predeterminado/machote para las futuras. Para volver al texto de
+  // fábrica, se borra el texto y se guarda -- eso YA revierte ambos lados (ver
+  // onGuardarTextoGlobal), no hace falta un botón aparte para eso.
+  const btnGuardar = document.createElement('button');
+  btnGuardar.type = 'button';
+  btnGuardar.className = 'btn-guardar-texto';
+  btnGuardar.textContent = '💾 Guardar';
+  btnGuardar.title = 'Guarda este texto para esta cotización y lo deja como machote para las cotizaciones futuras.';
+  btnGuardar.addEventListener('click', () => _onGuardarGlobalActual(id, e.textContent, textoDefecto));
+  wrap.append(btnGuardar);
   const btnOcultar = document.createElement('button');
   btnOcultar.type = 'button';
   btnOcultar.className = 'btn-ocultar-texto';
-  btnOcultar.textContent = oculto ? '👁 Mostrar este párrafo' : '🙈 Ocultar este párrafo';
+  btnOcultar.textContent = oculto ? '👁 Mostrar' : '🙈 Apagar';
+  btnOcultar.title = oculto ? 'Mostrar este párrafo de nuevo.' : 'Apagar este párrafo -- no aparece en la cotización final.';
   btnOcultar.addEventListener('click', () => _onOcultarTextoActual(id, !oculto));
   wrap.append(btnOcultar);
-  if (oculto) wrap.append(el('span', 'nota-texto-oculto', 'Oculto -- no aparece en la cotización final'));
+  if (oculto) wrap.append(el('span', 'nota-texto-oculto', 'Apagado -- no aparece en la cotización final'));
   return wrap;
 }
 
@@ -325,20 +309,20 @@ function textoChico(textoDefecto, idOverride) {
   });
   span.addEventListener('focusout', () => _onEditarTextoActual(id, span.textContent, base));
   wrap.append(span);
-  const btnGlobal = document.createElement('button');
-  btnGlobal.type = 'button';
-  btnGlobal.className = 'btn-icono-global btn-icono-global-tarjeta' + (tieneGlobal ? ' activo' : '');
-  btnGlobal.textContent = tieneGlobal ? '🌐✕' : '✓';
-  btnGlobal.title = tieneGlobal
-    ? 'Quitar de todas las cotizaciones -- vuelve al texto original de la app.'
-    : 'Guardar esta edición para todas las cotizaciones (también afecta a otros clientes).';
-  btnGlobal.setAttribute('aria-label', btnGlobal.title);
-  btnGlobal.addEventListener('click', (ev) => {
+  // Un solo botón "💾 Guardar" (ver nota en campoEditableConId) -- el apagado de este
+  // texto chico vive a nivel de grupo completo (tarjeta/gráfica, checkbox "Mostrar:
+  // ..." de graficoToggle), no aquí individualmente, por espacio.
+  const btnGuardar = document.createElement('button');
+  btnGuardar.type = 'button';
+  btnGuardar.className = 'btn-guardar-texto btn-guardar-texto-chico' + (tieneGlobal ? ' activo' : '');
+  btnGuardar.textContent = '💾';
+  btnGuardar.title = 'Guarda este texto para esta cotización y lo deja como machote para las cotizaciones futuras.';
+  btnGuardar.setAttribute('aria-label', btnGuardar.title);
+  btnGuardar.addEventListener('click', (ev) => {
     ev.preventDefault();
-    if (tieneGlobal) _onQuitarGlobalActual(id, textoDefecto);
-    else _onGuardarGlobalActual(id, span.textContent, textoDefecto);
+    _onGuardarGlobalActual(id, span.textContent, textoDefecto);
   });
-  wrap.append(btnGlobal);
+  wrap.append(btnGuardar);
   return wrap;
 }
 
@@ -394,28 +378,20 @@ function celdaEditable(id, textoDefecto) {
   span.addEventListener('focusout', () => _onEditarTextoActual(id, span.textContent, base));
   const frag = document.createDocumentFragment();
   frag.append(span);
-  // Boton de aplicar/quitar "a todas las cotizaciones" -- hasta 2026-11-05 (continuacion
-  // 7) las celdas de tabla SOLO heredaban pasivamente el predeterminado global/plantilla
-  // de tarifa (via `base` arriba), sin ningun control aqui para activarlo o quitarlo;
-  // solo los parrafos sueltos (campoEditableConId) tenian el boton. Pedido explicito del
-  // usuario: agregar el mismo control, mismo mecanismo (_onGuardarGlobalActual/
-  // _onQuitarGlobalActual), a las celdas tambien.
-  // Iconos distintos de campoEditableConId a proposito: un "✕" suelto aqui chocaria con
-  // el "✕" de botonOcultarColFila (ocultar la columna/fila completa), que vive en el
-  // mismo <th>/junto a esta misma celda -- dos iconos identicos para acciones distintas
-  // en el mismo campo, justo lo que el usuario pidio evitar. "🌐✕" es inconfundible.
+  // Un solo botón "💾 Guardar" (ver nota en campoEditableConId, 2026-11-09) -- guarda
+  // para esta cotización Y lo deja como machote para las futuras, en un clic. El
+  // apagado de la celda vive en botonOcultarColFila (columna/fila completa, más abajo
+  // en tabla()), no aquí -- "✕" suelto aquí chocaría con el "✕" de ese otro botón que
+  // vive junto a esta misma celda, por eso se usa el icono "💾" en vez de "✓/✕".
   const btnGlobal = document.createElement('button');
   btnGlobal.type = 'button';
-  btnGlobal.className = 'btn-icono-global btn-icono-global-celda' + (tieneGlobal ? ' activo' : '');
-  btnGlobal.textContent = tieneGlobal ? '🌐✕' : '✓';
-  btnGlobal.title = tieneGlobal
-    ? 'Quitar de todas las cotizaciones -- vuelve al texto original de la app.'
-    : 'Guardar esta edición para todas las cotizaciones (también afecta a otros clientes).';
+  btnGlobal.className = 'btn-guardar-texto btn-guardar-texto-celda' + (tieneGlobal ? ' activo' : '');
+  btnGlobal.textContent = '💾';
+  btnGlobal.title = 'Guarda este texto para esta cotización y lo deja como machote para las cotizaciones futuras.';
   btnGlobal.setAttribute('aria-label', btnGlobal.title);
   btnGlobal.addEventListener('click', (ev) => {
     ev.preventDefault();
-    if (tieneGlobal) _onQuitarGlobalActual(id, textoDefecto);
-    else _onGuardarGlobalActual(id, span.textContent, textoDefecto);
+    _onGuardarGlobalActual(id, span.textContent, textoDefecto);
   });
   frag.append(btnGlobal);
   return frag;
