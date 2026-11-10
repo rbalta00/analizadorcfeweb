@@ -22,6 +22,17 @@ import { renderSeccion, ordenSeccionesEfectivo, seccionTieneDatos } from './secc
 import { archivoAImagenComprimida } from './imagenes.js';
 import { COSTOS_RESIDENCIAL, COSTOS_COMERCIAL } from './motor.js';
 
+// Bug real reportado por el usuario, 2026-11-09: "cuando le di generar pdf no se ven
+// la foto del recibo y de la verificacion en sitio". Causa: cuando ese archivo es un
+// PDF (el caso mas comun -- el recibo casi siempre se sube como PDF, no foto),
+// archivoAImagenComprimida() (imagenes.js) necesita window.pdfjsLib para leerlo
+// (via abrirPdf() en pdftext.js) -- esta pagina cargaba jsPDF (para generar el PDF de
+// salida) pero NUNCA pdf.js (para LEER los PDF adjuntos), asi que la conversion
+// fallaba en silencio (atrapada por el try/catch de abajo) y la imagen se omitia sin
+// avisar. `lib/pdf.min.js` se agrego en vista-previa.html; aqui se configura el
+// worker, mismo patron que app.js/clienteForm.js.
+if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+
 // construirResultado() NO acepta proyecto.formulario tal cual -- espera el objeto
 // "input" ya derivado que leerInputCalculo() (app.js) arma leyendo el formulario EN
 // VIVO (rateKw/btPct/fpBonusPct calculados, costos resuelto a un objeto, etc.), no el

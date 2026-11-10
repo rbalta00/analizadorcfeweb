@@ -973,6 +973,34 @@ se reinventa una formula aqui, solo se traduce.
 - `vista-previa.html`/`js/vistaPrevia.js`/`css/vista-previa.css` agregados al cache
   del service worker (`ARCHIVOS_APP_SHELL`) -- bump a `v28`.
 
+### Bug real: la vista previa no mostraba la foto del recibo/verificación en el PDF (2026-11-09, más tarde todavía)
+- El usuario reportó: "note que cuando le di generar pdf no se ven la foto del recibo
+  y de la verificación en sitio". Reproducido en vivo (servidor local efímero,
+  cliente de prueba GDMTO con un archivo inyectado en `archivosRecibo`/
+  `archivosVerificacion`): con una imagen PNG de prueba SÍ se embebía bien en ambos
+  botones ("Cotización completa" del editor y "Generar PDF" de la vista previa) --
+  el bug solo aparecía con un **PDF** como adjunto (el caso más común en la realidad,
+  ya que el recibo normalmente se sube como PDF, no como foto).
+- **Causa real**: `archivoAImagenComprimida()` (`js/imagenes.js`) necesita
+  `window.pdfjsLib` para leer un PDF adjunto (vía `abrirPdf()` en `pdftext.js`) --
+  `vista-previa.html` (la página nueva de esta misma sesión) cargaba `jspdf.umd.min.js`
+  (para GENERAR el PDF de salida) pero nunca `lib/pdf.min.js` (para LEER los PDF
+  adjuntos). La conversión fallaba en silencio (atrapada por el `try/catch` de
+  `convertirTodos()`), así que la imagen simplemente se omitía sin avisar -- de ahí
+  que "no se vea". `index.html` nunca tuvo este bug porque ya cargaba `pdf.min.js`
+  desde antes (por el lector de recibos con OCR).
+- **Arreglado**: `vista-previa.html` ahora también carga `lib/pdf.min.js`;
+  `js/vistaPrevia.js` configura `window.pdfjsLib.GlobalWorkerOptions.workerSrc`,
+  mismo patrón que `app.js`/`clienteForm.js`.
+- **Verificado en vivo con un PDF de prueba real** (generado a mano, 1 página, válido
+  -- confirmado abriéndolo con `pdf.js` antes de usarlo): con el fix, tanto "Cotización
+  completa" (editor) como "Generar PDF" (vista previa) embebieron correctamente la
+  imagen en las páginas "Documento: recibo original de CFE" y "Documento: verificación
+  en sitio" (confirmado inspeccionando la lista de operadores de cada página del PDF
+  resultante con `pdf.js` -- `paintImageXObject`/`paintJpegXObject` presente en ambas).
+  `node js/test_motor.mjs`/`test_recibo.mjs` en verde, sin tocar el motor.
+- Cache del service worker bumpeado a `v29`.
+
 ## Como probarlo en el navegador
 ```
 cd web
