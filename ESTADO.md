@@ -1073,6 +1073,49 @@ se reinventa una formula aqui, solo se traduce.
   completo: `vistaPreviaComun.js`/`vistaPreviaCompartida.js`/
   `vista-previa-compartida.html` agregados a `ARCHIVOS_APP_SHELL`).
 
+### Auditoría exhaustiva del motor de cálculo: 2 bugs reales corregidos (2026-11-10)
+- Pedido explícito del usuario: "revisa exhaustivamente los cálculos de todo el
+  contenido completo". Se corrió una auditoría dedicada de `js/motor.js`/
+  `js/resultado.js` línea por línea, más contraste de los ~13 bloques "📐 Cómo se
+  calculó" de `js/secciones.js` contra las fórmulas reales, con verificación manual
+  independiente (no solo lectura) de GDMTH, amortización de crédito, deducción ISR, y
+  el año 13 del flujo a 25 años (reposición de inversor + degradación + escalamiento
+  simultáneos). Las 2 suites de prueba (`test_motor.mjs`/`test_recibo.mjs`, 32+
+  aserciones contra el caso real de Abue) sirvieron de terreno conocido-correcto, sin
+  tocarlas. Veredicto: el motor es confiable para cotizaciones reales -- los 2 bugs
+  encontrados son de "explicación engañosa" (el total que paga el cliente SIEMPRE fue
+  correcto en ambos casos), no de "cobro incorrecto".
+- **Bug 1, `js/secciones.js` (`calculoReciboDomestico`, tarifas 01/DAC)**: el Paso 1
+  de la tabla "Cómo se calculó" de la sección 3 mostraba `fd.base` etiquetado SOLO
+  como "Cargo de energía", pero `fd.base = energiaMonto + cargoFijo` (ver `invoice()`
+  en `motor.js`) -- escondía el cargo fijo capturable (`d_cargoFijo`, campo existente
+  desde 2026-11-06) cuando el cliente SÍ lo trae en su recibo real. Corregido:
+  el Paso 1 ahora muestra solo el monto de energía (`fd.base - fd.cargoFijo`), y se
+  agrega un Paso "1b" condicional ("Cargo fijo de CFE del período") solo cuando aplica
+  -- el Paso 2 (Subtotal) explica la suma correctamente en cualquiera de los 2 casos.
+  Verificado en vivo con tarifa 01 + cargo fijo de $50: Paso 1 = $432.13 (solo
+  energía), Paso 1b = $50.00, Subtotal = $482.13 (coincide exacto), total final sin
+  cambios ($609.27, el mismo de siempre -- el bug nunca afectó el monto cobrado).
+- **Bug 2, `js/secciones.js` (`g05-calc-formula`, sección 5, todas las tarifas)**: la
+  fila "Consumo mensual normalizado" mostraba `r.annualKwh / 12`, pero
+  `r.annualKwh` dejó de ser `consumoMensual × 12` desde el 2026-11-06 (hallazgo 9 de
+  esa auditoría -- ahora se calcula con los días reales del calendario, a propósito,
+  para que coincida con el resto del documento) -- el número real que decide cuántos
+  paneles se proponen (`consumoMensual`, usado directo en `dimensionarHorasSol()`)
+  nunca se exponía en `r`, así que esta fila mostraba una cifra ligeramente distinta
+  (diferencia típica <0.5%, sin efecto en el número de paneles, pero la explicación no
+  coincidía con el cálculo real). Corregido: la fila ahora calcula el promedio
+  directo de `r.consumosMensualesUsados` (el mismo arreglo que ya usa la fila de
+  arriba, "Suma de los períodos"), en vez de derivarlo de `annualKwh`. Verificado en
+  vivo con un historial de 3 períodos (2000/2500/2400 kWh, el último
+  siempre reemplazado por el período facturado actual -- diseño ya documentado desde
+  2026-11-01, no es parte de este bug): la tabla ahora muestra 2,300 kWh/mes (el
+  promedio real, `6900/3`), no los 2,293.75 kWh/mes que habría dado `annualKwh/12`.
+- `node js/test_motor.mjs`/`test_recibo.mjs` en verde antes y después de ambos fixes
+  -- ninguno de los dos toca `motor.js`/`resultado.js`, son correcciones puramente de
+  presentación en `secciones.js` (import nuevo de `R` desde `motor.js`, sin cambios al
+  motor mismo). Cache del service worker bumpeado a `v31`.
+
 ## Como probarlo en el navegador
 ```
 cd web

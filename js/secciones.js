@@ -9,7 +9,7 @@ import { bloqueDeSeccion, seccionesDelBloque } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
 import { leerTextosGlobales, leerPlantillaTarifa } from './textosGlobales.js';
-import { beneficioCosto } from './motor.js';
+import { beneficioCosto, R } from './motor.js';
 
 // Razon real por la que un concepto NO reducible no baja con paneles solares -- NO es la
 // misma razon para todos. 'suministro' es un cargo fijo por tener contrato (no depende de
@@ -1202,10 +1202,19 @@ function calculoReciboDomestico(r) {
   // calculoReciboConDemanda arriba) -- el total de este paso a paso es garantizadamente el
   // mismo numero ya cobrado, no una reconstruccion aparte.
   const fd = r.facturaDetalle;
+  // Bug real encontrado en auditoria, 2026-11-10: fd.base = energiaMonto + cargoFijo
+  // (ver invoice() en motor.js, tarifa domestica) -- el Paso 1 mostraba M(fd.base)
+  // etiquetado SOLO como "Cargo de energia", escondiendo el cargo fijo capturable
+  // (inputs d_cargoFijo/d_dap desde 2026-11-06) cuando el cliente SI lo trae en su
+  // recibo. El TOTAL cobrado (fd.total) siempre fue correcto -- solo el desglose
+  // paso a paso no reflejaba fielmente de que se compone fd.base.
+  const tieneCargoFijo = Math.abs(fd.cargoFijo || 0) > 1e-9;
+  const montoSoloEnergia = R(fd.base - (fd.cargoFijo || 0));
   const pasos = [
     ['1', `Cargo de energía (${tieneTramos ? 'suma de los 3 tramos' : 'precio único'})`,
-      tieneTramos ? 'Suma de lo que corresponde a cada tramo' : `${r.periodoKwh.toLocaleString('en-US')} kWh × ${rateProm.toFixed(4)} $/kWh`, M(fd.base)],
-    ['2', 'Subtotal (antes de IVA)', 'Igual al Paso 1 -- esta tarifa no tiene cargo fijo de demanda', M(fd.subtotal)],
+      tieneTramos ? 'Suma de lo que corresponde a cada tramo' : `${r.periodoKwh.toLocaleString('en-US')} kWh × ${rateProm.toFixed(4)} $/kWh`, M(montoSoloEnergia)],
+    ...(tieneCargoFijo ? [['1b', 'Cargo fijo de CFE del período', 'Importe fijo capturado para este período (distinto del DAP, que lo cobra el municipio)', M(fd.cargoFijo)]] : []),
+    ['2', 'Subtotal (antes de IVA)', tieneCargoFijo ? 'Cargo de energía + cargo fijo' : 'Igual al Paso 1 -- esta tarifa no tiene cargo fijo de demanda', M(fd.subtotal)],
     ['3', '+ IVA (16%)', `16% × ${M(fd.subtotal)}`, M(fd.iva)],
     ['4', '+ DAP (alumbrado público, lo cobra el municipio, no CFE)', 'Importe fijo de este período', M(fd.dap)],
     ['=', 'TOTAL de este período', '', M(fd.total)],
@@ -1356,11 +1365,23 @@ function s05(r, _leido, onToggle) {
       ? r.consumosMensualesUsados.map((kwh, i) => [`Historial P${i + 1}`, `${kwh.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`])
       : [['Período facturado actual (sin historial)', `${r.periodoKwh.toLocaleString('en-US')} kWh ÷ ${r.periodoDias} días × 30.5 = ${r.consumosMensualesUsados[0].toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`]],
       { small: true, textCols: [1], id: 'g05-calc-periodos' })),
-    graficoToggle('g05-calc-formula', 'Tabla de fórmula del consumo anual', tabla(['Variable', 'Cómo se obtuvo', 'Valor'], [
-      ['Suma de los períodos de arriba', r.consumosMensualesUsados.map(v => v.toFixed(1)).join(' + '), `${r.consumosMensualesUsados.reduce((a, b) => a + b, 0).toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh`],
-      ['Consumo mensual normalizado', `Suma ÷ ${r.consumosMensualesUsados.length} período(s)`, `${(r.annualKwh / 12).toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`],
-      ['Consumo anual de referencia', 'Consumo mensual × 12', `${r.annualKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año`],
-    ], { small: true, textCols: [1], id: 'g05-calc-formula' })),
+    graficoToggle('g05-calc-formula', 'Tabla de fórmula del consumo anual', (() => {
+      // Bug real encontrado en auditoria, 2026-11-10: esta fila mostraba r.annualKwh/12,
+      // pero el numero que de verdad entra a dimensionarHorasSol() (y decide cuantos
+      // paneles se proponen) es el promedio directo de r.consumosMensualesUsados --
+      // resultado.js ya NO calcula annualKwh como consumoMensual*12 (se cambio a
+      // extrapolar mes a mes con los dias reales del calendario, ver su propio
+      // comentario "Antes: consumoMensual * 12"), asi que dividir annualKwh/12 ya no
+      // reproduce el mismo numero (diferencia tipica <0.5%, sin efecto en el numero de
+      // paneles, pero la explicacion debe decir el numero REAL que se uso).
+      const sumaPeriodos = r.consumosMensualesUsados.reduce((a, b) => a + b, 0);
+      const consumoMensualReal = sumaPeriodos / r.consumosMensualesUsados.length;
+      return tabla(['Variable', 'Cómo se obtuvo', 'Valor'], [
+        ['Suma de los períodos de arriba', r.consumosMensualesUsados.map(v => v.toFixed(1)).join(' + '), `${sumaPeriodos.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh`],
+        ['Consumo mensual normalizado', `Suma ÷ ${r.consumosMensualesUsados.length} período(s)`, `${consumoMensualReal.toLocaleString('en-US', { maximumFractionDigits: 1 })} kWh/mes`],
+        ['Consumo anual de referencia', 'Consumo mensual × 12', `${r.annualKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año`],
+      ], { small: true, textCols: [1], id: 'g05-calc-formula' });
+    })()),
     avisoCream(`Base usada: ${r.basisConsumo}.`),
   ], r));
   return art;
