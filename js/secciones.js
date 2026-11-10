@@ -1105,6 +1105,17 @@ function s03(r, _leido, onToggle) {
   }
   const suma = Object.values(r.cargos).reduce((a, b) => a + b, 0);
   filas.push(['Suma de componentes', M(suma)]);
+  // Pedido explicito del usuario, 2026-11-10: "agregale el iva a la suma de
+  // componentes" -- esta tabla solo mostraba el desglose crudo del recibo (sin BT/
+  // bonificacion/DAP/IVA, eso vive en el paso a paso de bloqueCalculo mas abajo), asi
+  // que la "Suma de componentes" se veia mas chica que el total real que paga el
+  // cliente, sin explicar por que. Se agrega el 16% de IVA sobre esa misma suma como
+  // referencia rapida en esta tabla -- el total exacto con BT/bonificacion/DAP sigue
+  // viviendo en la tabla de pasos de abajo ("Como se calculo"), que es la fuente
+  // garantizada igual al recibo real.
+  const ivaSuma = R(suma * 0.16);
+  filas.push(['+ IVA (16%)', M(ivaSuma)]);
+  filas.push(['Suma de componentes con IVA', M(suma + ivaSuma)]);
   art.append(graficoToggle('g03-cargos', 'Tabla de componentes del recibo', tabla(['Componente del recibo', 'Importe'], filas, { id: 'g03-cargos' })));
   art.append(p('En palabras simples: "Suministro" es lo que cuesta que CFE le dé servicio, sin importar cuánto ' +
     'consuma. "Distribución" y "Transmisión" son el costo de llevar la electricidad desde la planta hasta su ' +
