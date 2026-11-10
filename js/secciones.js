@@ -734,6 +734,46 @@ function s01(r, _leido, onToggle) {
   const art = crearSeccion(1, 'Su proyecto, explicado en una página', 'Resultado principal: ¿cuánto cuesta y en cuánto se paga solo?', r, onToggle);
   art.append(p(`${r.titular} · ${r.domicilio || 'domicilio por confirmar'}`));
   art.append(p(`Servicio CFE ${r.noServicio || 'por confirmar'} · Estudio del ${r.fechaEstudio}.`));
+  // Pedido explicito del usuario, 2026-11-10: "primero este el calculo de la agencia
+  // estatal con los paneles que propone, y despues empiece nuestro analisis CON LA
+  // COMPARATIVA" -- es decir, dentro de esta misma pagina-resumen: 1) el bloque de la
+  // verificacion en sitio (agencia estatal) va primero, 2) la comparativa va justo
+  // despues, como apertura de "nuestro analisis" (no al final), y 3) el resto de
+  // nuestro propio calculo (vigencia/tarjetas/que-se-propone/cuanto-cuesta) sigue
+  // despues de la comparativa. Las columnas de la tabla comparativa tambien se
+  // reordenaron (verificacion primero, nuestro calculo despues) para que coincidan.
+  const ev = r.escenarioVerificado;
+  if (ev) {
+    art.append(subtitulo(1, 'verificacion-sitio', `Su proyecto según la verificación en sitio (ver sección ${refSeccion(19, r)})`));
+    art.append(p(`Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la verificación en ` +
+      `campo, en vez de los ${r.n} que calcula este sistema a partir del consumo real.`));
+    art.append(graficoToggle('g01-tarjetas-verificado-principales', 'Tarjetas: inversión, recuperación y ahorro año 1 (verificación en sitio)', tarjetas([
+      [M(ev.investment), 'Lo que costaría el sistema, IVA incluido'],
+      [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se pagaría solo'],
+      [M(ev.ahorroAnual), 'Lo que ahorraría en el primer año'],
+    ])));
+    art.append(graficoToggle('g01-tarjetas-verificado-sistema', 'Tarjetas: paneles, ahorro neto y % de ahorro (verificación en sitio)', tarjetas([
+      [`${ev.n} paneles`, `${r.moduloWp} W por módulo / ${ev.kwp.toFixed(2)} kWp`],
+      [M(ev.ahorroAnual - ev.om1), 'Ahorro neto año 1, tras mantenimiento'],
+      [PCT(ev.pctAhorro), 'Porcentaje de la factura que ahorraría'],
+    ])));
+    const dif = ev.diferenciaPaneles;
+    art.append(subtitulo(1, 'comparativo-verificacion', `Comparativo: calculado vs. verificación en sitio (ver sección ${refSeccion(20, r)})`));
+    art.append(graficoToggle('g01-comparativo-verificacion', 'Tabla comparativa calculado vs. verificación en sitio', tabla(['Concepto comparable', `Verificación en sitio (sección ${refSeccion(19, r)})`, `Nuestro cálculo (sección ${refSeccion(1, r)})`, 'Diferencia'], [
+      ['Paneles', `${ev.n}`, `${r.n}`, dif === 0 ? 'Igual' : `${dif > 0 ? '+' : ''}${dif}`],
+      ['Potencia', `${ev.kwp.toFixed(2)} kWp`, `${r.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
+      ['Inversión, IVA incluido', M(ev.investment), M(r.investment), M(ev.investment - r.investment)],
+      ['Ahorro anual', M(ev.ahorroAnual), M(r.ahorroAnual), M(ev.diferenciaAhorro)],
+      ['Recuperación simple', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', '—'],
+      ['% de ahorro de factura', PCT(ev.pctAhorro), PCT(r.pctAhorro), '—'],
+    ], { small: true, id: 'g01-comparativo-verificacion' })));
+    art.append(avisoCream(dif === 0
+      ? 'El número de paneles coincide con el de la verificación en campo -- ambos escenarios salen iguales.'
+      : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que ` +
+        'calcula este sistema a partir del consumo real del recibo -- ambos criterios son válidos y conviene presentarle al cliente las dos ' +
+        'referencias antes de decidir el tamaño final. Ambos escenarios se calcularon con el mismo motor (mismo recibo, misma tarifa, ' +
+        'mismos costos) -- no implica que ambos tamaños quepan físicamente en el espacio disponible.'));
+  }
   art.append(avisoCream(`Esta cotización es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días). Los ` +
     'precios de materiales son una provisión de mercado, no una cotización fija de proveedor -- después de esa ' +
     'fecha hay que revisarlos antes de confirmar.'));
@@ -773,45 +813,6 @@ function s01(r, _leido, onToggle) {
   art.append(avisoCream('El recibo permite comprobar el gasto actual; el ahorro futuro es una estimación ' +
     `condicionada. Se conserva el gasto observado de ${listaConceptos(r.meta.noReducibles)} sin anticipar ahorro ` +
     'adicional. Los precios deberán actualizarse antes de contratar.'));
-  // Pedido explicito del usuario: ver juntas, en la MISMA pagina, la pagina-resumen de
-  // nuestro calculo (arriba) y la de la verificacion en sitio -- antes estaban
-  // separadas por 20+ secciones (1 vs. 24). En vez de reordenar las 25 secciones
-  // (reenumerar rompería las decenas de referencias cruzadas "ver seccion N" ya
-  // escritas en todo el archivo), se repite aqui el resumen condensado de la
-  // seccion 24 justo debajo del de la seccion 1 -- el detalle completo (formulas,
-  // documento adjunto) sigue viviendo en las secciones 23/24/25 para quien lo busque.
-  const ev = r.escenarioVerificado;
-  if (ev) {
-    art.append(subtitulo(1, 'verificacion-sitio', `Su proyecto según la verificación en sitio (ver sección ${refSeccion(19, r)})`));
-    art.append(p(`Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la verificación en ` +
-      `campo, en vez de los ${r.n} que calcula este sistema a partir del consumo real.`));
-    art.append(graficoToggle('g01-tarjetas-verificado-principales', 'Tarjetas: inversión, recuperación y ahorro año 1 (verificación en sitio)', tarjetas([
-      [M(ev.investment), 'Lo que costaría el sistema, IVA incluido'],
-      [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se pagaría solo'],
-      [M(ev.ahorroAnual), 'Lo que ahorraría en el primer año'],
-    ])));
-    art.append(graficoToggle('g01-tarjetas-verificado-sistema', 'Tarjetas: paneles, ahorro neto y % de ahorro (verificación en sitio)', tarjetas([
-      [`${ev.n} paneles`, `${r.moduloWp} W por módulo / ${ev.kwp.toFixed(2)} kWp`],
-      [M(ev.ahorroAnual - ev.om1), 'Ahorro neto año 1, tras mantenimiento'],
-      [PCT(ev.pctAhorro), 'Porcentaje de la factura que ahorraría'],
-    ])));
-    const dif = ev.diferenciaPaneles;
-    art.append(subtitulo(1, 'comparativo-verificacion', `Comparativo: calculado vs. verificación en sitio (ver sección ${refSeccion(20, r)})`));
-    art.append(graficoToggle('g01-comparativo-verificacion', 'Tabla comparativa calculado vs. verificación en sitio', tabla(['Concepto comparable', `Nuestro cálculo (sección ${refSeccion(1, r)})`, `Verificación en sitio (sección ${refSeccion(19, r)})`, 'Diferencia'], [
-      ['Paneles', `${r.n}`, `${ev.n}`, dif === 0 ? 'Igual' : `${dif > 0 ? '+' : ''}${dif}`],
-      ['Potencia', `${r.kwp.toFixed(2)} kWp`, `${ev.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
-      ['Inversión, IVA incluido', M(r.investment), M(ev.investment), M(ev.investment - r.investment)],
-      ['Ahorro anual', M(r.ahorroAnual), M(ev.ahorroAnual), M(ev.diferenciaAhorro)],
-      ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', '—'],
-      ['% de ahorro de factura', PCT(r.pctAhorro), PCT(ev.pctAhorro), '—'],
-    ], { small: true, id: 'g01-comparativo-verificacion' })));
-    art.append(avisoCream(dif === 0
-      ? 'El número de paneles coincide con el de la verificación en campo -- ambos escenarios salen iguales.'
-      : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que ` +
-        'calcula este sistema a partir del consumo real del recibo -- ambos criterios son válidos y conviene presentarle al cliente las dos ' +
-        'referencias antes de decidir el tamaño final. Ambos escenarios se calcularon con el mismo motor (mismo recibo, misma tarifa, ' +
-        'mismos costos) -- no implica que ambos tamaños quepan físicamente en el espacio disponible.'));
-  }
   return art;
 }
 
@@ -1060,14 +1061,6 @@ function s25(r, _leido, onToggle) {
   art.append(p(`Lo que este sistema calculó a partir del consumo real del recibo (${r.n} paneles) comparado con lo ` +
     `que propone el documento de verificación en campo (${ev.n} paneles) -- ambos escenarios usan el mismo recibo, ` +
     'la misma tarifa y los mismos costos, solo cambia el número de paneles.'));
-  art.append(textoEditable('h5', null, `Calculado por este sistema (sección ${refSeccion(1, r)})`));
-  art.append(graficoToggle('g20-tarjetas-calculado', 'Tarjetas: resumen calculado por este sistema', tarjetas([
-    [M(r.investment), 'Inversión estimada, IVA incluido'],
-    [`${r.n} paneles`, `${r.moduloWp} W por módulo / ${r.kwp.toFixed(2)} kWp`],
-    [M(r.ahorroAnual), 'Ahorro estimado de factura, año 1'],
-    [r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', 'Recuperación simple estimada'],
-    [PCT(r.pctAhorro), 'Ahorro anual de factura estimado'],
-  ])));
   art.append(textoEditable('h5', null, `Propuesta de la verificación en campo (sección ${refSeccion(19, r)})`));
   art.append(graficoToggle('g20-tarjetas-verificado', 'Tarjetas: resumen según la verificación en sitio', tarjetas([
     [M(ev.investment), 'Inversión estimada, IVA incluido'],
@@ -1075,6 +1068,14 @@ function s25(r, _leido, onToggle) {
     [M(ev.ahorroAnual), 'Ahorro estimado de factura, año 1'],
     [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'Recuperación simple estimada'],
     [PCT(ev.pctAhorro), 'Ahorro anual de factura estimado'],
+  ])));
+  art.append(textoEditable('h5', null, `Calculado por este sistema (sección ${refSeccion(1, r)})`));
+  art.append(graficoToggle('g20-tarjetas-calculado', 'Tarjetas: resumen calculado por este sistema', tarjetas([
+    [M(r.investment), 'Inversión estimada, IVA incluido'],
+    [`${r.n} paneles`, `${r.moduloWp} W por módulo / ${r.kwp.toFixed(2)} kWp`],
+    [M(r.ahorroAnual), 'Ahorro estimado de factura, año 1'],
+    [r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', 'Recuperación simple estimada'],
+    [PCT(r.pctAhorro), 'Ahorro anual de factura estimado'],
   ])));
   const dif = ev.diferenciaPaneles;
   art.append(p(dif === 0
