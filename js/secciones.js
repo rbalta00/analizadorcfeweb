@@ -577,16 +577,25 @@ export function seccionTieneDatos(numero, r) {
   return true;
 }
 
+// Orden NATURAL por defecto de las 25 secciones -- pedido explicito del usuario,
+// 2026-11-10: "nuestro calculo" (secciones 6-11, sistema propuesto/produccion/
+// ambiental/ahorro/presupuesto) se muestra primero, pero el cliente debe ver PRIMERO
+// el proyecto segun la verificacion en sitio de la agencia estatal (seccion 19) y
+// DESPUES nuestro propio analisis -- asi que 19 se adelanta a justo antes de la 6. El
+// comparativo (seccion 20, que compara ambos) se queda donde ya estaba -- el usuario
+// pidio explicitamente dejarlo "al final", no arrastrarlo junto con la 19.
+const ORDEN_NATURAL_DEFAULT = [1, 2, 3, 4, 5, 19, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25];
+
 // Orden PERSONALIZADO de secciones, si Isaac arrastro/movio alguna con las flechas del
 // indice (ver moverSeccion en app.js) -- r.ordenSecciones es un array de numeros de
 // seccion en el orden que se quiere mostrar. Si no esta definido, o si quedo
 // desactualizado (ej. una seccion nueva que no existia cuando se guardo el orden, o
 // una que ya no existe por seccionTieneDatos), se valida contra el orden natural
-// 1..N: lo que sigue siendo valido se respeta en su posicion relativa, lo que falta se
-// agrega al final -- nunca se pierde una seccion por un orden guardado viejo.
+// (ORDEN_NATURAL_DEFAULT, no necesariamente 1..N): lo que sigue siendo valido se
+// respeta en su posicion relativa, lo que falta se agrega al final -- nunca se pierde
+// una seccion por un orden guardado viejo.
 export function ordenSeccionesEfectivo(r) {
-  const natural = [];
-  for (let n = 1; n <= TITULOS_SECCIONES.length; n++) natural.push(n);
+  const natural = ORDEN_NATURAL_DEFAULT.filter(n => n <= TITULOS_SECCIONES.length);
   const guardado = (r.ordenSecciones || []).filter(n => natural.includes(n));
   const faltantes = natural.filter(n => !guardado.includes(n));
   return [...guardado, ...faltantes];

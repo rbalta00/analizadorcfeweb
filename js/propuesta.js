@@ -789,7 +789,14 @@ function pagina21(doc, r, numero) {
 const PAGINAS = [
   ['resumen', pagina01, null, 1],
   ['recibo_cargos', pagina02, null, 2], ['recibo_cargos', pagina03, null, 3], ['recibo_cargos', pagina04, null, 4],
-  ['consumo_sistema', pagina05, null, 5], ['consumo_sistema', pagina06, null, 6],
+  ['consumo_sistema', pagina05, null, 5],
+  // Seccion 19 ("Su proyecto segun la verificacion en sitio") adelantada aqui, justo
+  // antes del sistema propuesto (seccion 6) -- mismo orden que ordenSeccionesEfectivo
+  // en secciones.js: primero el proyecto segun la agencia estatal, despues nuestro
+  // propio calculo. El comparativo (seccion 20) se deja en su lugar de siempre, mas
+  // adelante -- pedido explicito del usuario de no moverlo junto con la 19.
+  ['comparativo_verificacion', paginaProyectoVerificado, (r) => !!r.escenarioVerificado, 19],
+  ['consumo_sistema', pagina06, null, 6],
   ['consumo_sistema', pagina06b, (r) => !!r.fotoSembrado, 6],
   ['consumo_sistema', pagina06c, (r) => !!(r.fotosInmueble && r.fotosInmueble.length), 6],
   ['produccion', pagina07, null, 7], ['ambiental', pagina08, null, 8],
@@ -799,7 +806,6 @@ const PAGINAS = [
   ['pagos_100', pagina15, null, 15], ['pagos_100', pagina16, null, 16],
   ['documentos', paginaDocumentoRecibo, (r) => !!(r._archivosReciboImgs && r._archivosReciboImgs.length), 17],
   ['documentos', paginaDocumentoVerificacion, (r) => !!(r._archivosVerificacionImgs && r._archivosVerificacionImgs.length), 18],
-  ['comparativo_verificacion', paginaProyectoVerificado, (r) => !!r.escenarioVerificado, 19],
   ['comparativo_verificacion', paginaComparativoVerificacion, (r) => !!r.escenarioVerificado, 20],
   ['pendientes', pagina17, null, 21], ['pendientes', pagina17b, null, 21],
   ['alcance', pagina18, null, 22], ['alcance', pagina19, null, 23],
