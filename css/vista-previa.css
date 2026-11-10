@@ -1,0 +1,76 @@
+/* Estilos SOLO de vista-previa.html -- no afectan al editor (index.html) para nada,
+   es un archivo aparte a proposito. Dos objetivos: (1) ocultar todos los controles de
+   edicion (botones, checkboxes, numeros del editor) para que se vea como un documento
+   terminado, y (2) imitar el tamano de hoja A4 y los colores del PDF real
+   (pdfComponents.js: NAVY #163b4c / GOLD #c8a654 / GREY #5e737c) para que se parezca
+   lo mas posible, aunque NO sea pixel-perfecto a la paginacion real (aceptado
+   explicitamente por el usuario, 2026-11-09 -- "aunque la pagina se vea bien y no sea
+   la real"). */
+
+body.vista-previa-pagina { background: #e7eaed; }
+
+.vp-topbar {
+  position: sticky; top: 0; z-index: 50; background: #163b4c; color: #fff;
+  padding: 10px 16px; display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.vp-topbar h1 { font-size: 1rem; margin: 0; }
+.vp-topbar .vp-sub { font-size: 0.78rem; color: #cbd6db; margin: 0; }
+.vp-topbar .vp-estado { font-size: 0.72rem; color: #9fb3bb; margin: 0; }
+.vp-topbar .acciones { margin: 0; }
+
+/* Cada seccion se dibuja como una "hoja" blanca de proporcion A4 (595.28pt de ancho,
+   el mismo punto que usa pdfComponents.js -- 1pt de CSS = 1pt real, el navegador lo
+   convierte solo), con los mismos margenes (40pt L/R, 70pt arriba para el encabezado,
+   40pt abajo) y una barra superior que imita dibujarHeaderFooter(). No intenta
+   replicar los saltos de pagina reales dentro de una seccion larga -- cada seccion es
+   "una hoja o mas" en el PDF real, aqui es siempre una sola tarjeta de alto variable. */
+body.vista-previa-pagina main { max-width: 680pt; }
+body.vista-previa-pagina .seccion {
+  background: #fff; border: none; border-radius: 0; box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  width: 595.28pt; max-width: 100%; margin: 0 auto 24px; padding: 70pt 40pt 40pt 40pt;
+  position: relative;
+}
+body.vista-previa-pagina .seccion::before {
+  content: ''; position: absolute; top: 46pt; left: 40pt; right: 40pt; height: 1.5pt;
+  background: #c8a654;
+}
+body.vista-previa-pagina .seccion-header { margin-bottom: 14px; }
+/* El numero de pagina real del PDF no se imita aqui a proposito -- una seccion de
+   esta vista puede corresponder a varias hojas reales (o fracción de una), fingir un
+   numero aqui seria enganoso. El numero de pagina real solo existe en el PDF
+   generado (boton "Generar PDF" de esta misma pagina). */
+
+/* Ocultar TODO control de edicion -- mismo criterio/lista que CLASES_OMITIR en
+   propuestaDom.js (lo que el PDF real tampoco incluye), mas los propios de esta
+   sesion (numeracion del editor, botones Guardar/Apagar). */
+body.vista-previa-pagina .badge-num-editable,
+body.vista-previa-pagina .btn-guardar-texto,
+body.vista-previa-pagina .btn-ocultar-texto,
+body.vista-previa-pagina .nota-texto-global,
+body.vista-previa-pagina .nota-texto-oculto,
+body.vista-previa-pagina .th-accion-tabla,
+body.vista-previa-pagina .td-accion-tabla,
+body.vista-previa-pagina .btn-ocultar-col-fila,
+body.vista-previa-pagina .toggle-seccion,
+body.vista-previa-pagina .calculo-detalle-apagado,
+body.vista-previa-pagina .campo-oculto,
+body.vista-previa-pagina .grafico-apagado,
+body.vista-previa-pagina .col-oculta-tabla,
+body.vista-previa-pagina .fila-oculta-tabla {
+  display: none !important;
+}
+/* Texto editable -> se ve como texto normal, sin el aspecto de "clic para editar". */
+body.vista-previa-pagina .texto-editable,
+body.vista-previa-pagina .texto-editable-chico,
+body.vista-previa-pagina .celda-editable {
+  outline: none !important; background: none !important; cursor: default !important;
+}
+body.vista-previa-pagina .campo-editado > .texto-editable,
+body.vista-previa-pagina .texto-editable-chico-editado,
+body.vista-previa-pagina .celda-editada {
+  background: none !important; /* no marcar en dorado lo editado -- aqui ya es "el texto final", no hace falta distinguirlo */
+}
+
+.vp-visor { max-width: 680pt; margin: 24px auto; }
+.vp-visor .iframe-pdf { width: 100%; height: 85vh; border: none; }

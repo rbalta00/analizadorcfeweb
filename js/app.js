@@ -2833,6 +2833,18 @@ async function prepararDocumentosAdjuntosParaPdf(r) {
   r._archivosVerificacionImgs = await convertirTodos(proyectoActual.archivosVerificacion);
 }
 
+// Abre vista-previa.html en una ventana con nombre fijo -- pedido explicito del
+// usuario, 2026-11-09: "uso dos pantallas... que se abra y se vea la pagina de
+// previsualizacion". Usar el MISMO nombre de ventana ("vistaPreviaCFE") en cada clic
+// hace que, si ya esta abierta (ej. en el segundo monitor), el navegador reuse esa
+// misma ventana y solo navegue a la cotizacion nueva, en vez de abrir una ventana
+// distinta cada vez.
+$('btnAbrirVistaPrevia').addEventListener('click', () => {
+  if (!clienteActual || !proyectoActual) return;
+  const url = `vista-previa.html?cliente=${encodeURIComponent(clienteActual.id)}&proyecto=${encodeURIComponent(proyectoActual.id)}`;
+  window.open(url, 'vistaPreviaCFE', 'width=760,height=900');
+});
+
 $('btnGenerarPdf').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarAntesDeGenerarDocumento(true)) return;

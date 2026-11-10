@@ -916,6 +916,63 @@ se reinventa una formula aqui, solo se traduce.
 - **Rebranding** ("Analizador FV CFE") y **pasos de entrega** (análisis completo/
   preliminar) documentados en la entrada anterior de esta misma fecha, más arriba.
 
+### Vista previa en ventana/pantalla aparte, se actualiza sola (2026-11-09, más tarde todavía)
+- Pedido explícito del usuario: "uso dos pantallas, en una pongo el editor que ya
+  tenemos y en el otro que se abra y se vea la página de previsualización" -- quería
+  una aproximación visual al PDF (no el PDF real) que se actualizara sola mientras
+  edita en la otra ventana, con un botón propio para generar el PDF real desde ahí.
+- **Archivos nuevos**: `vista-previa.html`, `js/vistaPrevia.js`, `css/vista-previa.css`.
+  Página independiente (como `cliente.html`), con su propio `#contenedorSecciones` --
+  se abre con `?cliente=ID&proyecto=ID` en la URL, lee ese proyecto de `localStorage`
+  y lo renderiza con el MISMO `renderSeccion()` de `secciones.js` que usa el editor
+  (sin reinventar ningún renderizado).
+- **Se actualiza sola de verdad, sin servidor ni polling**: usa el evento nativo
+  `window.addEventListener('storage', ...)` del navegador, que SOLO se dispara en
+  OTRAS pestañas/ventanas del mismo origen cuando cambia una llave de `localStorage`
+  (nunca en la pestaña que hizo el cambio) -- exactamente el caso de "edito en una
+  ventana, veo en la otra". Probado en vivo con 2 pestañas reales: editar y guardar un
+  párrafo en una pestaña actualizó la otra sola, sin ningún refresco manual.
+- **Estilo "hoja" que imita el PDF real, sin pretender ser pixel-perfecto** (aceptado
+  explícitamente por el usuario): `css/vista-previa.css` usa las MISMAS medidas en
+  puntos que `pdfComponents.js` (595.28×841.89pt, márgenes 40/70/40/40) y los mismos
+  colores (navy/gold/grey), oculta TODOS los controles de edición (botones Guardar/
+  Apagar, numeración del editor, checkboxes) vía CSS, y deshabilita `contentEditable`
+  por JS para que un clic accidental no intente "editar" nada ahí.
+- **Las secciones apagadas se QUITAN del todo de esta vista** (a diferencia del editor,
+  que las deja atenuadas a propósito para que Isaac las siga viendo -- ver
+  VISION_Y_REQUISITOS.md sección 5) -- la vista previa representa "cómo queda la
+  cotización", no el editor, así que aquí debía comportarse como el PDF. Probado en
+  vivo: apagar una sección en el editor la quitó por completo de la vista previa
+  (22→21 secciones), no solo la atenuó.
+- **Botón "🖥️ Abrir vista previa en otra ventana"** nuevo en `index.html` (pestaña de
+  exportar PDF, arriba de "Cotización completa") -- usa un nombre de ventana fijo
+  (`window.open(url, 'vistaPreviaCFE', ...)`) para que, si ya está abierta en el
+  segundo monitor, el navegador reuse esa misma ventana en vez de abrir una nueva cada
+  vez que se pulsa el botón.
+- **Botón "📄 Generar PDF" propio** en la vista previa -- llama a la MISMA función real
+  (`generarPdfCompletaDesdeVista`, importada de `propuesta.js`), nunca una copia.
+- **2 bugs reales encontrados y corregidos durante la propia construcción/prueba**:
+  1. `construirResultado()` no acepta `proyecto.formulario` (el snapshot crudo del
+     formulario) directo -- espera el objeto "input" ya derivado que normalmente arma
+     `leerInputCalculo()` leyendo el DOM en vivo (`rateKw`/`btPct`/`fpBonusPct`
+     calculados, `costos` resuelto a un objeto). Sin esto, `construirResultado()`
+     tronaba (`ErrorDeClasificacion: rate_kw es obligatorio`) porque nunca llegaba
+     nada a `rateKw`. Se escribió `construirInputDesdeFormulario()` en
+     `vistaPrevia.js`, que replica exactamente la misma derivación de
+     `leerInputCalculo()` pero leyendo del snapshot guardado en vez del DOM.
+  2. `vista-previa.html` no cargaba `lib/jspdf.umd.min.js` -- el botón "Generar PDF"
+     tronaba (`Cannot destructure property 'jsPDF' of 'window.jspdf'`). Agregado el
+     mismo `<script>` que ya tiene `index.html`.
+- **Verificado de punta a punta con 2 pestañas reales** (servidor local efímero,
+  cliente de prueba GDMTO con los datos reales de Abue, puerto nuevo cada vez por el
+  cacheo de módulos ya documentado): edición en vivo propagada sola a la otra pestaña,
+  sección apagada desaparece de la vista previa, y el PDF generado DESDE la vista
+  previa (31 páginas) se verificó con `pdf.js` -- con numeración de página, sin
+  ninguna contaminación de "№" del editor, con la edición reflejada, y sin la sección
+  apagada. `node js/test_motor.mjs`/`test_recibo.mjs` en verde, sin tocar el motor.
+- `vista-previa.html`/`js/vistaPrevia.js`/`css/vista-previa.css` agregados al cache
+  del service worker (`ARCHIVOS_APP_SHELL`) -- bump a `v28`.
+
 ## Como probarlo en el navegador
 ```
 cd web
