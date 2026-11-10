@@ -200,21 +200,9 @@
       <p class="nota" id="estadoReciboNuevoProyecto"></p>
       <div class="acciones">
         <button id="btnNuevoProyectoBlanco" class="btn-secundario">+ Cotización en blanco</button>
-        <button id="btnNuevoProyectoPlantilla" class="btn-secundario">📋 Desde cotización ya validada</button>
       </div>
-    </section>
-
-    <section class="tarjeta" id="panelPlantillas" hidden>
-      <h3>📋 Elegir cotización ya validada como punto de partida</h3>
-      <p class="nota">Copia la tarifa, cargos, escalones y configuración de la cotización que elijas. El titular,
-        domicilio, número de servicio, período/kWh e historial de este cliente nuevo SIEMPRE quedan en blanco --
-        hay que capturarlos del recibo real de este cliente antes de calcular.</p>
-      <div class="fila">
-        <label><input type="checkbox" id="chkSoloDefinitivasPlantilla" checked> Mostrar solo las marcadas como ✅ Definitiva</label>
-        <select id="filtroTarifaPlantilla"></select>
-      </div>
-      <div id="listaPlantillas" class="lista-clientes"></div>
-      <div class="acciones"><button id="btnCancelarPlantilla" class="btn-secundario">Cancelar</button></div>
+      <p class="nota">¿Quieres partir de una cotización ya validada (machote)? Crea una cotización en blanco
+        y aplícasela desde el panel "Guardar cotización", al final de esa cotización.</p>
     </section>
 
     <section class="tarjeta">
@@ -308,6 +296,17 @@
         cálculo del sistema (paneles, inversión, ahorro) -- pasa el cursor sobre la marca para ver exactamente
         para qué se usa ese dato. Los demás (titular, domicilio, condiciones del inmueble, etc.) son solo
         informativos para la cotización.</p>
+
+      <h3>📋 ¿Partir de una cotización ya validada? (opcional, antes de capturar)</h3>
+      <p class="nota">Copia sobre ESTA cotización la tarifa, cargos, escalones, pasos de entrega y configuración
+        de la que elijas abajo -- el titular, domicilio, número de servicio, período/kWh e historial de este
+        cliente SIEMPRE quedan en blanco, hay que capturarlos de su recibo real. (El nombre y el cliente de esta
+        cotización se ajustan más abajo, en la pestaña de exportar PDF -- "1. Guarda tus cambios".)</p>
+      <div class="fila">
+        <label><input type="checkbox" id="chkSoloDefinitivasMachote" checked> Mostrar solo las marcadas como ✅ Definitiva</label>
+        <select id="filtroTarifaMachote"></select>
+      </div>
+      <div id="listaMachotes" class="lista-clientes"></div>
 
       <h3>1. Recibo CFE</h3>
       <p class="nota">Sube el PDF o una foto del recibo: se detecta la tarifa sola y, si hay suficientes datos, se
@@ -682,19 +681,26 @@
       <p class="nota">Pensado para 2 pantallas: abre esto en tu segunda ventana/monitor y se actualiza sola
         mientras editas aquí (no hace falta refrescar a mano). No es el PDF -- es una aproximación con el mismo
         estilo, para ver "cómo va quedando" sin generar el documento cada vez.</p>
+      <div class="acciones">
+        <button type="button" id="btnCompartirVistaPrevia" class="btn-secundario">🔗 Compartir vista previa en vivo (link)</button>
+        <button type="button" id="btnDejarDeCompartir" class="btn-link" hidden>🛑 Dejar de compartir este link</button>
+      </div>
+      <p class="nota">Para un colaborador en OTRO dispositivo (no tu segunda pantalla): genera un link público
+        que se actualiza solo cada pocos segundos mientras sigas editando aquí. Cualquiera con el link puede ver
+        esta cotización -- mismo criterio que el resto de esta app (sin contraseña).</p>
+      <div id="cajaLinkCompartido" hidden class="fila">
+        <input type="text" id="inputLinkCompartido" readonly />
+        <button type="button" id="btnCopiarLinkCompartido" class="btn-secundario">📋 Copiar link</button>
+        <button type="button" id="btnWhatsappLinkCompartido" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
+      </div>
       <p class="nota">"Cotización completa" lee directo lo que ves en pantalla para el <strong>paso activo</strong>
         elegido arriba -- incluye tus ediciones de texto/tablas, el "Recibo original", la "Verificación en sitio" y
         el comparativo calculado-vs-verificación (lo que aplique y esté encendido en este paso). Revisa el
         documento antes de enviarlo al cliente.</p>
       <div class="acciones acciones-pdf">
         <button id="btnGenerarPdf" class="btn-primario">Cotización completa (paso activo)</button>
-        <button id="btnResumenEjecutivo" class="btn-secundario">Resumen ejecutivo (1 página, fijo)</button>
-        <button id="btnAnexoInterconexion" class="btn-secundario">📐 Anexo trámite CFE (fijo)</button>
         <button id="btnEnviarWhatsapp" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
       </div>
-      <p class="nota">Solo <strong>"Cotización completa"</strong> cambia según el paso de entrega activo (arriba).
-        "Resumen ejecutivo" y "Anexo trámite CFE" son documentos aparte, de formato fijo -- siempre traen el mismo
-        contenido sin importar qué secciones hayas apagado.</p>
       <p class="nota" id="notaAdjuntoWhatsapp">El botón de WhatsApp intenta adjuntar el PDF directo al compartir
         (funciona en celular/Android con Chrome, y algunos navegadores de escritorio recientes); si tu navegador no
         lo permite, abre el chat solo con el texto y hay que adjuntar el PDF a mano (ya descargado arriba).</p>

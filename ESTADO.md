@@ -1001,6 +1001,78 @@ se reinventa una formula aqui, solo se traduce.
   `node js/test_motor.mjs`/`test_recibo.mjs` en verde, sin tocar el motor.
 - Cache del service worker bumpeado a `v29`.
 
+### Link de vista previa compartida (colaborador en otro dispositivo) + limpieza de botones (2026-11-09, más tarde todavía)
+- Pedido explícito del usuario: "puedes hacer un link para compartir y que también vea
+  el colaborador la vista previa en tiempo real" -- a diferencia de `vista-previa.html`
+  (mismo dispositivo, localStorage + evento `storage`), esto es para alguien en OTRO
+  dispositivo/navegador.
+- **Refactor previo, sin cambio de comportamiento**: se extrajo a `js/vistaPreviaComun.js`
+  toda la lógica que antes vivía solo en `vistaPrevia.js` (`construirInputDesdeFormulario`,
+  `construirRDesdeProyecto`, `renderEnContenedor`, `generarYMostrarPdf`) -- ahora la
+  comparten `vista-previa.html` y la página nueva, para que nunca se desincronicen.
+  `vista-previa.html` se re-probó completa después del refactor (misma suite de
+  pruebas de la entrada anterior) -- sin regresión.
+- **Backend**: tabla nueva `vista_compartida` en el proyecto Supabase de este repo
+  (`cotizador-fv-cfe`, `prchqgvwaepzmcohoehu`) -- `token` (llave primaria),
+  `cliente_id`/`proyecto_id`/`cliente_nombre`, `proyecto` (jsonb, el proyecto
+  COMPLETO), `actualizado_en`. RLS abierta a la anon key (mismo modelo que el resto
+  del proyecto -- `envios_cliente`, `cliente.html`, etc.) -- cualquiera con el link ve
+  los datos de esa cotización, decisión consciente ya aceptada por el usuario.
+  `js/supabase.js` ganó 3 helpers genéricos nuevos (`supabaseUpsertar`,
+  `supabaseActualizarPorFiltro`, `supabaseEliminarPorFiltro`) para tablas cuya llave
+  primaria no se llama `id`.
+- **Editor** (`index.html`/`js/app.js`): botón nuevo "🔗 Compartir vista previa en vivo
+  (link)" -- genera un token corto, empuja el proyecto completo a Supabase, y muestra
+  el link con botones de copiar/WhatsApp. Cada vez que algo cambia (`renderSecciones()`,
+  llamada tras cualquier edición/toggle) se vuelve a empujar el estado, con un debounce
+  de 900ms para no mandar una fila por cada clic/tecla seguidos. Botón "🛑 Dejar de
+  compartir" borra la fila y el link deja de funcionar.
+- **Página pública nueva** (`vista-previa-compartida.html` + `js/vistaPreviaCompartida.js`):
+  toma `?token=...`, hace **polling** cada 4s a la tabla (no Supabase Realtime/
+  websockets, para no sumar una dependencia nueva -- consistente con el resto del
+  proyecto, que ya usa `fetch` directo a PostgREST en vez del SDK `supabase-js`) y
+  re-renderiza solo cuando `actualizado_en` cambió. Mismo botón "Generar PDF" real que
+  las otras vistas.
+- **Verificado en vivo con 3 "dispositivos" simulados** (3 pestañas aisladas, servidor
+  local efímero): generar el link desde el editor confirmó la fila en Supabase (vía
+  SQL directo); una pestaña NUEVA que nunca tocó `localStorage` (solo leyó el link)
+  mostró la cotización completa; editar un párrafo en el editor se reflejó solo en esa
+  pestaña del "colaborador" tras el polling, sin tocarla; "Dejar de compartir" borró
+  la fila de verdad (confirmado por SQL, count 0).
+- **Limpieza de botones, pedido explícito del usuario**: se quitaron "Resumen
+  ejecutivo (1 página, fijo)" y "Anexo trámite CFE (fijo)" de la pestaña de exportar
+  PDF -- quedó solo "Cotización completa" + WhatsApp. Las funciones que los generaban
+  (`generarResumenEjecutivo`/`generarAnexoInterconexion`) se dejaron intactas en
+  `resumen.js` (sin botón que las llame) por si se piden de vuelta -- "Guía para
+  presentar (genérica)" (botón distinto, pantalla de Clientes) no se tocó.
+- **Flujo de "machote" reubicado y consolidado**, pedido explícito del usuario: "ya
+  hay un botón de nuevo cliente al final de la cotización donde se trabaja... permite
+  elegir qué cliente, el nombre de la cotización y qué cotización final usar como
+  machote -- ya están los botones, solo arréglalos... y quita lo repetido". Se quitó
+  el flujo aparte "📋 Desde cotización ya validada" (pantalla "Cotizaciones de este
+  cliente", requería tener el cliente destino ya fijado de antemano) y se reemplazó
+  por un panel "📋 ¿Partir de una cotización ya validada?" al PRINCIPIO del formulario
+  de captura de cualquier cotización (recién creada en blanco o no) -- reusa el
+  nombre/cliente que YA se deciden en el panel "Guardar cotización" de esa misma
+  cotización, solo aplica tarifa/cargos/pasos encima de la que ya está abierta
+  (`aplicarMachoteAProyecto()` en `clientes.js`, comparte la misma lógica de limpieza
+  de campos que `crearProyectoDesdeOrigen()`, que se dejó intacta por si se usa en
+  otro lado después).
+  - **Bug real encontrado probando esto mismo**: el panel se puso primero dentro de
+    "2. Genera el PDF" (`tabPdf`), que solo se muestra DESPUÉS de calcular por primera
+    vez -- una cotización recién creada en blanco nunca había calculado nada, así que
+    el panel nunca se habría visto. Movido al inicio de "Datos y recibo" (`tabCaptura`),
+    visible desde que se abre la cotización, antes de capturar nada.
+  - Verificado en vivo: cliente origen con una cotización marcada ✅ definitiva (GDMTO),
+    cliente destino con una cotización en blanco -- el panel mostró la definitiva de
+    inmediato al abrir la cotización en blanco; aplicarla copió tarifa/cargos
+    correctamente, dejó titular/período en blanco, mostró el aviso "esta cotización se
+    creó a partir de otra ya guardada", y permitió completar+calcular normal.
+- `node js/test_motor.mjs`/`test_recibo.mjs` en verde en todo momento -- no se tocó el
+  motor de cálculo. Cache del service worker bumpeado a `v30` (cubre este bloque
+  completo: `vistaPreviaComun.js`/`vistaPreviaCompartida.js`/
+  `vista-previa-compartida.html` agregados a `ARCHIVOS_APP_SHELL`).
+
 ## Como probarlo en el navegador
 ```
 cd web

@@ -5,14 +5,14 @@
 import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo, listarClientes,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
-  crearProyectoDesdeOrigen,
+  aplicarMachoteAProyecto,
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
 import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf, generarPdfCompletaDesdeVista } from './propuesta.js';
-import { generarResumenEjecutivo, generarGuiaPresentacion, generarAnexoInterconexion } from './resumen.js';
+import { generarGuiaPresentacion } from './resumen.js';
 import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida } from './imagenes.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, escalaCostosParaTarifa, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
@@ -24,7 +24,7 @@ import {
 } from './formularioRecibo.js';
 import {
   SUPABASE_URL, supabaseListar, supabaseActualizar, supabaseEliminar, supabaseSubirArchivo,
-  supabaseEliminarArchivo, supabaseListarArchivos,
+  supabaseEliminarArchivo, supabaseListarArchivos, supabaseUpsertar, supabaseEliminarPorFiltro,
 } from './supabase.js';
 import { subirANube, bajarDeNube, eliminarClienteDeNube, listarClientesEnNube } from './nube.js';
 import { panelesEnTecho, esquinasDelTecho, crearEditorPaneles, hornearImagenSembrado, PANEL_ANCHO_M, PANEL_ALTO_M } from './sembrador.js';
@@ -793,17 +793,23 @@ $('btnNuevoProyectoBlanco').addEventListener('click', () => {
   abrirProyecto(clienteActual.id, proyecto.id);
 });
 
-// ---------------- Nueva cotizacion desde una ya validada (pedido explicito del
-// usuario, 2026-11-06: "usar la tarifa ya validada o la cotizacion ya validada") ----------------
+// ---------------- Machote: aplicar una cotizacion ya validada SOBRE la que esta
+// abierta (pedido explicito del usuario, 2026-11-06: "usar la tarifa ya validada o la
+// cotizacion ya validada"; reubicado 2026-11-09 al panel "Guardar cotizacion" -- "ya
+// hay un boton de nuevo cliente al final de la cotizacion donde se trabaja... permite
+// elegir que cliente, el nombre de la cotizacion y que cotizacion final usar como
+// machote", quitando el flujo aparte "Desde cotizacion ya validada" por redundante) ----------------
 // Lista TODOS los proyectos de TODOS los clientes (no solo los de clienteActual) --
 // el punto es poder reusar la tarifa de CUALQUIER cotizacion de confianza ya hecha
-// antes, no solo las de este cliente en particular.
-function candidatosPlantilla() {
-  const soloDefinitivas = $('chkSoloDefinitivasPlantilla').checked;
-  const tarifaFiltro = $('filtroTarifaPlantilla').value;
+// antes, no solo las de este cliente en particular. Se excluye la cotizacion ABIERTA
+// (no tendria sentido usarse a si misma como su propio machote).
+function candidatosMachote() {
+  const soloDefinitivas = $('chkSoloDefinitivasMachote').checked;
+  const tarifaFiltro = $('filtroTarifaMachote').value;
   const filas = [];
   for (const c of listarClientes()) {
     for (const p of (c.proyectos || [])) {
+      if (proyectoActual && p.id === proyectoActual.id) continue;
       if (!p.formulario || !p.formulario.tarifa) continue; // sin datos capturados, nada que clonar
       if (soloDefinitivas && !p.definitiva) continue;
       if (tarifaFiltro && p.formulario.tarifa !== tarifaFiltro) continue;
@@ -813,20 +819,21 @@ function candidatosPlantilla() {
   return filas.sort((a, b) => (b.proyecto.actualizadoEn || '').localeCompare(a.proyecto.actualizadoEn || ''));
 }
 
-function renderPanelPlantillas() {
-  const select = $('filtroTarifaPlantilla');
+function renderListaMachotes() {
+  const select = $('filtroTarifaMachote');
   if (!select.dataset.listo) {
     select.innerHTML = '<option value="">Todas las tarifas</option>' +
       [...TARIFAS_SOPORTADAS].map(t => `<option value="${t}">${t}</option>`).join('');
     select.dataset.listo = '1';
   }
-  const cont = $('listaPlantillas');
-  const candidatos = candidatosPlantilla();
+  const cont = $('listaMachotes');
+  if (!clienteActual || !proyectoActual) { cont.innerHTML = ''; return; }
+  const candidatos = candidatosMachote();
   cont.innerHTML = '';
   if (!candidatos.length) {
     cont.append(Object.assign(document.createElement('p'), {
       className: 'nota',
-      textContent: 'No hay ninguna cotización guardada que coincida con este filtro (prueba quitar "solo definitivas" o cambiar la tarifa).',
+      textContent: 'No hay ninguna otra cotización guardada que coincida con este filtro (prueba quitar "solo definitivas" o cambiar la tarifa).',
     }));
     return;
   }
@@ -838,9 +845,20 @@ function renderPanelPlantillas() {
       `<div class="nota">Cliente: ${escapeHtml(cliente.nombre)} · Tarifa: ${escapeHtml(proyecto.formulario.tarifa)} · ` +
       `${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</div>`;
     div.addEventListener('click', () => {
-      const nuevo = crearProyectoDesdeOrigen(clienteActual, { cliente, proyecto }, {});
-      $('panelPlantillas').hidden = true;
-      abrirProyecto(clienteActual.id, nuevo.id);
+      if (!confirm(`¿Aplicar "${proyecto.nombre}" (${cliente.nombre}) como machote sobre esta cotización? Se reemplazan tarifa/cargos/pasos -- el titular/domicilio/historial de este cliente se quedan en blanco, hay que capturarlos de su recibo real.`)) return;
+      aplicarMachoteAProyecto(proyectoActual, { cliente, proyecto });
+      guardarProyecto(clienteActual, proyectoActual);
+      aplicarFormulario(proyectoActual.formulario);
+      ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
+      $('contenedorSecciones').innerHTML = '';
+      $('tabEditorPrecios').hidden = true;
+      $('tabFinanciamiento').hidden = true;
+      $('estadoCalculo').className = 'nota aviso';
+      $('estadoCalculo').textContent = 'Machote aplicado -- revisa los datos (sobre todo titular/domicilio/período/historial, que quedaron en blanco) y pulsa "Calcular".';
+      $('tabPdf').hidden = true;
+      renderAvisoPlantillaOrigen();
+      renderListaMachotes();
+      $('tabCaptura').scrollIntoView({ behavior: 'smooth' });
     });
     cont.append(div);
   }
@@ -861,13 +879,8 @@ $('btnMarcarPlantillaVerificada').addEventListener('click', () => {
 // (el aviso de "plantilla sin verificar" se consolido en avisosPendientesParaDocumento(),
 // mas abajo en este archivo, junto con los demas avisos antes de generar un documento)
 
-$('btnNuevoProyectoPlantilla').addEventListener('click', () => {
-  $('panelPlantillas').hidden = false;
-  renderPanelPlantillas();
-});
-$('btnCancelarPlantilla').addEventListener('click', () => { $('panelPlantillas').hidden = true; });
-$('chkSoloDefinitivasPlantilla').addEventListener('change', renderPanelPlantillas);
-$('filtroTarifaPlantilla').addEventListener('change', renderPanelPlantillas);
+$('chkSoloDefinitivasMachote').addEventListener('change', renderListaMachotes);
+$('filtroTarifaMachote').addEventListener('change', renderListaMachotes);
 
 // Subir un recibo aquí (antes de abrir ninguna cotización) crea una cotización nueva
 // con los datos ya detectados -- pedido explícito del usuario. Si en cambio se sube un
@@ -952,6 +965,12 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   // aqui (ver asegurarPasos en clientes.js) -- nunca pierden lo que ya tuvieran apagado.
   asegurarPasos(proyectoActual);
   renderSelectorPasos();
+  // Si esta cotizacion ya tenia un link de vista previa compartida activo de una
+  // sesion anterior, mostrar la caja con el link de nuevo (en vez de empezar oculta
+  // como si nunca se hubiera compartido).
+  if (proyectoActual.compartirToken) mostrarCajaLinkCompartido(proyectoActual.compartirToken);
+  else { $('cajaLinkCompartido').hidden = true; $('btnDejarDeCompartir').hidden = true; }
+  renderListaMachotes();
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
@@ -2492,6 +2511,10 @@ function renderSecciones(r) {
   renderSelectorPasos();
   numerarContenidoEditable();
   observarSecciones();
+  // Si hay un link de vista previa compartida activo para esta cotizacion, empuja el
+  // estado nuevo a Supabase (con debounce, para no mandar una fila por cada clic/tecla
+  // seguidos) -- no hace nada si nunca se activo "Compartir" (ver mas abajo).
+  empujarVistaCompartidaConDebounce();
 }
 
 // ---------------- Numeracion de TODO el contenido editable (pedido explicito del
@@ -2845,6 +2868,106 @@ $('btnAbrirVistaPrevia').addEventListener('click', () => {
   window.open(url, 'vistaPreviaCFE', 'width=760,height=900');
 });
 
+// ---------------- Vista previa compartida por LINK (para un colaborador en OTRO
+// dispositivo, no la segunda pantalla de Isaac -- esa es btnAbrirVistaPrevia de
+// arriba) -- pedido explicito del usuario, 2026-11-09: "puedes hacer un link para
+// compartir y que tambien vea el colaborador la vista previa en tiempo real". La
+// pagina publica (vista-previa-compartida.html) hace polling de la tabla Supabase
+// `vista_compartida`; aqui solo hace falta EMPUJAR el proyecto completo ahi cada vez
+// que algo cambia. Mismo modelo de seguridad que el resto de este proyecto (sin
+// autenticacion, cualquiera con el link ve los datos) -- decision consciente, ya
+// aceptada por el usuario al pedir esto.
+function urlVistaCompartida(token) {
+  return `${location.origin}${location.pathname.replace(/index\.html$/, '')}vista-previa-compartida.html?token=${encodeURIComponent(token)}`;
+}
+
+function tokenCompartirAleatorio() {
+  if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID().replace(/-/g, '').slice(0, 14);
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+function mostrarCajaLinkCompartido(token) {
+  $('cajaLinkCompartido').hidden = false;
+  $('btnDejarDeCompartir').hidden = false;
+  const url = urlVistaCompartida(token);
+  $('inputLinkCompartido').value = url;
+}
+
+// Empuja el proyecto actual (completo) a la fila de vista_compartida de este token --
+// se llama una vez al activar "Compartir", y despues en automatico desde
+// renderSecciones() cada vez que algo cambia (ver mas abajo, con debounce para no
+// mandar una fila por cada clic/tecla seguidos).
+async function empujarVistaCompartida() {
+  if (!proyectoActual?.compartirToken || !clienteActual) return;
+  try {
+    await supabaseUpsertar('vista_compartida', {
+      token: proyectoActual.compartirToken,
+      cliente_id: clienteActual.id,
+      proyecto_id: proyectoActual.id,
+      cliente_nombre: clienteActual.nombre,
+      proyecto: proyectoActual,
+      actualizado_en: new Date().toISOString(),
+    }, 'token');
+  } catch (err) {
+    console.error('No se pudo actualizar la vista previa compartida:', err);
+  }
+}
+
+let _debounceCompartir = null;
+function empujarVistaCompartidaConDebounce() {
+  if (!proyectoActual?.compartirToken) return;
+  clearTimeout(_debounceCompartir);
+  _debounceCompartir = setTimeout(empujarVistaCompartida, 900);
+}
+
+$('btnCompartirVistaPrevia').addEventListener('click', async () => {
+  if (!clienteActual || !proyectoActual) return;
+  const boton = $('btnCompartirVistaPrevia');
+  if (proyectoActual.compartirToken) { mostrarCajaLinkCompartido(proyectoActual.compartirToken); return; }
+  boton.disabled = true;
+  const textoOriginal = boton.textContent;
+  boton.textContent = 'Generando link…';
+  try {
+    const token = tokenCompartirAleatorio();
+    proyectoActual.compartirToken = token;
+    guardarProyecto(clienteActual, proyectoActual);
+    await empujarVistaCompartida();
+    mostrarCajaLinkCompartido(token);
+  } catch (err) {
+    alert('No se pudo crear el link de la vista compartida: ' + err.message);
+    delete proyectoActual.compartirToken;
+    guardarProyecto(clienteActual, proyectoActual);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = textoOriginal;
+  }
+});
+
+$('btnDejarDeCompartir').addEventListener('click', async () => {
+  if (!proyectoActual?.compartirToken) return;
+  if (!confirm('¿Dejar de compartir esta cotización? El link dejará de funcionar para quien lo tenga.')) return;
+  try { await supabaseEliminarPorFiltro('vista_compartida', `token=eq.${encodeURIComponent(proyectoActual.compartirToken)}`); }
+  catch (err) { console.error('No se pudo borrar la vista compartida en Supabase:', err); }
+  delete proyectoActual.compartirToken;
+  guardarProyecto(clienteActual, proyectoActual);
+  $('cajaLinkCompartido').hidden = true;
+  $('btnDejarDeCompartir').hidden = true;
+});
+
+$('btnCopiarLinkCompartido').addEventListener('click', async () => {
+  const input = $('inputLinkCompartido');
+  input.select();
+  try { await navigator.clipboard.writeText(input.value); $('btnCopiarLinkCompartido').textContent = '✓ Copiado'; }
+  catch { document.execCommand('copy'); $('btnCopiarLinkCompartido').textContent = '✓ Copiado'; }
+  setTimeout(() => { $('btnCopiarLinkCompartido').textContent = '📋 Copiar link'; }, 2000);
+});
+
+$('btnWhatsappLinkCompartido').addEventListener('click', () => {
+  const url = $('inputLinkCompartido').value;
+  const texto = encodeURIComponent(`Te comparto la vista previa en vivo de esta cotización -- se va actualizando sola:\n${url}`);
+  window.open(`https://wa.me/?text=${texto}`, '_blank');
+});
+
 $('btnGenerarPdf').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarAntesDeGenerarDocumento(true)) return;
@@ -2864,20 +2987,6 @@ $('btnGenerarPdf').addEventListener('click', async () => {
     boton.disabled = false;
     boton.textContent = textoOriginal;
   }
-});
-
-$('btnResumenEjecutivo').addEventListener('click', () => {
-  if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  if (!confirmarAntesDeGenerarDocumento()) return;
-  const doc = generarResumenEjecutivo(ultimoResultado);
-  mostrarPdfEnVisor(doc, nombreArchivoProyecto('Resumen_ejecutivo'));
-});
-
-$('btnAnexoInterconexion').addEventListener('click', () => {
-  if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  if (!confirmarAntesDeGenerarDocumento()) return;
-  const doc = generarAnexoInterconexion(ultimoResultado);
-  mostrarPdfEnVisor(doc, nombreArchivoProyecto('Anexo_interconexion_CFE'));
 });
 
 // (el boton "Cotizacion editada" / window.print() se quito 2026-11-07, pedido

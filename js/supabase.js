@@ -52,6 +52,40 @@ export async function supabaseEliminar(tabla, id) {
   await manejarRespuesta(resp);
 }
 
+// Variantes con filtro arbitrario -- para tablas cuya llave primaria NO se llama "id"
+// (ej. vista_compartida, llave "token"). `filtro` es un query string de PostgREST tal
+// cual (ej. "token=eq.abc123").
+export async function supabaseActualizarPorFiltro(tabla, filtro, cambios) {
+  const resp = await fetch(`${BASE}/${tabla}?${filtro}`, {
+    method: 'PATCH',
+    headers: { ...HEADERS_BASE, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify(cambios),
+  });
+  await manejarRespuesta(resp);
+}
+
+export async function supabaseEliminarPorFiltro(tabla, filtro) {
+  const resp = await fetch(`${BASE}/${tabla}?${filtro}`, {
+    method: 'DELETE',
+    headers: HEADERS_BASE,
+  });
+  await manejarRespuesta(resp);
+}
+
+// Inserta o actualiza en un solo paso si ya existe una fila con el mismo valor en
+// `onConflict` (nombre de columna con constraint unico/primary key) -- usado por la
+// vista previa compartida para "empujar el estado mas reciente" sin tener que saber
+// de antemano si ya existe la fila.
+export async function supabaseUpsertar(tabla, fila, onConflict) {
+  const resp = await fetch(`${BASE}/${tabla}?on_conflict=${encodeURIComponent(onConflict)}`, {
+    method: 'POST',
+    headers: { ...HEADERS_BASE, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' },
+    body: JSON.stringify(fila),
+  });
+  const filas = await manejarRespuesta(resp);
+  return filas ? filas[0] : null;
+}
+
 // Sube un archivo (PDF o foto de un recibo) al bucket publico "recibos" y regresa su
 // URL de descarga directa. `carpeta` agrupa los archivos (ej. "cotizaciones" o
 // "envios") para poder distinguirlos en el bucket; `nombreOriginal` se sanea porque

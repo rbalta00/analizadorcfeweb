@@ -346,8 +346,8 @@ export function eliminarProyecto(cliente, proyectoId) {
 // cliente -- mismo criterio de transparencia que el resto del proyecto (reconciliacion,
 // avisos de OCR, etc.): nunca dejar que un dato sin verificar se vea identico a uno ya
 // confirmado.
-export function crearProyectoDesdeOrigen(cliente, origen, { nombre } = {}) {
-  const f = origen.proyecto.formulario ? JSON.parse(JSON.stringify(origen.proyecto.formulario)) : null;
+function clonarFormularioParaMachote(formularioOrigen) {
+  const f = formularioOrigen ? JSON.parse(JSON.stringify(formularioOrigen)) : null;
   if (f) {
     f.titular = ''; f.domicilio = ''; f.noServicio = '';
     f.periodoDias = ''; f.periodoKwh = '';
@@ -355,14 +355,21 @@ export function crearProyectoDesdeOrigen(cliente, origen, { nombre } = {}) {
     f.historialNoDom = Array(12).fill(null);
     f.historialDom = Array(6).fill(null);
   }
-  const proyecto = crearProyecto(cliente, { nombre });
-  proyecto.formulario = f;
-  // Los pasos de entrega (que secciones se muestran en cada paso) SI se clonan del
-  // origen -- a diferencia de textosEditados/textosOcultos (redaccion especifica de
-  // ESE cliente, nunca se clona), que secciones conviene mostrar en un "Analisis
-  // preliminar" vs una "Propuesta completa" es una decision de formato que si tiene
-  // sentido reusar como parte del machote. Pedido explicito del usuario, 2026-11-09:
-  // "la cotizacion que ya decidimos que esta bien se pueda utilizar como machote".
+  return f;
+}
+
+// Aplica un machote (otra cotizacion ya validada) SOBRE un proyecto que ya existe --
+// pedido explicito del usuario, 2026-11-09: "ya hay un boton de nuevo cliente al final
+// de la cotizacion donde se trabaja... permite elegir que cliente, el nombre de la
+// cotizacion y que cotizacion final usar como machote" -- en vez de un flujo aparte
+// ("Desde cotizacion ya validada", quitado de index.html por redundante), esto se usa
+// desde el panel "Guardar cotizacion" de una cotizacion YA ABIERTA (tipicamente recien
+// creada en blanco): nombre/cliente se deciden con los controles que ya existian ahi,
+// esto solo aplica la tarifa/cargos/pasos del origen. Comparte la misma logica de
+// limpieza de campos que crearProyectoDesdeOrigen() (clonarFormularioParaMachote) --
+// nunca se clona identidad/consumo real, siempre viene del recibo real de ESTE cliente.
+export function aplicarMachoteAProyecto(proyecto, origen) {
+  proyecto.formulario = clonarFormularioParaMachote(origen.proyecto.formulario);
   if (origen.proyecto.pasos) {
     proyecto.pasos = JSON.parse(JSON.stringify(origen.proyecto.pasos));
     proyecto.pasoActivo = origen.proyecto.pasoActivo || 'completo';
@@ -375,6 +382,12 @@ export function crearProyectoDesdeOrigen(cliente, origen, { nombre } = {}) {
     fecha: new Date().toISOString(),
   };
   proyecto.plantillaVerificada = false;
+  return proyecto;
+}
+
+export function crearProyectoDesdeOrigen(cliente, origen, { nombre } = {}) {
+  const proyecto = crearProyecto(cliente, { nombre });
+  aplicarMachoteAProyecto(proyecto, origen);
   guardarProyecto(cliente, proyecto);
   return proyecto;
 }

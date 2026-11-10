@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Vista previa compartida</title>
+  <meta name="description" content="Vista previa en vivo de una cotización, compartida por link -- se actualiza sola cada pocos segundos. No es el PDF final." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/vista-previa.css" />
+</head>
+<body class="vista-previa-pagina">
+
+<div class="vp-topbar">
+  <div>
+    <h1 id="tituloVistaPrevia">Vista previa compartida</h1>
+    <p class="vp-sub" id="subtituloVistaPrevia"></p>
+    <p class="vp-estado" id="estadoVistaPrevia">Cargando…</p>
+  </div>
+  <div class="acciones">
+    <button type="button" id="btnRefrescarVistaPrevia" class="btn-secundario">↻ Refrescar ahora</button>
+    <button type="button" id="btnGenerarPdfVistaPrevia" class="btn-primario">📄 Generar PDF</button>
+  </div>
+</div>
+
+<main>
+  <p class="nota" style="max-width:680pt; margin:14px auto; text-align:center;">
+    Esto NO es el PDF final -- es una aproximación con el mismo estilo/márgenes para ver cómo va quedando la
+    cotización. Se actualiza sola cada pocos segundos mientras la persona que te compartió este link siga
+    trabajando en ella. Para el documento real, usa "📄 Generar PDF" arriba.
+  </p>
+  <div id="contenedorSecciones"></div>
+</main>
+
+<div id="visorVistaPrevia" class="vp-visor"></div>
+
+<script src="lib/pdf.min.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
+<script type="module" src="js/vistaPreviaCompartida.js"></script>
+</body>
+</html>
