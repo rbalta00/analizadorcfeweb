@@ -452,6 +452,12 @@ export function textoVisibleDe(seccionEl, selector) {
 // OJO: no llama doc.addPage() -- el llamador (generarPdfCompletaDesdeVista en
 // propuesta.js) decide cuando abrir pagina nueva de forma uniforme para TODAS las
 // secciones (genericas o con funcion dedicada), para no duplicar ese control aqui.
+// Regresa la posicion Y final -- si sale igual a CONTENT_TOP, no se dibujo NADA (toda
+// la seccion quedo sin contenido visible: titulo oculto + cada parrafo/tabla/grafico
+// apagado individualmente, sin apagar la seccion completa). El llamador
+// (generarPdfCompletaDesdeVista en propuesta.js) usa esto para borrar la pagina en vez
+// de dejarla en blanco -- bug real reportado por el usuario, 2026-11-11: "hay hojas
+// vacias" al apagar textos/columnas sueltos dentro de una seccion que sigue activa.
 export function dibujarSeccionGenerica(doc, seccionEl) {
-  recorrer(doc, seccionEl, CONTENT_TOP);
+  return recorrer(doc, seccionEl, CONTENT_TOP);
 }

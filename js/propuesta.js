@@ -870,14 +870,28 @@ export function generarPdfCompletaDesdeVista(r) {
   // vino a resolver. A diferencia de 17/18 (que si necesitan imagenes remotas
   // pre-descargadas), 19/20 son solo parrafos/tarjetas/tablas -- el mismo contenido que
   // cualquier otra seccion generica, ya resuelto en el DOM con sus ediciones aplicadas.
+  // Cada seccion siempre abre su propia pagina (addPage de abajo) -- pero si TODO su
+  // contenido quedo apagado individualmente (titulo oculto + cada parrafo/tabla/grafico
+  // apagado uno por uno, sin apagar la seccion completa), dibujarSeccionGenerica() no
+  // dibuja nada y la pagina queda en blanco (solo encabezado/pie, que se agregan DESPUES,
+  // en el loop de abajo). Se guardan los numeros de esas paginas para borrarlas al final
+  // en vez de dejarlas vacias -- bug real reportado por el usuario, 2026-11-11.
+  const paginasVacias = [];
   seccionesDom.forEach((seccionEl, i) => {
     const numero = Number((seccionEl.id || '').replace('seccion-', ''));
     if (i > 0) doc.addPage();
     const pag = doc.getNumberOfPages();
     if (numero === 17 && r._archivosReciboImgs && r._archivosReciboImgs.length) paginaDocumentoRecibo(doc, r, pag, seccionEl);
     else if (numero === 18 && r._archivosVerificacionImgs && r._archivosVerificacionImgs.length) paginaDocumentoVerificacion(doc, r, pag, seccionEl);
-    else dibujarSeccionGenerica(doc, seccionEl);
+    else if (dibujarSeccionGenerica(doc, seccionEl) === CONTENT_TOP) paginasVacias.push(pag);
   });
+  // Se borran de la ultima a la primera para que los numeros de pagina de las demas
+  // vacias (todavia sin borrar) no se recorran entre borrados. Se deja al menos 1
+  // pagina siempre (caso extremo: si TODAS salieran vacias, no se borra la ultima para
+  // no dejar el documento sin paginas).
+  for (let j = paginasVacias.length - 1; j >= 0; j--) {
+    if (doc.getNumberOfPages() > 1) doc.deletePage(paginasVacias[j]);
+  }
 
   const titulo = `ESTUDIO DEL SISTEMA SOLAR · ${r.titular}`;
   const subtitulo = `${r.tarifa} · servicio ${r.noServicio || ''} · ${r.fechaEstudio} · ${r.n} paneles de ${r.moduloWp} W`;
