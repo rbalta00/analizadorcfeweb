@@ -1066,7 +1066,7 @@ function s24(r, _leido, onToggle) {
       ['Recuperación del flujo', ev.recuperacionAcumulada ? `${ev.recuperacionAcumulada.toFixed(1)} años` : 'No se recupera en 25 años'],
     ], { small: true, id: 'g19-indicador-adicional' })));
   }
-  art.append(bloqueCalculo(24, [
+  art.append(bloqueCalculo(19, [
     p(`Mismo recibo, mismo motor, solo cambia el número de paneles: este escenario usa el MISMO recibo de ` +
       `${r.titular} (sección ${refSeccion(2, r)} -- ${r.periodoKwh.toLocaleString('en-US')} kWh en ${r.periodoDias} días, tarifa ${r.tarifa}) ` +
       `y las mismas fórmulas de las secciones ${refSeccion(6, r)}, ${refSeccion(11, r)} y ${refSeccion(13, r)} -- la única diferencia es que aquí "n" (número de paneles) es ` +
@@ -1119,7 +1119,7 @@ function s25(r, _leido, onToggle) {
   art.append(p(dif === 0
     ? 'El número de paneles calculado por el consumo real coincide con lo que sugirió la verificación en campo -- ambos escenarios salen iguales.'
     : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que calcula este sistema a partir del consumo real del recibo, lo que cambia la inversión en ${M(Math.abs(ev.investment - r.investment))} y el ahorro anual en ${M(Math.abs(ev.diferenciaAhorro))}. La verificación en campo suele basarse en el espacio disponible observado en sitio, no necesariamente en el consumo exacto -- ambos criterios son válidos y conviene presentarle al cliente las dos referencias antes de decidir el tamaño final.`));
-  art.append(bloqueCalculo(25, [
+  art.append(bloqueCalculo(20, [
     p(`Fórmula de la diferencia (ambos escenarios usan el mismo motor -- sección ${refSeccion(6, r)}/${refSeccion(11, r)}/${refSeccion(13, r)} -- solo cambia "n"):`),
     graficoToggle('g20-calc-formula', 'Tabla de fórmula de la diferencia', tabla(['Variable', 'Fórmula', 'Sustitución'], [
       ['Diferencia de paneles', 'Paneles verificación − paneles calculados', `${ev.n} − ${r.n} = ${dif > 0 ? '+' : ''}${dif}`],
