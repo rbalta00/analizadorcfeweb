@@ -418,21 +418,45 @@ function clonarFormularioParaMachote(formularioOrigen) {
 // cotizacion y que cotizacion final usar como machote" -- en vez de un flujo aparte
 // ("Desde cotizacion ya validada", quitado de index.html por redundante), esto se usa
 // desde el panel "Guardar cotizacion" de una cotizacion YA ABIERTA (tipicamente recien
-// creada en blanco): nombre/cliente se deciden con los controles que ya existian ahi,
-// esto solo aplica la tarifa/cargos/pasos del origen. Comparte la misma logica de
-// limpieza de campos que crearProyectoDesdeOrigen() (clonarFormularioParaMachote) --
-// nunca se clona identidad/consumo real, siempre viene del recibo real de ESTE cliente.
+// creada en blanco): nombre/cliente se deciden con los controles que ya existian ahi.
+// Comparte la misma logica de limpieza de campos que crearProyectoDesdeOrigen()
+// (clonarFormularioParaMachote) -- nunca se clona identidad/consumo real, siempre
+// viene del recibo real de ESTE cliente.
+//
+// CAMPOS_EDITORIAL_MACHOTE: bug real reportado por el usuario, 2026-11-12 -- "cuando
+// usamos como machote... se cambiaron textos, solo modifica los calculos los textos
+// dejalos igual que el machote". Antes esta funcion solo copiaba
+// formulario/pasos -- textosEditados/textosOcultos/seccionesExcluidas/graficosExcluidos/
+// calculosActivos/tablaColumnasOcultas/tablaFilasOcultas/ordenSecciones se quedaban en
+// los DEFAULT de un proyecto recien creado (todo encendido, sin ninguna edicion), asi
+// que cualquier texto personalizado o secccion/grafico/columna/fila apagada en el
+// machote se perdia en silencio -- el nuevo proyecto mostraba el texto GENERICO de
+// fabrica en vez del texto ya redactado del machote. Estos campos son id->valor
+// (ids ESTRUCTURALES, estables para cualquier cotizacion con el mismo layout de
+// secciones/tablas, nunca datos del cliente real) -- copiarlos tal cual es seguro.
+// Riesgo aceptado explicitamente por el usuario: un texto editado a mano que mencione
+// algo especifico del cliente ORIGEN (ej. su ubicacion) viajaria igual al nuevo -- "ya
+// si sale algo mal yo lo modifico manual" (el aviso de "plantilla sin verificar" ya
+// existente sigue recordando revisar antes de confiar en el resultado).
+const CAMPOS_EDITORIAL_MACHOTE = [
+  'textosEditados', 'textosOcultos', 'seccionesExcluidas', 'graficosExcluidos',
+  'calculosActivos', 'tablaColumnasOcultas', 'tablaFilasOcultas', 'ordenSecciones',
+];
 export function aplicarMachoteAProyecto(proyecto, origen) {
-  proyecto.formulario = clonarFormularioParaMachote(origen.proyecto.formulario);
-  if (origen.proyecto.pasos) {
-    proyecto.pasos = JSON.parse(JSON.stringify(origen.proyecto.pasos));
-    proyecto.pasoActivo = origen.proyecto.pasoActivo || 'completo';
+  const origenProyecto = origen.proyecto;
+  for (const campo of CAMPOS_EDITORIAL_MACHOTE) {
+    if (origenProyecto[campo] !== undefined) proyecto[campo] = JSON.parse(JSON.stringify(origenProyecto[campo]));
+  }
+  proyecto.formulario = clonarFormularioParaMachote(origenProyecto.formulario);
+  if (origenProyecto.pasos) {
+    proyecto.pasos = JSON.parse(JSON.stringify(origenProyecto.pasos));
+    proyecto.pasoActivo = origenProyecto.pasoActivo || 'completo';
     aplicarPaso(proyecto, proyecto.pasoActivo);
   }
   proyecto.plantillaOrigen = {
     clienteNombre: origen.cliente.nombre,
-    proyectoNombre: origen.proyecto.nombre,
-    tarifa: origen.proyecto.formulario?.tarifa || null,
+    proyectoNombre: origenProyecto.nombre,
+    tarifa: origenProyecto.formulario?.tarifa || null,
     fecha: new Date().toISOString(),
   };
   proyecto.plantillaVerificada = false;

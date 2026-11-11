@@ -891,7 +891,7 @@ function renderListaMachotes() {
       `<div class="nota">Cliente: ${escapeHtml(cliente.nombre)} · Tarifa: ${escapeHtml(proyecto.formulario.tarifa)} · ` +
       `${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</div>`;
     div.addEventListener('click', () => {
-      if (!confirm(`¿Aplicar "${proyecto.nombre}" (${cliente.nombre}) como machote sobre esta cotización? Se reemplazan tarifa/cargos/pasos -- el titular/domicilio/historial de este cliente se quedan en blanco, hay que capturarlos de su recibo real.`)) return;
+      if (!confirm(`¿Aplicar "${proyecto.nombre}" (${cliente.nombre}) como machote sobre esta cotización? Se reemplazan tarifa/cargos/pasos y TODOS los textos/apagados editados (se quedan igual que en el machote) -- el titular/domicilio/historial de este cliente se quedan en blanco, hay que capturarlos de su recibo real.`)) return;
       aplicarMachoteAProyecto(proyectoActual, { cliente, proyecto });
       guardarProyecto(clienteActual, proyectoActual);
       aplicarFormulario(proyectoActual.formulario);
