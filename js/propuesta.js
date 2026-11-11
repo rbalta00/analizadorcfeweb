@@ -385,7 +385,13 @@ export function paginaDocumentoRecibo(doc, r, numero, seccionEl) {
   paginaDocumentoAdjunto(doc, r, numero, 'Documento: recibo original de CFE', r._archivosReciboImgs || [], seccionEl);
 }
 export function paginaDocumentoVerificacion(doc, r, numero, seccionEl) {
-  paginaDocumentoAdjunto(doc, r, numero, 'Documento: verificación en sitio', r._archivosVerificacionImgs || [], seccionEl);
+  // Respeta el apagado por renglon de cada archivo (pedido explicito del usuario,
+  // 2026-11-10, ver ID_DOCUMENTOS_VERIFICACION en secciones.js) -- mismo id/indice que
+  // en pantalla, filtrado antes de dibujar, igual que tablaF() filtra filas/columnas
+  // ocultas de una tabla real.
+  const ocultos = new Set(r.tablaFilasOcultas?.['g18-documentos-verificacion'] || []);
+  const imagenes = (r._archivosVerificacionImgs || []).filter((_, i) => !ocultos.has(i));
+  paginaDocumentoAdjunto(doc, r, numero, 'Documento: verificación en sitio', imagenes, seccionEl);
 }
 
 // ---------- Proyecto segun verificacion en sitio / comparativo (secciones 19/20

@@ -885,10 +885,16 @@ function s02(r, leido, onToggle) {
   return art;
 }
 
-function filaArchivo(a) {
+// `ocultar`: opcional ({ oculto, onToggle }) -- pedido explicito del usuario,
+// 2026-11-10: "en la seccion 18 tambien poner apagado de cada renglon", mismo patron
+// reversible ya usado en tabla() (botonOcultarColFila) pero aplicado a esta grilla de
+// archivos adjuntos, que no es una <table> real. Nunca se quita del DOM -- solo se
+// atenua (clase fila-oculta-tabla, reusa el mismo CSS de las filas de tabla ocultas)
+// con su propio boton para reactivarla.
+function filaArchivo(a, ocultar = null) {
   const esImagen = (a.tipo || '').startsWith('image/');
   const esPdf = (a.tipo || '').includes('pdf');
-  const fila = el('div', 'documento-adjunto' + (esPdf ? ' documento-adjunto-conpdf' : ''));
+  const fila = el('div', 'documento-adjunto' + (esPdf ? ' documento-adjunto-conpdf' : '') + (ocultar && ocultar.oculto ? ' fila-oculta-tabla' : ''));
   if (esImagen) {
     const img = document.createElement('img');
     img.src = a.url; img.alt = a.nombre; img.className = 'documento-adjunto-img';
@@ -943,6 +949,7 @@ function filaArchivo(a) {
     }
   });
   fila.append(btnDescargar);
+  if (ocultar) fila.append(botonOcultarColFila(ocultar.oculto, ocultar.onToggle));
   return fila;
 }
 
@@ -971,6 +978,8 @@ function s22(r, _leido, onToggle) {
 
 // ---------- 23: documento verificacion en sitio ----------
 // Renumerada: se renderiza como 18 (ver nota en s22 arriba).
+const ID_DOCUMENTOS_VERIFICACION = 'g18-documentos-verificacion';
+
 function s23(r, _leido, onToggle) {
   const art = crearSeccion(18, 'Documento: verificación en sitio', 'El documento de verificación en campo (gobierno u otro emisor), tal como se adjuntó.', r, onToggle);
   const verif = r.archivosVerificacion || [];
@@ -979,8 +988,19 @@ function s23(r, _leido, onToggle) {
       `automáticamente; lo que sí se usa para calcular es el número de paneles que se haya capturado a mano en ` +
       `"Condiciones del inmueble" (ver sección ${refSeccion(19, r)}).`));
     const grid = el('div', 'documentos-grid');
-    verif.forEach(a => grid.append(filaArchivo(a)));
+    // Apagado por renglon (cada archivo adjunto) -- pedido explicito del usuario,
+    // 2026-11-10. Mismo mecanismo generico ya usado para filas de tabla
+    // (_filasOcultasActual/_onToggleFilaActual, ver tabla() arriba) -- esta grilla no
+    // es una <table> real, pero el store es solo un mapa id->indices, no le importa.
+    const ocultos = new Set(_filasOcultasActual[ID_DOCUMENTOS_VERIFICACION] || []);
+    verif.forEach((a, i) => {
+      const oculto = ocultos.has(i);
+      grid.append(filaArchivo(a, { oculto, onToggle: () => _onToggleFilaActual(ID_DOCUMENTOS_VERIFICACION, i, oculto) }));
+    });
     art.append(grid);
+    if (ocultos.size) {
+      art.append(el('p', 'nota', `🚫 ${ocultos.size} archivo(s) oculto(s) de este documento -- no se incluirán en el PDF ni en lo que vería el cliente, atenuados aquí solo como referencia.`));
+    }
   } else {
     art.append(badgeEstado('pendiente'));
     art.append(p('Aún no se adjuntó el documento de "Verificación en sitio" del gobierno a esta cotización. Para ' +
