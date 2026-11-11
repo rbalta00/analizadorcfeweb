@@ -96,16 +96,18 @@ export function cardsRow(doc, y, items) {
 }
 
 // --- Aviso (notice) ---
-export function notice(doc, y, text) {
-  setFont(doc, 9.5, false, BLACK);
-  const lineas = doc.splitTextToSize(String(text), CONTENT_W - 20);
-  const h = lineas.length * 13 + 20;
+// `size`/`bold`/`lineH` opcionales (default = aviso normal 9.5 / 13) -- el aviso
+// con clase 'letra-titulo' usa la letra del titulo H2 (helvetica bold 14 / 18).
+export function notice(doc, y, text, { size = 9.5, bold = false, lineH = 13 } = {}) {
+  const lineas = (() => { setFont(doc, size, bold, BLACK); return doc.splitTextToSize(String(text), CONTENT_W - 20); })();
+  const h = lineas.length * lineH + 20;
   doc.setFillColor(CREAM);
   doc.rect(MARGIN_L, y, CONTENT_W, h, 'F');
-  let ly = y + 10 + 9.5;
+  setFont(doc, size, bold, BLACK);
+  let ly = y + 10 + size;
   for (const linea of lineas) {
     doc.text(linea, MARGIN_L + 10, ly);
-    ly += 13;
+    ly += lineH;
   }
   return y + h;
 }

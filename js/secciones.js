@@ -788,7 +788,10 @@ function s01(r, _leido, onToggle) {
         'referencias antes de decidir el tamaño final. Ambos escenarios se calcularon con el mismo motor (mismo recibo, misma tarifa, ' +
         'mismos costos) -- no implica que ambos tamaños quepan físicamente en el espacio disponible.'));
   }
-  art.append(avisoCream(`Esta cotización es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días). Los ` +
+  // Pedido explicito del usuario, 2026-11-10: este aviso (el №13 del editor en la
+  // seccion 1 con verificacion en sitio) va con el MISMO tamaño y tipo de letra que el
+  // titulo de la seccion (№1) -- clase 'letra-titulo' (styles.css + propuestaDom.js).
+  art.append(textoEditable('div', 'aviso-cream letra-titulo', `Esta cotización es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días). Los ` +
     'precios de materiales son una provisión de mercado, no una cotización fija de proveedor -- después de esa ' +
     'fecha hay que revisarlos antes de confirmar.'));
   art.append(graficoToggle('g01-tarjetas-principales', 'Tarjetas: inversión, recuperación y ahorro año 1', tarjetas([

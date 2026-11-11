@@ -139,6 +139,13 @@ function dibujarTexto(doc, nodo, y) {
     for (const l of lineas) { doc.text(l, MARGIN_L, y + 9); y += 12; }
     return y + 4;
   }
+  if (cls.includes('aviso-cream') && cls.includes('letra-titulo')) {
+    // Misma letra que el H2 de arriba (bold 14, renglon de 18).
+    doc.setFont('helvetica', 'bold');
+    const n = contarLineas(doc, texto, CONTENT_W - 20, 14);
+    y = continuarSiNecesario(doc, y, n * 18 + 20);
+    return notice(doc, y, texto, { size: 14, bold: true, lineH: 18 });
+  }
   if (cls.includes('aviso-cream')) {
     const n = contarLineas(doc, texto, CONTENT_W - 20, 9.5);
     y = continuarSiNecesario(doc, y, n * 13 + 20);
