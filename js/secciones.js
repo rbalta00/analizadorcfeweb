@@ -750,6 +750,7 @@ function s01(r, _leido, onToggle) {
   // despues de la comparativa. Las columnas de la tabla comparativa tambien se
   // reordenaron (verificacion primero, nuestro calculo despues) para que coincidan.
   const ev = r.escenarioVerificado;
+  const nodosComparativo = [];
   if (ev) {
     art.append(subtitulo(1, 'verificacion-sitio', `Su proyecto según la verificación en sitio (ver sección ${refSeccion(19, r)})`));
     art.append(p(`Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la verificación en ` +
@@ -765,8 +766,14 @@ function s01(r, _leido, onToggle) {
       [PCT(ev.pctAhorro), 'Porcentaje de la factura que ahorraría'],
     ])));
     const dif = ev.diferenciaPaneles;
-    art.append(subtitulo(1, 'comparativo-verificacion', `Comparativo: calculado vs. verificación en sitio (ver sección ${refSeccion(20, r)})`));
-    art.append(graficoToggle('g01-comparativo-verificacion', 'Tabla comparativa calculado vs. verificación en sitio', tabla(['Concepto comparable', `Verificación en sitio (sección ${refSeccion(19, r)})`, `Nuestro cálculo (sección ${refSeccion(1, r)})`, 'Diferencia'], [
+    // Pedido explicito del usuario, 2026-11-10 (despues): la tabla comparativa (paneles/
+    // potencia/inversion/ahorro) se movio de aqui a JUSTO ANTES de "Que se propone"
+    // (el №29 del editor), despues de las tarjetas de nuestro calculo. Los nodos se
+    // siguen CREANDO aqui, en el mismo orden de siempre, y solo se insertan mas abajo:
+    // avisoCream() consume siguienteTextoId() (s1-tN), y crearlo despues del aviso de
+    // vigencia intercambiaria los ids y desfasaria las ediciones ya guardadas.
+    nodosComparativo.push(subtitulo(1, 'comparativo-verificacion', `Comparativo: calculado vs. verificación en sitio (ver sección ${refSeccion(20, r)})`));
+    nodosComparativo.push(graficoToggle('g01-comparativo-verificacion', 'Tabla comparativa calculado vs. verificación en sitio', tabla(['Concepto comparable', `Verificación en sitio (sección ${refSeccion(19, r)})`, `Nuestro cálculo (sección ${refSeccion(1, r)})`, 'Diferencia'], [
       ['Paneles', `${ev.n}`, `${r.n}`, dif === 0 ? 'Igual' : `${dif > 0 ? '+' : ''}${dif}`],
       ['Potencia', `${ev.kwp.toFixed(2)} kWp`, `${r.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
       ['Inversión, IVA incluido', M(ev.investment), M(r.investment), M(ev.investment - r.investment)],
@@ -774,7 +781,7 @@ function s01(r, _leido, onToggle) {
       ['Recuperación simple', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', '—'],
       ['% de ahorro de factura', PCT(ev.pctAhorro), PCT(r.pctAhorro), '—'],
     ], { small: true, id: 'g01-comparativo-verificacion' })));
-    art.append(avisoCream(dif === 0
+    nodosComparativo.push(avisoCream(dif === 0
       ? 'El número de paneles coincide con el de la verificación en campo -- ambos escenarios salen iguales.'
       : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que ` +
         'calcula este sistema a partir del consumo real del recibo -- ambos criterios son válidos y conviene presentarle al cliente las dos ' +
@@ -804,6 +811,7 @@ function s01(r, _leido, onToggle) {
       'primer año. Esto es un resultado válido del modelo con este consumo tan bajo, no un error de captura -- ' +
       'revisar si el consumo del período/historial es representativo antes de presentar esta propuesta.'));
   }
+  for (const n of nodosComparativo) art.append(n);
   art.append(subtitulo(1, 'que-se-propone', 'Qué se propone'));
   art.append(p(`Instalar un sistema conectado a red de ${r.n} paneles de ${r.moduloWp} W. Su producción regional ` +
     `de referencia es de ${r.gen.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh/año. Se plantea ` +
