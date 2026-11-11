@@ -870,20 +870,62 @@ export function generarPdfCompletaDesdeVista(r) {
   // vino a resolver. A diferencia de 17/18 (que si necesitan imagenes remotas
   // pre-descargadas), 19/20 son solo parrafos/tarjetas/tablas -- el mismo contenido que
   // cualquier otra seccion generica, ya resuelto en el DOM con sus ediciones aplicadas.
-  // Cada seccion siempre abre su propia pagina (addPage de abajo) -- pero si TODO su
-  // contenido quedo apagado individualmente (titulo oculto + cada parrafo/tabla/grafico
-  // apagado uno por uno, sin apagar la seccion completa), dibujarSeccionGenerica() no
-  // dibuja nada y la pagina queda en blanco (solo encabezado/pie, que se agregan DESPUES,
-  // en el loop de abajo). Se guardan los numeros de esas paginas para borrarlas al final
-  // en vez de dejarlas vacias -- bug real reportado por el usuario, 2026-11-11.
+  //
+  // Flujo CONTINUO entre secciones (ya no una pagina nueva forzada por cada una) --
+  // pedido explicito del usuario, 2026-11-11: "la vista previa... se ve muy bien pero
+  // el pdf no trata de que se vean lo mas iguales posible" + "todavia tiene espacios
+  // muy grandes en blanco". La vista previa en pantalla es un documento continuo, sin
+  // saltos de pagina por seccion -- forzar una pagina nueva por cada una (como antes)
+  // dejaba hojas casi vacias cuando una seccion quedaba con poco o nada de contenido
+  // visible (apagado granular). dibujarSeccionGenerica() ahora recibe por donde se
+  // quedo la seccion anterior y sigue desde ahi (abriendo pagina nueva SOLA si el
+  // contenido de verdad no cabe, via continuarSiNecesario) -- dibuja tambien un
+  // separador fino entre secciones que comparten pagina, para que no se vean pegadas.
+  //
+  // Las secciones 17/18 (documentos adjuntos) SI siguen necesitando su propia pagina
+  // completa -- dibujan imagenes con una funcion dedicada que siempre asume que
+  // arranca en CONTENT_TOP, y lo que sigue despues no debe pegarse encima de esas
+  // fotos. `paginaPropiaForzada` marca cuando la SIGUIENTE seccion debe abrir pagina
+  // nueva por esto (no por falta de espacio) -- solo en ese caso especifico es seguro
+  // borrar la pagina despues si no dibujo nada real (ver paginasVacias abajo): si la
+  // seccion comparte pagina con la anterior (flujo normal), borrar la pagina borraria
+  // tambien el contenido de la seccion de antes.
+  //
+  // Bug real adicional encontrado al investigar "pagina casi en blanco, solo dice
+  // Comprobado": CADA seccion siempre agrega su badge de confiabilidad (Comprobado/
+  // Declarado/Supuesto/Pendiente, ver badgeEstado() en secciones.js) sin ningun toggle
+  // -- nunca se puede apagar. El primer intento de este fix (y === CONTENT_TOP) nunca
+  // detectaba esto como "vacia" porque el badge SI avanza el cursor, aunque sea lo
+  // UNICO que se dibuja. dibujarSeccionGenerica() ahora regresa tambien si dibujo algo
+  // REAL (sin contar el badge ni el contador "NN de XX") -- ver stats.real en
+  // propuestaDom.js.
+  let y = CONTENT_TOP;
+  let paginaPropiaForzada = false;
   const paginasVacias = [];
-  seccionesDom.forEach((seccionEl, i) => {
+  seccionesDom.forEach((seccionEl) => {
     const numero = Number((seccionEl.id || '').replace('seccion-', ''));
-    if (i > 0) doc.addPage();
+    const esRecibo = numero === 17 && r._archivosReciboImgs && r._archivosReciboImgs.length;
+    const esVerificacion = numero === 18 && r._archivosVerificacionImgs && r._archivosVerificacionImgs.length;
+    if (esRecibo || esVerificacion || paginaPropiaForzada) {
+      doc.addPage();
+      y = CONTENT_TOP;
+    }
+    if (esRecibo) {
+      paginaDocumentoRecibo(doc, r, doc.getNumberOfPages(), seccionEl);
+      paginaPropiaForzada = true;
+      return;
+    }
+    if (esVerificacion) {
+      paginaDocumentoVerificacion(doc, r, doc.getNumberOfPages(), seccionEl);
+      paginaPropiaForzada = true;
+      return;
+    }
+    const empezoPaginaPropia = paginaPropiaForzada;
     const pag = doc.getNumberOfPages();
-    if (numero === 17 && r._archivosReciboImgs && r._archivosReciboImgs.length) paginaDocumentoRecibo(doc, r, pag, seccionEl);
-    else if (numero === 18 && r._archivosVerificacionImgs && r._archivosVerificacionImgs.length) paginaDocumentoVerificacion(doc, r, pag, seccionEl);
-    else if (dibujarSeccionGenerica(doc, seccionEl) === CONTENT_TOP) paginasVacias.push(pag);
+    const resultado = dibujarSeccionGenerica(doc, seccionEl, y);
+    y = resultado.y;
+    paginaPropiaForzada = false;
+    if (empezoPaginaPropia && !resultado.real) paginasVacias.push(pag);
   });
   // Se borran de la ultima a la primera para que los numeros de pagina de las demas
   // vacias (todavia sin borrar) no se recorran entre borrados. Se deja al menos 1

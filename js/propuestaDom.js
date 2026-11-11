@@ -373,10 +373,22 @@ function dibujarDocumentoAdjunto(doc, cont, y) {
   return dibujarImagenDataUrl(doc, cont.querySelector('img'), y);
 }
 
-function recorrer(doc, nodo, y) {
+// `stats.real` se marca en true la primera vez que se dibuja algo que SI cuenta como
+// contenido real (para decidir si una pagina forzada quedo vacia, ver
+// generarPdfCompletaDesdeVista en propuesta.js) -- el badge de confiabilidad
+// (Comprobado/Declarado/Supuesto/Pendiente) y el contador "NN de XX" NO cuentan,
+// porque estan SIEMPRE presentes en cualquier seccion sin importar si el admin apago
+// todo lo demas (ver badgeEstado()/.seccion-numero en secciones.js, nunca tienen
+// toggle). Bug real reportado por el usuario, 2026-11-11: una seccion con todo
+// apagado salvo ese badge generaba una pagina "casi en blanco" que solo decia
+// "Comprobado" -- el chequeo anterior (y === CONTENT_TOP) nunca lo detectaba porque
+// el badge SI avanzaba el cursor.
+function recorrer(doc, nodo, y, stats) {
   for (const hijo of Array.from(nodo.children)) {
     if (!esVisible(hijo)) continue;
     const cls = hijo.className || '';
+    const yAntes = y;
+    let esDecorativo = false;
     if (cls.includes('texto-editable') || cls.includes('texto-editable-chico')) {
       y = dibujarTexto(doc, hijo, y);
     } else if (hijo.tagName === 'TABLE') {
@@ -404,8 +416,9 @@ function recorrer(doc, nodo, y) {
       // "clic para expandir"), saltando el <summary> (solo es el texto del control).
       for (const nieto of Array.from(hijo.children)) {
         if (nieto.tagName === 'SUMMARY') continue;
-        y = recorrer(doc, nieto, y);
+        y = recorrer(doc, nieto, y, stats);
       }
+      continue;
     } else if (!hijo.children.length && hijo.textContent.trim()) {
       // Texto "huerfano" -- un div/span con su propio texto que no cayo en ninguno de
       // los casos reconocidos arriba (ej. .seccion-numero "06 de 18", .badge-estado
@@ -414,11 +427,14 @@ function recorrer(doc, nodo, y) {
       // contenedor generico, no tenian hijos ELEMENTO (solo un nodo de texto), y su
       // contenido se perdia en silencio sin dibujar nada.
       y = dibujarTexto(doc, hijo, y);
+      esDecorativo = cls.includes('badge-estado') || cls.includes('seccion-numero');
     } else {
       // Contenedor generico (div envoltorio, campo-editable, seccion-header, etc.) --
       // sigue bajando por sus hijos en el mismo orden visual.
-      y = recorrer(doc, hijo, y);
+      y = recorrer(doc, hijo, y, stats);
+      continue;
     }
+    if (!esDecorativo && y !== yAntes) stats.real = true;
   }
   return y;
 }
@@ -443,21 +459,41 @@ export function textoVisibleDe(seccionEl, selector) {
   return limpiarParaPdf(nodo.textContent);
 }
 
-// Dibuja UNA seccion (ya resuelta en el DOM, con sus ediciones aplicadas), empezando
-// en pagina nueva -- el encabezado global (titulo del estudio + titular + numero de
-// pagina) lo pone aparte dibujarHeaderFooter() en cada pagina fisica (ver
+// Dibuja UNA seccion (ya resuelta en el DOM, con sus ediciones aplicadas) a partir de
+// `yInicial` -- el encabezado global (titulo del estudio + titular + numero de pagina)
+// lo pone aparte dibujarHeaderFooter() en cada pagina fisica (ver
 // generarPdfCompletaDesdeVista en propuesta.js), igual que ya hacia buildPdf() para
 // las paginas de siempre -- aqui solo se dibuja el CONTENIDO (el h2 real de la
 // seccion, ya con sus ediciones, es parte de ese contenido).
-// OJO: no llama doc.addPage() -- el llamador (generarPdfCompletaDesdeVista en
-// propuesta.js) decide cuando abrir pagina nueva de forma uniforme para TODAS las
-// secciones (genericas o con funcion dedicada), para no duplicar ese control aqui.
-// Regresa la posicion Y final -- si sale igual a CONTENT_TOP, no se dibujo NADA (toda
-// la seccion quedo sin contenido visible: titulo oculto + cada parrafo/tabla/grafico
-// apagado individualmente, sin apagar la seccion completa). El llamador
-// (generarPdfCompletaDesdeVista en propuesta.js) usa esto para borrar la pagina en vez
-// de dejarla en blanco -- bug real reportado por el usuario, 2026-11-11: "hay hojas
-// vacias" al apagar textos/columnas sueltos dentro de una seccion que sigue activa.
-export function dibujarSeccionGenerica(doc, seccionEl) {
-  return recorrer(doc, seccionEl, CONTENT_TOP);
+//
+// OJO: no llama doc.addPage() por su cuenta salvo que el contenido de verdad no quepa
+// (via continuarSiNecesario, dentro de dibujarTexto/dibujarTabla/etc.) -- las
+// secciones ya NO van cada una en su propia pagina (flujo continuo, pedido explicito
+// del usuario 2026-11-11: "que [el pdf] se vea[n] lo mas iguales posible" a la vista
+// previa en pantalla, que es un documento continuo sin saltos de pagina por seccion).
+// Si `yInicial` > CONTENT_TOP (esta seccion continua justo despues de otra en la misma
+// pagina), se dibuja un separador fino para que no se vean pegadas -- se omite si
+// continuarSiNecesario ya abrio pagina nueva por falta de espacio (ahi la pagina en
+// blanco de por si ya separa visualmente).
+//
+// Regresa { y, real } -- `real` es false si NO se dibujo nada que cuente como
+// contenido real (ver stats.real en recorrer()), aunque el cursor se haya movido por
+// el badge de confiabilidad o el contador de seccion. El llamador
+// (generarPdfCompletaDesdeVista en propuesta.js) usa esto para borrar una pagina
+// forzada que quedo asi en vez de dejarla casi en blanco.
+export function dibujarSeccionGenerica(doc, seccionEl, yInicial = CONTENT_TOP) {
+  let y = yInicial;
+  if (y > CONTENT_TOP) {
+    y = continuarSiNecesario(doc, y, 30);
+    if (y > CONTENT_TOP) {
+      y = spacer(y, 6);
+      doc.setDrawColor(LINE);
+      doc.setLineWidth(0.75);
+      doc.line(MARGIN_L, y, MARGIN_L + CONTENT_W, y);
+      y = spacer(y, 10);
+    }
+  }
+  const stats = { real: false };
+  y = recorrer(doc, seccionEl, y, stats);
+  return { y, real: stats.real };
 }
