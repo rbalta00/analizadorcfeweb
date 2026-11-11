@@ -3,7 +3,7 @@
 // en esta maquina -- ver web/ESTADO.md. Los datos (historial de cotizaciones) nunca
 // pasan por aqui, viven en localStorage del navegador, no en este cache.
 
-const CACHE_NOMBRE = "cfe-cotizador-v31";
+const CACHE_NOMBRE = "cfe-cotizador-v32";
 
 const ARCHIVOS_APP_SHELL = [
   "./",
@@ -71,7 +71,16 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   event.respondWith(
-    fetch(event.request)
+    // "cache: no-store" en el fetch de red -- pedido explicito del usuario,
+    // 2026-11-10: el boton "Actualizar" debe traer los cambios sin tener que cerrar y
+    // volver a abrir la app. Antes el fetch de red usaba las reglas normales de cache
+    // HTTP del navegador (ademas de este cache de respaldo) -- aunque la intencion ya
+    // era "red primero", el navegador podia seguir sirviendo una copia de su propio
+    // cache HTTP sin volver a pedirla al servidor, asi que un redeploy no siempre
+    // llegaba aunque se recargara la pagina. "no-store" fuerza a ignorar ese cache y
+    // pedir siempre al servidor mientras haya red -- el cache de este service worker
+    // (caches.put/caches.match de abajo) sigue siendo el respaldo offline de siempre.
+    fetch(event.request, { cache: "no-store" })
       .then((respuestaRed) => {
         const copia = respuestaRed.clone();
         caches.open(CACHE_NOMBRE).then((cache) => cache.put(event.request, copia));

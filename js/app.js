@@ -3194,71 +3194,28 @@ $('btnEnviarWhatsapp').addEventListener('click', async () => {
 });
 
 // ---------------- Actualizar (topbar, visible en toda la app) ----------------
-// Antes era "Refrescar" y solo volvia a renderizar con lo que ya estaba en memoria --
-// si se subia un recibo/verificacion/envio nuevo desde otro lado (otra pestaña, un
-// cliente via cliente.html, "Traer de la nube") no se reflejaba hasta recargar la
-// pagina a mano. Ahora "Actualizar" vuelve a LEER de localStorage/Supabase (no solo
-// re-pintar lo ya cargado) y ademas revisa si hay una version nueva de la app
-// desplegada -- pedido explicito del usuario, 2026-11-01: "tanto a la aplicacion como
-// a los proyectos y cotizaciones... si les subo algo nuevo tiene que actualizarse".
-$('btnRefrescar').addEventListener('click', () => {
-  if (!$('pantallaClientes').hidden) {
-    renderListaClientes();
-  } else if (!$('pantallaEnvios').hidden) {
-    renderListaEnvios();
-  } else if (!$('pantallaProyectos').hidden) {
-    renderListaProyectos();
-  } else if (!$('pantallaCliente').hidden && clienteActual && proyectoActual) {
-    // Bug real reportado por el usuario, 2026-11-06: si se corrige un dato a mano en
-    // el formulario (ej. un campo que el OCR leyo mal, o que hubo que capturar manual)
-    // y se pulsa "Actualizar" SIN haber pulsado "Calcular" antes, esto releia
-    // proyectoActual.formulario de localStorage -- la version YA GUARDADA, descartando
-    // en silencio lo recien escrito en pantalla que todavia no se habia guardado.
-    // "Actualizar" debe reflejar el dato que el usuario acaba de corregir, no borrarlo.
-    // Se guarda primero el formulario actual (mismo patron ya usado en
-    // revisarVersionNuevaApp() para no perder lo escrito al detectar una app nueva) y
-    // DESPUES se reabre -- asi re-leer de localStorage recoge exactamente lo que
-    // estaba en pantalla, y si en vez de eso cambio algo externo (otra pestaña, "Traer
-    // de la nube") sin que aqui se haya tocado nada, el resultado es el mismo de antes
-    // (nada que guardar primero, se re-lee tal cual).
-    try {
-      proyectoActual.formulario = leerFormulario();
-      guardarProyecto(clienteActual, proyectoActual);
-      abrirProyecto(clienteActual.id, proyectoActual.id);
-      $('estadoCalculo').className = 'nota ok';
-      $('estadoCalculo').textContent = 'Actualizado y recalculado con los datos en pantalla.';
-    } catch (e) {
-      $('estadoCalculo').className = 'nota aviso';
-      $('estadoCalculo').textContent = 'Error al actualizar: ' + e.message;
-    }
-  }
-  revisarVersionNuevaApp();
-});
-
-// Revisa en segundo plano si hay una version nueva de la app ya desplegada. El propio
-// service-worker.js ya activa cualquier version nueva sola (self.skipWaiting() +
-// self.clients.claim(), sin esperar a que se cierren las pestañas viejas) -- aqui solo
-// se fuerza la revision inmediata (reg.update(), en vez de esperar a que el navegador
-// la haga por su cuenta cada ~24h) y se escucha cuando esa version toma el control
-// para recargar sola, guardando antes el formulario de captura actual si hay uno
-// abierto para no perder lo escrito.
-let yaEscuchandoControllerChange = false;
-async function revisarVersionNuevaApp() {
-  if (!('serviceWorker' in navigator)) return;
-  if (!yaEscuchandoControllerChange) {
-    yaEscuchandoControllerChange = true;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!$('pantallaCliente').hidden && clienteActual && proyectoActual) {
-        try { proyectoActual.formulario = leerFormulario(); guardarProyecto(clienteActual, proyectoActual); } catch (e) {}
-      }
-      location.reload();
-    });
+// Pedido explicito del usuario, 2026-11-10: "para que no cierre y abra la app, con el
+// boton actualizar que recargue los cambios". Antes este boton solo volvia a
+// RENDERIZAR con el codigo JS que ya estaba cargado en esta misma apertura de la
+// pagina -- si se desplegaba una version nueva de app.js/secciones.js/etc. (sin tocar
+// service-worker.js), nada forzaba a traer ese codigo nuevo; solo se reflejaba si el
+// usuario cerraba y volvia a abrir la app instalada (una navegacion nueva de verdad).
+// Ahora "Actualizar" SIEMPRE hace una recarga real de la pagina (location.reload()) --
+// junto con el fetch "cache: no-store" del propio service worker (ver
+// service-worker.js), esto garantiza traer el codigo mas reciente desplegado sin tener
+// que cerrar/reabrir la app. Se guarda primero el formulario en pantalla (si hay un
+// proyecto abierto) para no perder lo que se este escribiendo -- mismo cuidado que ya
+// tenia esta funcion desde el 2026-11-06.
+$('btnRefrescar').addEventListener('click', async () => {
+  if (!$('pantallaCliente').hidden && clienteActual && proyectoActual) {
+    try { proyectoActual.formulario = leerFormulario(); guardarProyecto(clienteActual, proyectoActual); } catch (e) { /* no bloquea la recarga si falla */ }
   }
   try {
-    const reg = await navigator.serviceWorker.getRegistration();
+    const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) await reg.update();
-  } catch (e) { /* revision en segundo plano, sin interrumpir al usuario si falla */ }
-}
+  } catch (e) { /* no bloquea la recarga si falla */ }
+  location.reload();
+});
 
 // =====================================================================
 // PWA: service worker + boton de instalar + deteccion de ya-instalada
