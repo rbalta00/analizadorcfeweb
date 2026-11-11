@@ -40,6 +40,14 @@ const CLASES_OMITIR = [
   'td-accion-tabla', 'grafico-apagado', 'campo-oculto', 'col-oculta-tabla',
   'calculo-detalle-apagado',
   'fila-oculta-tabla', 'documento-adjunto-pdf',
+  // nota-admin-oculto: avisos de "N fila(s)/columna(s)/archivo(s) oculto(s)..." (ver
+  // tabla() y la grilla de documentos en secciones.js) -- son SOLO para que el admin
+  // confirme que algo se ocultó, nunca para el cliente. Bug real reportado por el
+  // usuario, 2026-11-10: estas notas no estaban dentro de ningun contenedor ya
+  // excluido (a diferencia de 'grafico-apagado'/'calculo-detalle-apagado'/
+  // 'seccion-apagada', que SI se excluyen enteros), asi que se colaban tal cual en el
+  // PDF -- justo lo contrario de lo que avisaban ("no se incluirán...").
+  'nota-admin-oculto',
   // badge-num-editable: el numero chico (№1, №2...) que se le pega a cada elemento
   // editable SOLO en el editor en pantalla (ver numerarContenidoEditable() en app.js)
   // -- pedido explicito del usuario, 2026-11-09: "la numeracion es solo en el editor,

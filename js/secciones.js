@@ -477,7 +477,14 @@ function tabla(headers, filas, { small = false, textCols = [], id = null } = {})
     const partes = [];
     if (colsOcultas.size) partes.push(`${colsOcultas.size} columna(s)`);
     if (filasOcultas.size) partes.push(`${filasOcultas.size} fila(s)`);
-    wrap.append(el('p', 'nota', `🚫 ${partes.join(' y ')} oculta(s) de esta tabla -- no se incluirán en el PDF ni en lo que vería el cliente, atenuadas aquí solo como referencia.`));
+    // Clase 'nota-admin-oculto' (no solo 'nota'): bug real reportado por el usuario,
+    // 2026-11-10 -- esta nota es SOLO para el admin en pantalla, pero como las
+    // secciones genericas se dibujan en el PDF leyendo cualquier texto "huerfano" del
+    // DOM (ver dibujarSeccionGenerica en propuestaDom.js), se colaba tal cual en el
+    // PDF que ve el cliente, avisandole que se ocultaron filas/columnas -- justo lo
+    // contrario de lo que se queria. Ahora se excluye por clase (CLASES_OMITIR en
+    // propuestaDom.js), igual que el resto de "lo apagado" de este proyecto.
+    wrap.append(el('p', 'nota nota-admin-oculto', `🚫 ${partes.join(' y ')} oculta(s) de esta tabla -- no se incluirán en el PDF ni en lo que vería el cliente, atenuadas aquí solo como referencia.`));
   }
   return wrap;
 }
@@ -999,7 +1006,7 @@ function s23(r, _leido, onToggle) {
     });
     art.append(grid);
     if (ocultos.size) {
-      art.append(el('p', 'nota', `🚫 ${ocultos.size} archivo(s) oculto(s) de este documento -- no se incluirán en el PDF ni en lo que vería el cliente, atenuados aquí solo como referencia.`));
+      art.append(el('p', 'nota nota-admin-oculto', `🚫 ${ocultos.size} archivo(s) oculto(s) de este documento -- no se incluirán en el PDF ni en lo que vería el cliente, atenuados aquí solo como referencia.`));
     }
   } else {
     art.append(badgeEstado('pendiente'));
