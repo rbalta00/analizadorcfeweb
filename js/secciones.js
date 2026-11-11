@@ -1116,9 +1116,39 @@ function s25(r, _leido, onToggle) {
     [PCT(r.pctAhorro), 'Ahorro anual de factura estimado'],
   ])));
   const dif = ev.diferenciaPaneles;
-  art.append(p(dif === 0
-    ? 'El número de paneles calculado por el consumo real coincide con lo que sugirió la verificación en campo -- ambos escenarios salen iguales.'
-    : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que calcula este sistema a partir del consumo real del recibo, lo que cambia la inversión en ${M(Math.abs(ev.investment - r.investment))} y el ahorro anual en ${M(Math.abs(ev.diferenciaAhorro))}. La verificación en campo suele basarse en el espacio disponible observado en sitio, no necesariamente en el consumo exacto -- ambos criterios son válidos y conviene presentarle al cliente las dos referencias antes de decidir el tamaño final.`));
+  // Conclusion (pedido explicito del usuario, 2026-11-10: "haz la conclusion con el
+  // calculo bien de los dos resumenes anteriores ... ya que no cuadran"). Antes solo
+  // decia "cambia la inversion en $X y el ahorro en $Y" en valor absoluto (sin decir
+  // cual escenario cuesta/ahorra mas) y sin explicar por que 12 paneles mas casi no
+  // suben el ahorro. Ahora repite las cifras EXACTAS de las dos tarjetas de arriba y
+  // saca las diferencias de ahi mismo. Id ESTABLE nuevo ('s20-conclusion') para que un
+  // override/machote viejo con cifras congeladas de OTRO recibo (el texto anterior
+  // vivia en s20-t3) ya no tape el calculo de este recibo; siguienteTextoId() se sigue
+  // consumiendo para no desfasar s20-t4/s20-t5 (ediciones ya guardadas).
+  siguienteTextoId();
+  const difInv = ev.investment - r.investment;
+  const difAh = ev.diferenciaAhorro;
+  const masMenos = (x) => (x > 0 ? 'más' : 'menos');
+  const pb = (x) => (x ? `${x.toFixed(1)} años` : 'N/D');
+  let conclusion;
+  if (dif === 0) {
+    conclusion = 'Conclusión: el número de paneles calculado por el consumo real coincide con lo que sugirió la verificación en campo -- ambos escenarios salen iguales.';
+  } else {
+    conclusion = `Conclusión: con los ${ev.n} paneles de la verificación en campo (${ev.kwp.toFixed(2)} kWp) la inversión sería de ${M(ev.investment)}, ` +
+      `contra ${M(r.investment)} con los ${r.n} paneles calculados por este sistema (${r.kwp.toFixed(2)} kWp): ${M(Math.abs(difInv))} ${masMenos(difInv)}. ` +
+      `El ahorro de factura del año 1 sería de ${M(ev.ahorroAnual)} (${PCT(ev.pctAhorro)} de la factura) contra ${M(r.ahorroAnual)} (${PCT(r.pctAhorro)}): ` +
+      `${M(Math.abs(difAh))} ${masMenos(difAh)} al año. La recuperación simple pasaría de ${pb(r.payback)} a ${pb(ev.payback)}.`;
+    if (dif > 0 && difInv > 0) {
+      const anosExtra = difAh > 0 ? difInv / difAh : null;
+      conclusion += ` Los ${dif} paneles adicionales cuestan ${M(difInv)} y solo agregan ${M(Math.max(difAh, 0))} de ahorro al año` +
+        (anosExtra ? ` (se pagarían solos en ${anosExtra.toFixed(1)} años)` : ' (no se pagarían solos)') +
+        `: con los ${r.n} paneles calculados el ahorro ya está cerca de su máximo posible para este recibo, porque lo que queda por pagar ` +
+        `es sobre todo la parte que ningún panel reduce (cargos fijos/por demanda y alumbrado público, ver sección ${refSeccion(4, r)}).`;
+    }
+    conclusion += ' La verificación en campo suele basarse en el espacio disponible observado en sitio, no necesariamente en el consumo exacto -- ' +
+      'conviene presentarle al cliente las dos referencias antes de decidir el tamaño final.';
+  }
+  art.append(campoEditableConId('p', null, conclusion, 's20-conclusion'));
   art.append(bloqueCalculo(20, [
     p(`Fórmula de la diferencia (ambos escenarios usan el mismo motor -- sección ${refSeccion(6, r)}/${refSeccion(11, r)}/${refSeccion(13, r)} -- solo cambia "n"):`),
     graficoToggle('g20-calc-formula', 'Tabla de fórmula de la diferencia', tabla(['Variable', 'Fórmula', 'Sustitución'], [
