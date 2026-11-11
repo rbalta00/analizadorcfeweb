@@ -321,7 +321,22 @@ export function eliminarPaso(proyecto, idPaso) {
 
 // Marca el proyecto como actualizado y persiste TODO el cliente (los proyectos viven
 // anidados dentro del cliente en storage, no por separado).
+//
+// Guarda (bloqueada): una vez que un proyecto quedo CONGELADO (ver
+// clonarProyectoCongelado() mas abajo), este NUNCA se vuelve a escribir -- sin
+// importar que se le haya cambiado algo en memoria, ni desde donde se llame
+// (autoguardado de Calcular, edicion de texto, mover de cliente, etc.). Pedido
+// explicito del usuario, 2026-11-11: "que la que ya se guardo para entregar al
+// cliente no se toque ya". Se compara contra lo que YA esta guardado (no contra el
+// `proyecto` que llega, que podria venir ya con `bloqueada` puesto a proposito) --
+// clonarProyectoCongelado() guarda su clon nuevo con guardarCliente() directo, sin
+// pasar por aqui, asi que no hace falta ninguna excepcion para "la primera vez".
 export function guardarProyecto(cliente, proyecto) {
+  const existente = (cliente.proyectos || []).find(p => p.id === proyecto.id);
+  if (existente && existente.bloqueada) {
+    console.warn(`Cotización "${proyecto.nombre}" está bloqueada (ya se entregó como definitiva) -- se ignora este intento de modificarla.`);
+    return cliente;
+  }
   proyecto.actualizadoEn = new Date().toISOString();
   const i = (cliente.proyectos || []).findIndex(p => p.id === proyecto.id);
   if (i >= 0) cliente.proyectos[i] = proyecto; else (cliente.proyectos = cliente.proyectos || []).push(proyecto);
@@ -331,6 +346,37 @@ export function guardarProyecto(cliente, proyecto) {
 export function eliminarProyecto(cliente, proyectoId) {
   cliente.proyectos = (cliente.proyectos || []).filter(p => p.id !== proyectoId);
   return guardarCliente(cliente);
+}
+
+// Clona un proyecto COMPLETO (todo su estado real: formulario, textos
+// editados/ocultos, secciones/graficos/tablas apagados, archivos adjuntos, orden de
+// secciones, etc.) en un registro NUEVO e independiente del mismo cliente, marcado
+// `definitiva`+`bloqueada` -- a diferencia de crearProyectoDesdeOrigen() (que solo
+// copia tarifa/cargos como PUNTO DE PARTIDA para una cotizacion distinta, pensado para
+// otro cliente), esto preserva todo tal cual para que el PDF que generaria el clon sea
+// idéntico al original en este momento exacto.
+//
+// Pedido explicito del usuario, 2026-11-11: al dar clic en "Marcar como definitiva y
+// guardar", la version que se entrega al cliente debe quedar en un registro aparte y
+// CONGELADO (bloqueada, ver guardarProyecto() arriba), mientras la cotizacion que se
+// sigue trabajando ("el proyecto que se esta haciendo") sigue intacta y editable bajo
+// su propio id de siempre -- antes ambas cosas eran el MISMO registro, asi que seguir
+// editando despues de marcar definitiva modificaba en silencio lo que ya se le habia
+// entregado al cliente. El clon aparece en el historial de cotizaciones de este mismo
+// cliente (✅ Definitiva + 🔒) y automaticamente queda disponible para reusar como
+// "machote" (candidatosMachote() en app.js ya filtra por `proyecto.definitiva`).
+export function clonarProyectoCongelado(cliente, proyecto) {
+  const ahora = new Date().toISOString();
+  const clon = JSON.parse(JSON.stringify(proyecto));
+  clon.id = uuid();
+  clon.creadoEn = ahora;
+  clon.actualizadoEn = ahora;
+  clon.definitiva = true;
+  clon.bloqueada = true;
+  clon.entregadaEn = ahora;
+  (cliente.proyectos = cliente.proyectos || []).push(clon);
+  guardarCliente(cliente);
+  return clon;
 }
 
 // Crea un proyecto nuevo CLONANDO los datos de tarifa/cargos de un proyecto YA

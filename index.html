@@ -228,6 +228,13 @@
       <button id="btnMarcarPlantillaVerificada" class="btn-secundario">✅ Ya verifiqué estos datos contra el recibo real</button>
     </section>
 
+    <section class="tarjeta" id="avisoProyectoBloqueado" hidden>
+      <p class="nota aviso">🔒 <strong>Esta es la versión DEFINITIVA ya entregada al cliente -- quedó congelada.</strong>
+        No se puede editar ni volver a guardar (cualquier cambio se ignora). Si necesitas seguir ajustando esta
+        cotización, abre la que sigue en curso (sin el candado) o usa "Desde cotización ya validada" para reusar
+        esta como base de una cotización nueva.</p>
+    </section>
+
     <section class="tarjeta" id="tabSeguimiento">
       <div class="seccion-header">
         <h2>📋 Seguimiento de esta cotización</h2>
@@ -654,7 +661,7 @@
           <select id="selectClienteGuardar"></select>
         </label>
         <button id="btnGuardarCotizacion" class="btn-secundario">💾 Guardar cotización</button>
-        <button id="btnMarcarDefinitiva" class="btn-primario">✅ Marcar como definitiva y guardar</button>
+        <button id="btnMarcarDefinitiva" class="btn-primario" title="Congela una copia aparte como lo entregado al cliente; esta cotización se queda igual, sigue editable.">✅ Marcar como definitiva y guardar (congela una copia)</button>
       </div>
       <div class="fila fila-nuevo-cliente-guardar" id="filaNuevoClienteGuardar" hidden>
         <label>Nombre del cliente nuevo

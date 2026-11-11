@@ -5,7 +5,7 @@
 import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo, listarClientes,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
-  aplicarMachoteAProyecto,
+  aplicarMachoteAProyecto, clonarProyectoCongelado,
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
@@ -736,7 +736,7 @@ function tarjetaProyecto(p) {
     : (p.formulario ? 'con datos capturados, cotización sin guardar todavía' : 'sin datos capturados todavía');
   const etapa = p.etapa || 'cotizado';
   div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(p.nombre)}</strong>` +
-    (p.definitiva ? `<span class="chip-definitiva">✅ Definitiva</span>` : '') +
+    (p.definitiva ? `<span class="chip-definitiva">✅ Definitiva${p.bloqueada ? ' 🔒' : ''}</span>` : '') +
     (p.plantillaOrigen && !p.plantillaVerificada ? `<span class="chip-etapa chip-etapa-cotizado">📋 desde plantilla, sin verificar</span>` : '') +
     `<span class="chip-etapa chip-etapa-${etapa}">${ETAPAS_PROYECTO[etapa]}</span>` +
     `<span class="nota">${estado} · actualizado ${new Date(p.actualizadoEn).toLocaleDateString('es-MX')}</span></div>`;
@@ -841,7 +841,7 @@ function renderListaMachotes() {
     const div = document.createElement('div');
     div.className = 'tarjeta-cliente';
     div.style.cursor = 'pointer';
-    div.innerHTML = `<strong>${escapeHtml(proyecto.nombre)}</strong> ${proyecto.definitiva ? '<span class="chip-definitiva">✅ Definitiva</span>' : ''}` +
+    div.innerHTML = `<strong>${escapeHtml(proyecto.nombre)}</strong> ${proyecto.definitiva ? `<span class="chip-definitiva">✅ Definitiva${proyecto.bloqueada ? ' 🔒' : ''}</span>` : ''}` +
       `<div class="nota">Cliente: ${escapeHtml(cliente.nombre)} · Tarifa: ${escapeHtml(proyecto.formulario.tarifa)} · ` +
       `${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</div>`;
     div.addEventListener('click', () => {
@@ -983,6 +983,11 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('proyectoNombreBarra').textContent = proyectoActual.nombre;
   $('inputNombreProyecto').value = proyectoActual.nombre || '';
   renderAvisoPlantillaOrigen();
+  // Congelada (ver clonarProyectoCongelado en clientes.js): se puede ver/generar su
+  // PDF para consulta, pero nunca editarla ni volver a guardarla -- guardarProyecto()
+  // ya lo rechaza de todas formas, este aviso es solo para que no sorprenda que un
+  // cambio "no se guardó".
+  $('avisoProyectoBloqueado').hidden = !proyectoActual.bloqueada;
   // Si se abre con camposIniciales, viene de subir una foto nueva (nuevo proyecto o
   // "nuevo proyecto en blanco" sin fotos) -- se conserva lo acumulado para poder seguir
   // agregando fotos del mismo recibo aqui dentro. Si se abre SIN camposIniciales (un
@@ -3062,10 +3067,20 @@ $('inputNombreProyecto').addEventListener('blur', () => {
 });
 
 // Logica compartida de "Guardar cotización" y "Marcar como definitiva" -- ambos
-// botones guardan/mueven la cotizacion al cliente elegido en el selector; el unico
-// extra de "definitiva" es marcar proyecto.definitiva = true (se ve como ✅ en el
-// historial de cotizaciones del cliente, ver tarjetaProyecto) para distinguir la
-// version final de versiones de prueba/comparacion -- pedido explicito del usuario.
+// botones guardan/mueven la cotizacion al cliente elegido en el selector.
+//
+// "Marcar como definitiva y guardar" YA NO marca proyecto.definitiva=true sobre el
+// MISMO registro que se sigue editando -- pedido explicito del usuario, 2026-11-11:
+// "que la que ya se guardo para entregar al cliente no se toque ya" + que esa version
+// quede disponible "en un boton solo para reusar" (el machote, ver
+// candidatosMachote()) "y en otro lado como parte del proyecto que se esta haciendo"
+// (la cotizacion sigue en el historial de este cliente, editable con normalidad). En
+// vez de eso: se CLONA el estado completo de ahorita en un registro nuevo y aparte
+// (clonarProyectoCongelado(), en clientes.js), marcado definitiva+bloqueada -- ese
+// clon es "lo que se le entrego al cliente", nunca se vuelve a tocar (guardarProyecto()
+// lo rechaza aunque alguien lo intente). La cotizacion que se sigue viendo en pantalla
+// (proyectoActual) se queda exactamente como estaba, sin el badge de definitiva, lista
+// para seguir ajustandose sin riesgo de pisar lo ya entregado.
 //
 // "Marcar como definitiva" ademas sube un respaldo a la nube automaticamente (pedido
 // explicito 2026-11-06: "checa que cuando se guarde la cotizacion validada se guarde
@@ -3076,12 +3091,15 @@ $('inputNombreProyecto').addEventListener('blur', () => {
 // que antes -- el respaldo automatico es solo para la version ya validada.
 async function guardarCotizacionConCliente({ definitiva } = {}) {
   if (!ultimoResultado) { alert('Calcula primero.'); return false; }
+  if (proyectoActual.bloqueada) {
+    alert('Esta cotización ya se marcó como definitiva y quedó congelada (es la versión que se le entregó al cliente) -- no se puede volver a guardar ni modificar. Usa "Desde cotización ya validada" para reusarla como base de una cotización nueva.');
+    return false;
+  }
   if ($('selectClienteGuardar').value === '__nuevo__') {
     alert('Primero crea el cliente nuevo con el botón "Crear cliente" (o cancélalo) antes de guardar.');
     return false;
   }
   proyectoActual.cotizacionGuardadaEn = new Date().toISOString();
-  if (definitiva) proyectoActual.definitiva = true;
   const clienteDestinoId = $('selectClienteGuardar').value;
   let seMovioDeCliente = false;
   if (clienteDestinoId && clienteDestinoId !== clienteActual.id) {
@@ -3104,10 +3122,20 @@ async function guardarCotizacionConCliente({ definitiva } = {}) {
       avisoSeparada = ` (se creó como cotización NUEVA -- "${resultado.nombreAnterior}" se quedó intacta.)`;
     }
   }
-  const etiqueta = definitiva ? 'Marcada como DEFINITIVA y guardada' : 'Guardada';
+  // Clona el estado de ahorita en un registro aparte y congelado (ver
+  // clonarProyectoCongelado en clientes.js) -- ESE clon es "lo que se le entrega al
+  // cliente" y nunca se vuelve a tocar. proyectoActual (lo que se sigue viendo en
+  // pantalla) se queda igual, sin badge de definitiva, listo para seguir editandose.
+  let avisoDefinitiva = '';
+  if (definitiva) {
+    guardarProyecto(clienteActual, proyectoActual); // asegura que el clon parta del estado mas reciente
+    const clon = clonarProyectoCongelado(clienteActual, proyectoActual);
+    avisoDefinitiva = ` Se creó "${clon.nombre}" como versión DEFINITIVA y quedó congelada (ya no se puede modificar) -- disponible en el historial de este cliente y para reusar desde "Desde cotización ya validada". Esta cotización que ves ahora sigue editable con normalidad.`;
+  }
+  const etiqueta = definitiva ? 'Versión definitiva creada' : 'Guardada';
   $('estadoGuardadoCotizacion').className = 'nota ok';
   $('estadoGuardadoCotizacion').textContent =
-    `✓ ${etiqueta} con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". Subiendo respaldo a la nube...` + avisoSeparada;
+    `✓ ${etiqueta} con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". Subiendo respaldo a la nube...` + avisoSeparada + avisoDefinitiva;
   // Pedido explicito del usuario, 2026-11-08 ("tambien se tiene que guardar en la
   // nube"): antes SOLO "Marcar como definitiva" subia a la nube automaticamente --
   // "Guardar cotización" (borrador) se quedaba solo local a proposito, para no subir
@@ -3118,12 +3146,12 @@ async function guardarCotizacionConCliente({ definitiva } = {}) {
     await subirANube();
     $('estadoGuardadoCotizacion').textContent =
       `✓ ${etiqueta} con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". ` +
-      'Respaldo en la nube actualizado.' + avisoSeparada;
+      'Respaldo en la nube actualizado.' + avisoSeparada + avisoDefinitiva;
   } catch (err) {
     $('estadoGuardadoCotizacion').className = 'nota aviso';
     $('estadoGuardadoCotizacion').textContent =
       `✓ ${etiqueta} en este dispositivo, pero NO se pudo subir el respaldo a la nube ` +
-      `(${err.message}). Usa "Guardar copia en la nube" más tarde para intentarlo de nuevo.` + avisoSeparada;
+      `(${err.message}). Usa "Guardar copia en la nube" más tarde para intentarlo de nuevo.` + avisoSeparada + avisoDefinitiva;
     console.error(err);
   }
   return true;
