@@ -5,7 +5,7 @@
 import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo, listarClientes,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
-  aplicarMachoteAProyecto, clonarProyectoCongelado,
+  aplicarMachoteAProyecto, clonarProyectoCongelado, crearProyectoDesdeOrigen,
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
@@ -558,6 +558,7 @@ function renderDefinitivasPorTarifa() {
     const div = document.createElement('div');
     div.className = 'tarjeta-cliente';
     div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(proyecto.nombre)}</strong>` +
+      (proyecto.propositoDefinitiva === 'muestra' ? ' <span class="chip-definitiva">📋 muestra</span>' : ' <span class="chip-definitiva">👤 entrega de cliente</span>') +
       `<span class="nota">Cliente: ${escapeHtml(cliente.nombre)} · ` +
       `${proyecto.ultimaInversionTotal != null ? 'Inversión ' + M(proyecto.ultimaInversionTotal) : 'sin calcular'}` +
       (proyecto.ultimoAhorroAnual != null ? ` · Ahorro anual ${M(proyecto.ultimoAhorroAnual)}` : '') +
@@ -736,7 +737,7 @@ function tarjetaProyecto(p) {
     : (p.formulario ? 'con datos capturados, cotización sin guardar todavía' : 'sin datos capturados todavía');
   const etapa = p.etapa || 'cotizado';
   div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(p.nombre)}</strong>` +
-    (p.definitiva ? `<span class="chip-definitiva">✅ Definitiva${p.bloqueada ? ' 🔒' : ''}</span>` : '') +
+    (p.definitiva ? `<span class="chip-definitiva">✅ Definitiva${p.bloqueada ? ' 🔒' : ''}${p.propositoDefinitiva === 'muestra' ? ' 📋 muestra' : ''}</span>` : '') +
     (p.plantillaOrigen && !p.plantillaVerificada ? `<span class="chip-etapa chip-etapa-cotizado">📋 desde plantilla, sin verificar</span>` : '') +
     `<span class="chip-etapa chip-etapa-${etapa}">${ETAPAS_PROYECTO[etapa]}</span>` +
     `<span class="nota">${estado} · actualizado ${new Date(p.actualizadoEn).toLocaleDateString('es-MX')}</span></div>`;
@@ -793,6 +794,51 @@ $('btnNuevoProyectoBlanco').addEventListener('click', () => {
   abrirProyecto(clienteActual.id, proyecto.id);
 });
 
+// Busca, de CUALQUIER cliente, la mejor cotización ✅ definitiva con esta tarifa para
+// usarla como ejemplo al dar de alta un estudio nuevo -- pedido explicito del usuario,
+// 2026-11-11: "ponle un botón para que elija la tarifa y el análisis definitivo que
+// hayamos puesto ahí en esa tarifa como ejemplo... para que trabajemos sobre ese
+// machote y ya le subo los datos que le correspondan". Prioriza las marcadas
+// `propositoDefinitiva: 'muestra'` (pensadas justo para esto); si no hay ninguna
+// todavía, cae a la definitiva más reciente de esa tarifa que exista (aunque sea la
+// entrega real de otro cliente) -- `esFallback` avisa de esto en la UI, para que no
+// se confunda con un ejemplo curado a propósito.
+function mejorDefinitivaPorTarifa(tarifa) {
+  const todas = [];
+  for (const c of listarClientes()) {
+    for (const p of (c.proyectos || [])) {
+      if (!p.definitiva || !p.formulario || p.formulario.tarifa !== tarifa) continue;
+      todas.push({ cliente: c, proyecto: p });
+    }
+  }
+  if (!todas.length) return null;
+  todas.sort((a, b) => (b.proyecto.actualizadoEn || '').localeCompare(a.proyecto.actualizadoEn || ''));
+  const muestra = todas.find(f => f.proyecto.propositoDefinitiva === 'muestra');
+  return muestra ? { ...muestra, esFallback: false } : { ...todas[0], esFallback: true };
+}
+
+$('btnNuevoProyectoDesdeDefinitiva').addEventListener('click', () => {
+  const tarifa = $('selectTarifaNuevoProyecto').value;
+  const estadoEl = $('estadoNuevoProyectoDesdeDefinitiva');
+  if (!tarifa) {
+    estadoEl.className = 'nota aviso';
+    estadoEl.textContent = 'Elige primero una tarifa.';
+    return;
+  }
+  const candidato = mejorDefinitivaPorTarifa(tarifa);
+  if (!candidato) {
+    estadoEl.className = 'nota aviso';
+    estadoEl.textContent = `Todavía no hay ninguna cotización ✅ definitiva con tarifa ${tarifa} guardada en ningún cliente -- usa "+ Cotización en blanco" y captura los datos a mano, o marca una cotización como "Definitiva para MUESTRA" primero para poder reusarla después.`;
+    return;
+  }
+  const nuevo = crearProyectoDesdeOrigen(clienteActual, candidato, {});
+  if (candidato.esFallback) {
+    estadoEl.className = 'nota aviso';
+    estadoEl.textContent = `No hay ninguna definitiva marcada como "muestra" para ${tarifa} todavía -- se usó como base la definitiva de "${candidato.cliente.nombre}" (se limpiaron sus datos de identidad/período/historial). Revisa los cargos antes de confiar en ellos.`;
+  }
+  abrirProyecto(clienteActual.id, nuevo.id);
+});
+
 // ---------------- Machote: aplicar una cotizacion ya validada SOBRE la que esta
 // abierta (pedido explicito del usuario, 2026-11-06: "usar la tarifa ya validada o la
 // cotizacion ya validada"; reubicado 2026-11-09 al panel "Guardar cotizacion" -- "ya
@@ -841,7 +887,7 @@ function renderListaMachotes() {
     const div = document.createElement('div');
     div.className = 'tarjeta-cliente';
     div.style.cursor = 'pointer';
-    div.innerHTML = `<strong>${escapeHtml(proyecto.nombre)}</strong> ${proyecto.definitiva ? `<span class="chip-definitiva">✅ Definitiva${proyecto.bloqueada ? ' 🔒' : ''}</span>` : ''}` +
+    div.innerHTML = `<strong>${escapeHtml(proyecto.nombre)}</strong> ${proyecto.definitiva ? `<span class="chip-definitiva">✅ Definitiva${proyecto.bloqueada ? ' 🔒' : ''}${proyecto.propositoDefinitiva === 'muestra' ? ' 📋 muestra' : ''}</span>` : ''}` +
       `<div class="nota">Cliente: ${escapeHtml(cliente.nombre)} · Tarifa: ${escapeHtml(proyecto.formulario.tarifa)} · ` +
       `${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</div>`;
     div.addEventListener('click', () => {
@@ -3089,7 +3135,12 @@ $('inputNombreProyecto').addEventListener('blur', () => {
 // otro dispositivo, solo empuja lo de este -- es seguro automatizarlo solo en esta
 // direccion. "Guardar cotización" (borrador, no definitiva) se queda solo local, igual
 // que antes -- el respaldo automatico es solo para la version ya validada.
-async function guardarCotizacionConCliente({ definitiva } = {}) {
+//
+// `proposito` ('muestra' | 'cliente') -- pedido explicito del usuario, 2026-11-11:
+// "cuando se genere ya decido si este nuevo lo guardo como definitivo PARA MUESTRA o
+// definitivo PARA EL CLIENTE". Solo importa cuando definitiva=true, se le pasa tal
+// cual a clonarProyectoCongelado().
+async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
   if (!ultimoResultado) { alert('Calcula primero.'); return false; }
   if (proyectoActual.bloqueada) {
     alert('Esta cotización ya se marcó como definitiva y quedó congelada (es la versión que se le entregó al cliente) -- no se puede volver a guardar ni modificar. Usa "Desde cotización ya validada" para reusarla como base de una cotización nueva.');
@@ -3129,8 +3180,9 @@ async function guardarCotizacionConCliente({ definitiva } = {}) {
   let avisoDefinitiva = '';
   if (definitiva) {
     guardarProyecto(clienteActual, proyectoActual); // asegura que el clon parta del estado mas reciente
-    const clon = clonarProyectoCongelado(clienteActual, proyectoActual);
-    avisoDefinitiva = ` Se creó "${clon.nombre}" como versión DEFINITIVA y quedó congelada (ya no se puede modificar) -- disponible en el historial de este cliente y para reusar desde "Desde cotización ya validada". Esta cotización que ves ahora sigue editable con normalidad.`;
+    const clon = clonarProyectoCongelado(clienteActual, proyectoActual, proposito);
+    const etiquetaProposito = clon.propositoDefinitiva === 'muestra' ? 'MUESTRA (ejemplo reusable por tarifa)' : 'ENTREGA del cliente';
+    avisoDefinitiva = ` Se creó "${clon.nombre}" como versión DEFINITIVA para ${etiquetaProposito} y quedó congelada (ya no se puede modificar) -- disponible en el historial de este cliente${clon.propositoDefinitiva === 'muestra' ? ' y para usarse como ejemplo al dar de alta un cliente nuevo' : ''}. Esta cotización que ves ahora sigue editable con normalidad.`;
   }
   const etiqueta = definitiva ? 'Versión definitiva creada' : 'Guardada';
   $('estadoGuardadoCotizacion').className = 'nota ok';
@@ -3158,7 +3210,8 @@ async function guardarCotizacionConCliente({ definitiva } = {}) {
 }
 
 $('btnGuardarCotizacion').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: false }));
-$('btnMarcarDefinitiva').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: true }));
+$('btnMarcarDefinitivaMuestra').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: true, proposito: 'muestra' }));
+$('btnMarcarDefinitivaCliente').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: true, proposito: 'cliente' }));
 
 // Crear un cliente nuevo sin salir de la cotizacion abierta -- elegir "+ Nuevo
 // cliente..." en el selector abre este mini-formulario en vez de guardar directo.

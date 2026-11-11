@@ -365,7 +365,14 @@ export function eliminarProyecto(cliente, proyectoId) {
 // entregado al cliente. El clon aparece en el historial de cotizaciones de este mismo
 // cliente (✅ Definitiva + 🔒) y automaticamente queda disponible para reusar como
 // "machote" (candidatosMachote() en app.js ya filtra por `proyecto.definitiva`).
-export function clonarProyectoCongelado(cliente, proyecto) {
+//
+// `proposito` ('muestra' | 'cliente') -- pedido explicito del usuario, 2026-11-11:
+// "cuando se genere ya decido si este nuevo lo guardo como definitivo PARA MUESTRA o
+// definitivo PARA EL CLIENTE". Ambos quedan igual de congelados (nunca se tocan), pero
+// solo 'muestra' se ofrece como ejemplo generico reusable por tarifa (ver
+// mejorDefinitivaPorTarifa() en app.js) -- 'cliente' es la entrega real de ESE cliente,
+// no necesariamente un buen ejemplo generico para empezar la cotizacion de otro.
+export function clonarProyectoCongelado(cliente, proyecto, proposito = 'cliente') {
   const ahora = new Date().toISOString();
   const clon = JSON.parse(JSON.stringify(proyecto));
   clon.id = uuid();
@@ -374,6 +381,7 @@ export function clonarProyectoCongelado(cliente, proyecto) {
   clon.definitiva = true;
   clon.bloqueada = true;
   clon.entregadaEn = ahora;
+  clon.propositoDefinitiva = proposito === 'muestra' ? 'muestra' : 'cliente';
   (cliente.proyectos = cliente.proyectos || []).push(clon);
   guardarCliente(cliente);
   return clon;

@@ -201,8 +201,24 @@
       <div class="acciones">
         <button id="btnNuevoProyectoBlanco" class="btn-secundario">+ Cotización en blanco</button>
       </div>
-      <p class="nota">¿Quieres partir de una cotización ya validada (machote)? Crea una cotización en blanco
-        y aplícasela desde el panel "Guardar cotización", al final de esa cotización.</p>
+      <div class="fila">
+        <label>Partir de la definitiva de muestra de una tarifa
+          <select id="selectTarifaNuevoProyecto">
+            <option value="">-- Elige una tarifa --</option>
+            <option value="GDMTO">GDMTO (media tensión, con demanda)</option>
+            <option value="GDMTH">GDMTH (media tensión, con demanda, por horario)</option>
+            <option value="GDBT">GDBT (baja tensión, con demanda)</option>
+            <option value="PDBT">PDBT (baja tensión, sin demanda)</option>
+            <option value="01">01 (doméstica)</option>
+            <option value="DAC">DAC (doméstica de alto consumo)</option>
+          </select>
+        </label>
+        <button id="btnNuevoProyectoDesdeDefinitiva" class="btn-secundario">📋 Usar esa definitiva como ejemplo</button>
+      </div>
+      <p class="nota" id="estadoNuevoProyectoDesdeDefinitiva">Crea una cotización nueva ya con la tarifa/cargos de
+        la definitiva marcada como "muestra" de esa tarifa (identidad, período, kWh e historial quedan en blanco --
+        captúralos del recibo real de este cliente). Si no hay ninguna marcada como muestra todavía, se usa la
+        definitiva más reciente de esa tarifa que haya, sea de muestra o entregada a otro cliente.</p>
     </section>
 
     <section class="tarjeta">
@@ -661,8 +677,10 @@
           <select id="selectClienteGuardar"></select>
         </label>
         <button id="btnGuardarCotizacion" class="btn-secundario">💾 Guardar cotización</button>
-        <button id="btnMarcarDefinitiva" class="btn-primario" title="Congela una copia aparte como lo entregado al cliente; esta cotización se queda igual, sigue editable.">✅ Marcar como definitiva y guardar (congela una copia)</button>
+        <button id="btnMarcarDefinitivaCliente" class="btn-primario" title="Congela una copia aparte como lo entregado a ESTE cliente; esta cotización se queda igual, sigue editable.">✅ Definitiva para EL CLIENTE (congela una copia)</button>
+        <button id="btnMarcarDefinitivaMuestra" class="btn-secundario" title="Congela una copia aparte marcada como ejemplo reusable para esta tarifa; esta cotización se queda igual, sigue editable.">📋 Definitiva para MUESTRA (ejemplo por tarifa)</button>
       </div>
+      <p class="nota">"Para el cliente" = la entrega final de esta cotización. "Para muestra" = además queda disponible como ejemplo para empezar cotizaciones nuevas de la misma tarifa (ver "+ Cotización en blanco" al crear/abrir un cliente). Ambas quedan congeladas, nunca se vuelven a modificar.</p>
       <div class="fila fila-nuevo-cliente-guardar" id="filaNuevoClienteGuardar" hidden>
         <label>Nombre del cliente nuevo
           <input type="text" id="inputNuevoClienteGuardarNombre" placeholder="Ej. Casa del Abue Sur SEDIF">
