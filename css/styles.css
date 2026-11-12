@@ -327,6 +327,7 @@ input[type="file"] { padding: 6px 0; }
 .chip-etapa-ganado { background: #d6f0db; color: #1f6b35; }
 .chip-etapa-perdido { background: #f8d7da; color: #7a1f27; }
 .chip-etapa-instalado { background: #d8e8f3; color: #16425a; }
+.chip-tarifa-proyecto { background: #e6f2f0; color: #1a6b63; font-family: monospace; }
 
 /* ===================== Dashboard de todos los clientes (2026-11-05) ===================== */
 .dashboard-etapas { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -339,6 +340,7 @@ input[type="file"] { padding: 6px 0; }
   .chip-tipo-gobierno { background: #1c3a4d; color: #a9d4ea; }
   .chip-tipo-particular { background: #4a3a1c; color: #e8c98a; }
   .chip-tipo-otro { background: #3a3a3a; color: #d8d8d8; }
+  .chip-tarifa-proyecto { background: #16302d; color: #8fd8cc; }
 }
 
 /* ===================== Indice de secciones (navegacion) ===================== */

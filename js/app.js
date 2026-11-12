@@ -768,7 +768,14 @@ function tarjetaProyecto(p) {
     ? `✓ cotización guardada el ${new Date(p.cotizacionGuardadaEn).toLocaleDateString('es-MX')}`
     : (p.formulario ? 'con datos capturados, cotización sin guardar todavía' : 'sin datos capturados todavía');
   const etapa = p.etapa || 'cotizado';
+  // Pedido explicito del usuario, 2026-11-11: "cotizaciones por tarifa para verlas...
+  // ordena todo con coherencia y logica" -- chip visible de la tarifa (si ya se
+  // capturo) en cada tarjeta, independiente del chip de estado (definitiva/muestra/
+  // editando, que ya existia) -- renderListaProyectos() las ordena por tarifa dentro
+  // de cada grupo para que las de la misma tarifa queden juntas.
+  const chipTarifa = p.formulario?.tarifa ? `<span class="chip-etapa chip-tarifa-proyecto">${escapeHtml(p.formulario.tarifa)}</span>` : '';
   div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(p.nombre)}</strong>` +
+    chipTarifa +
     (p.definitiva ? `<span class="chip-definitiva">✅ Definitiva${p.bloqueada ? ' 🔒' : ''}${p.propositoDefinitiva === 'muestra' ? ' 📋 muestra' : ''}</span>` : '') +
     (p.plantillaOrigen && !p.plantillaVerificada ? `<span class="chip-etapa chip-etapa-cotizado">📋 desde plantilla, sin verificar</span>` : '') +
     `<span class="chip-etapa chip-etapa-${etapa}">${ETAPAS_PROYECTO[etapa]}</span>` +
@@ -806,10 +813,15 @@ function renderListaProyectos() {
     cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: 'Todavía no hay cotizaciones para este cliente. Sube un recibo o arranca una en blanco.' }));
     return;
   }
-  const enTrabajo = proyectos.filter(p => !p.definitiva && p.formulario);
+  // Ordenadas por tarifa DENTRO de cada grupo (pedido explicito del usuario: "cotizaciones
+  // por tarifa para verlas... ordena todo con coherencia y logica") -- asi, si un cliente
+  // tiene cotizaciones de varias tarifas, las de la misma tarifa quedan juntas en vez de
+  // mezcladas por fecha. Sin tarifa capturada todavia van al final.
+  const porTarifa = (a, b) => (a.formulario?.tarifa || '￿').localeCompare(b.formulario?.tarifa || '￿');
+  const enTrabajo = proyectos.filter(p => !p.definitiva && p.formulario).sort(porTarifa);
   const borradoresVacios = proyectos.filter(p => !p.definitiva && !p.formulario);
-  const definitivasCliente = proyectos.filter(p => p.definitiva && p.propositoDefinitiva !== 'muestra');
-  const muestras = proyectos.filter(p => p.definitiva && p.propositoDefinitiva === 'muestra');
+  const definitivasCliente = proyectos.filter(p => p.definitiva && p.propositoDefinitiva !== 'muestra').sort(porTarifa);
+  const muestras = proyectos.filter(p => p.definitiva && p.propositoDefinitiva === 'muestra').sort(porTarifa);
 
   function grupo(titulo, lista, notaExtra) {
     if (!lista.length) return;
