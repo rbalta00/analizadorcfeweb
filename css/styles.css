@@ -319,12 +319,17 @@ input[type="file"] { padding: 6px 0; }
 }
 /* Pedido explicito del usuario, 2026-11-11: "permite editar nombre del cliente" --
    antes era un <strong> fijo, ahora un input (mismo patron ya probado con el nombre de
-   la cotizacion, inputNombreProyecto) que se ve como texto normal hasta que se le hace
-   foco. */
-.input-nombre-cliente { font-weight: 700; font-size: 1rem; border: 1px solid transparent;
-  background: none; padding: 2px 4px; border-radius: 4px; color: inherit; min-width: 80px; }
-.input-nombre-cliente:hover { border-color: var(--border); }
-.input-nombre-cliente:focus { border-color: var(--teal); outline: none; background: var(--card-bg); }
+   la cotizacion, inputNombreProyecto). Bug real de la primera version: con borde
+   transparente por default, se veia IDENTICO a texto fijo -- nada indicaba que se
+   podia editar ahi (el usuario reporto "no veo donde se puede editar"). Ahora lleva un
+   subrayado punteado SIEMPRE visible (no solo al pasar el mouse), para que se note que
+   es un campo, no una etiqueta. */
+.input-nombre-cliente { font-weight: 700; font-size: 1rem; border: none;
+  border-bottom: 1px dashed var(--border); background: none; padding: 2px 4px;
+  border-radius: 4px; color: inherit; min-width: 80px; cursor: text; }
+.input-nombre-cliente:hover { border-bottom-color: var(--teal); background: var(--bg); }
+.input-nombre-cliente:focus { border-bottom-style: solid; border-bottom-color: var(--teal); outline: none; background: var(--card-bg); }
+.icono-editar-nombre { font-size: 0.75rem; opacity: 0.55; margin-left: -6px; }
 .chip-tipo { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; }
 .chip-tipo-gobierno { background: #d8e8f3; color: #16425a; }
 .chip-tipo-particular { background: #f3e3c9; color: #6b4a12; }

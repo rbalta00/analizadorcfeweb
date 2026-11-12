@@ -190,6 +190,7 @@
     <div class="cliente-barra">
       <button id="btnVolverClientesDesdeProyectos" class="btn-link">← Clientes</button>
       <input type="text" id="clienteNombreBarraProyectos" class="input-nombre-cliente" title="Editar nombre del cliente">
+      <span class="icono-editar-nombre" aria-hidden="true">✏️</span>
       <span id="clienteTipoBarraProyectos" class="chip-tipo"></span>
       <span id="avisoNombreClienteDupProyectos" class="nota aviso" hidden></span>
     </div>
@@ -250,8 +251,10 @@
     <div class="cliente-barra">
       <button id="btnVolverProyectos" class="btn-link">← Cotizaciones</button>
       <input type="text" id="clienteNombreBarra" class="input-nombre-cliente" title="Editar nombre del cliente">
+      <span class="icono-editar-nombre" aria-hidden="true">✏️</span>
       <span id="clienteTipoBarra" class="chip-tipo"></span>
-      <span class="chip-proyecto">· <span id="proyectoNombreBarra"></span></span>
+      <span class="chip-proyecto">· <input type="text" id="proyectoNombreBarraInput" class="input-nombre-cliente" title="Editar nombre de la cotización"></span>
+      <span class="icono-editar-nombre" aria-hidden="true">✏️</span>
       <span id="avisoNombreClienteDup" class="nota aviso" hidden></span>
     </div>
 

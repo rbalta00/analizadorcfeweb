@@ -1208,8 +1208,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('clienteNombreBarra').value = clienteActual.nombre;
   $('clienteTipoBarra').textContent = etiquetaTipo(clienteActual.tipo);
   $('clienteTipoBarra').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
-  $('proyectoNombreBarra').textContent = proyectoActual.nombre;
-  $('inputNombreProyecto').value = proyectoActual.nombre || '';
+  sincronizarInputsNombreProyecto();
   renderAvisoPlantillaOrigen();
   renderAvisoBloqueo();
   revisarDuplicadoCliente();
@@ -2239,8 +2238,7 @@ function calcularYRenderizar() {
   // identifica sin tener que abrir cada una.
   if (/^Cotización \d+$/.test(proyectoActual.nombre) && titular && titular !== 'Cliente') {
     proyectoActual.nombre = titular;
-    $('proyectoNombreBarra').textContent = proyectoActual.nombre;
-    $('inputNombreProyecto').value = proyectoActual.nombre;
+    sincronizarInputsNombreProyecto();
   }
 
   proyectoActual.formulario = leerFormulario();
@@ -3327,22 +3325,35 @@ function guardarProyectoRespetandoRenombre(cliente, proyecto) {
 // Renombrar la cotizacion -- pedido explicito del usuario, 2026-11-05: poder
 // "ponerle nombre con su proyecto y su cliente" antes de guardarla como definitiva.
 // Se guarda en blur (igual que los campos editables de texto), no en cada tecla.
-$('inputNombreProyecto').addEventListener('blur', () => {
+// Pedido explicito del usuario, 2026-11-11 ("no veo donde se puede editar... la
+// cotización"): antes SOLO se podia renombrar desde este input, escondido dentro de la
+// pestaña "Guardar cotización" -- la barra de arriba (visible SIEMPRE) solo mostraba el
+// nombre como texto fijo. Ahora esa misma barra tambien es editable (mismo patron que
+// el nombre del cliente), sincronizada con este input via sincronizarInputsNombreProyecto().
+function sincronizarInputsNombreProyecto() {
   if (!proyectoActual) return;
-  const nuevo = $('inputNombreProyecto').value.trim();
-  if (!nuevo || nuevo === proyectoActual.nombre) return;
+  $('inputNombreProyecto').value = proyectoActual.nombre || '';
+  $('proyectoNombreBarraInput').value = proyectoActual.nombre || '';
+}
+function renombrarProyectoActual(nuevoNombreCrudo) {
+  if (!proyectoActual) return;
+  const nuevo = nuevoNombreCrudo.trim();
+  if (!nuevo || nuevo === proyectoActual.nombre) { sincronizarInputsNombreProyecto(); return; }
   proyectoActual.nombre = nuevo;
-  $('proyectoNombreBarra').textContent = nuevo;
+  sincronizarInputsNombreProyecto();
   revisarDuplicadoProyecto(nuevo, proyectoActual.id);
   const resultado = guardarProyectoRespetandoRenombre(clienteActual, proyectoActual);
   if (resultado.esNuevo) {
     proyectoActual = resultado.proyecto;
+    sincronizarInputsNombreProyecto();
     $('estadoGuardadoCotizacion').className = 'nota aviso';
     $('estadoGuardadoCotizacion').textContent =
       `✓ Se creó una cotización NUEVA llamada "${nuevo}" con los datos de ahorita -- ` +
       `"${resultado.nombreAnterior}" se quedó intacta tal como estaba guardada.`;
   }
-});
+}
+$('inputNombreProyecto').addEventListener('blur', () => renombrarProyectoActual($('inputNombreProyecto').value));
+$('proyectoNombreBarraInput').addEventListener('blur', () => renombrarProyectoActual($('proyectoNombreBarraInput').value));
 
 // Logica compartida de "Guardar cotización" y "Marcar como definitiva" -- ambos
 // botones guardan/mueven la cotizacion al cliente elegido en el selector.
