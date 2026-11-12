@@ -537,3 +537,44 @@ export function moverProyecto(clienteOrigenId, clienteDestinoId, proyecto) {
   guardarCliente(destino);
   return destino;
 }
+
+// Recupera texto editado que quedo HUERFANO por los fixes de id-fijo de 2026-11-11
+// (commits 9ecd60a/6b712ab) -- esos commits corrigieron que varios parrafos
+// condicionales (verificacion en sitio, historial, inmueble, ISR, reposicion de
+// inversor) tuvieran un id SECUENCIAL que se corria segun los datos del cliente.
+// Arreglar eso cambio el id de esos parrafos especificos -- cualquier edicion YA
+// guardada bajo el id secuencial viejo dejo de aplicarse (reportado por el usuario:
+// "esa es mi machote ya trabajado, recupera eso").
+//
+// El id VIEJO de cada uno se puede reconstruir EXACTO para un proyecto YA CALCULADO
+// (sobre todo uno congelado/definitiva, cuyos datos nunca cambian): es una funcion
+// pura de que tan abajo en la secuencia de esa seccion caia ese parrafo cuando las
+// MISMAS condiciones de r (escenarioVerificado/historial/inmueble/aplicaIsr/
+// reposicion) ya eran estas. No se BORRA el valor viejo (por si el calculo de alguna
+// seccion de arriba llegara a diferir), solo se copia hacia el id nuevo si este
+// todavia no tiene su propio valor.
+export function recuperarTextosEditadosOrfanados(textosEditados, r) {
+  if (!textosEditados) return textosEditados;
+  const hayDatosInmueble = !!(r.inmueble && Object.values(r.inmueble).some((v) => v));
+  const reposicionAnio = (r.flujo25Rows || []).find((x) => x.reposicionMxn)?.anio;
+  const mapa = [
+    ['s1-verif-texto', 's1-t2', !!r.escenarioVerificado],
+    ['s1-verif-aviso', 's1-t3', !!r.escenarioVerificado],
+    ['s2-aviso-nombre', 's2-t2', !!(r.tituloRecibo && r.titular && r.tituloRecibo.trim().toUpperCase() !== r.titular.trim().toUpperCase())],
+    ['s5-historial-intro', 's5-t0', !!(r.historial && r.historial.length >= 3)],
+    ['s6-inmueble-resumen', 's6-t1', hayDatosInmueble],
+    ['s6-inmueble-implica', 's6-t2', hayDatosInmueble],
+    ['s13-isr-aviso', 's13-t2', !!r.aplicaIsr],
+    ['s14-nota-reposicion', 's14-t1', !!(r.flujo25Rows && r.flujo25Rows.length && reposicionAnio)],
+  ];
+  let resultado = textosEditados;
+  let cambios = false;
+  for (const [idNuevo, idViejo, condicion] of mapa) {
+    if (!condicion) continue;
+    if (Object.prototype.hasOwnProperty.call(resultado, idNuevo)) continue; // ya tiene su propio valor -- no pisar
+    if (!Object.prototype.hasOwnProperty.call(resultado, idViejo)) continue; // no hay nada que recuperar
+    if (!cambios) { resultado = { ...resultado }; cambios = true; }
+    resultado[idNuevo] = resultado[idViejo];
+  }
+  return resultado;
+}

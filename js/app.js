@@ -4,6 +4,7 @@
 // resultado.js/motor.js; este archivo solo lee/escribe el DOM y el almacenamiento.
 import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo, tiposClienteUsados, listarClientes,
+  recuperarTextosEditadosOrfanados,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
   aplicarMachoteAProyecto, clonarProyectoCongelado, crearProyectoDesdeOrigen, detectarTextosConNumerosSospechosos,
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
@@ -2153,7 +2154,10 @@ function calcularYRenderizar() {
   r.tablaFilasOcultas = proyectoActual.tablaFilasOcultas || {};
   r.calculosActivos = proyectoActual.calculosActivos || todosLosBloques();
   r.ordenSecciones = proyectoActual.ordenSecciones || null;
-  r.textosEditados = proyectoActual.textosEditados || {};
+  // Recupera texto editado que quedo huerfano por los fixes de id-fijo de hoy (ver
+  // recuperarTextosEditadosOrfanados en clientes.js) -- no se pisa nada, solo se
+  // completa lo que el id nuevo todavia no tenga, usando el id viejo si existe.
+  r.textosEditados = recuperarTextosEditadosOrfanados(proyectoActual.textosEditados || {}, r);
   r.textosOcultos = proyectoActual.textosOcultos || {};
   r.fotoSembrado = proyectoActual.fotoSembrado || null;
   r.fotosInmueble = proyectoActual.fotosInmueble || [];
