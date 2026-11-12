@@ -3609,7 +3609,16 @@ $('btnEnviarWhatsapp').addEventListener('click', async () => {
     `VAN 25 años: ${M(r.van)}\n\n` +
     'Adjunto el PDF de la cotización.';
   try {
-    const doc = generarPdf(ultimoResultado, { secciones: proyectoActual.seccionesActivas, seccionesExcluidas: proyectoActual.seccionesExcluidas });
+    // generarPdfCompletaDesdeVista (no generarPdf) -- bug real reportado por el
+    // usuario, 2026-11-12: "el S20.6 no se apaga, esta apagado y se imprime en el pdf
+    // generado". Causa: este boton seguia usando generarPdf(), el generador de texto
+    // FIJO de siempre (nunca lee textosOcultos/textosEditados de ningun parrafo, de
+    // ninguna seccion) -- a diferencia de "Cotizacion completa"/"Descargar PDF", que ya
+    // se cambiaron a generarPdfCompletaDesdeVista() desde el 2026-11-07 precisamente
+    // por este mismo problema. Mismo fix aplicado aqui: lee el DOM ya renderizado
+    // (con ediciones/apagados aplicados) en vez de reconstruir el texto desde cero.
+    await prepararDocumentosAdjuntosParaPdf(ultimoResultado);
+    const doc = generarPdfCompletaDesdeVista(ultimoResultado);
     const blob = doc.output('blob');
     const archivo = new File([blob], nombreArchivoProyecto('Cotizacion'), { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
@@ -3755,11 +3764,23 @@ async function verificarEdicionesEnPdf() {
   });
 
   // 3) Parrafos ocultos a mano (textosOcultos) -- su texto actual en pantalla NO
-  // deberia aparecer en el PDF.
+  // deberia aparecer en el PDF. Extracto de 120 caracteres, no 60 -- bug real
+  // encontrado verificando el reporte "S20.6 no se apaga" (2026-11-12): la seccion 1
+  // (texto "s1-verif-aviso") y la seccion 20 (texto "s20-t5") comparten casi la misma
+  // redaccion sobre el escenario verificado ("Ambos escenarios se calcularon con el
+  // mismo motor (mismo recibo, misma tarifa, mismos costos...") -- los primeros 60
+  // caracteres son IDENTICOS entre ambas, asi que ocultar solo la de la seccion 20
+  // reportaba un falso "SI aparece" porque la de la seccion 1 (nunca oculta) seguia
+  // trayendo ese mismo inicio. Confirmado con el texto COMPLETO de cada una que el PDF
+  // real (generarPdfCompletaDesdeVista) si excluye correctamente la oculta -- el bug
+  // era de esta funcion de verificacion, no del PDF. 120 caracteres ya cubre donde
+  // ambos parrafos empiezan a divergir ("de materiales... solo cambia" vs ") -- no
+  // implica"); no es una garantia absoluta para cualquier texto futuro, pero reduce
+  // mucho el riesgo de este mismo falso positivo.
   Object.keys(proyectoActual.textosOcultos || {}).forEach((id) => {
     const nodo = document.querySelector(`[data-texto-id="${id}"]`);
     if (!nodo) return;
-    const extracto = nodo.textContent.trim().slice(0, 60);
+    const extracto = nodo.textContent.trim().slice(0, 120);
     if (extracto && textoPdf.includes(extracto)) {
       problemas.push(`✗ Parrafo oculto "${id}" SI aparece en el PDF (no debería): "${extracto}…"`);
     } else if (extracto) {
