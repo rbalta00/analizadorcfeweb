@@ -901,6 +901,9 @@ function mostrarPantallaProyectos(clienteId) {
   $('clienteTipoBarraProyectos').textContent = etiquetaTipo(clienteActual.tipo);
   $('clienteTipoBarraProyectos').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
   $('estadoReciboNuevoProyecto').textContent = '';
+  $('selectTarifaNuevoProyecto').value = '';
+  $('listaMuestrasNuevoProyecto').innerHTML = '';
+  $('estadoNuevoProyectoDesdeDefinitiva').className = 'nota';
   revisarDuplicadoCliente();
   renderListaProyectos();
 }
@@ -939,16 +942,16 @@ $('btnNuevoProyectoBlanco').addEventListener('click', () => {
   abrirProyecto(clienteActual.id, proyecto.id);
 });
 
-// Busca, de CUALQUIER cliente, la mejor cotización ✅ definitiva con esta tarifa para
-// usarla como ejemplo al dar de alta un estudio nuevo -- pedido explicito del usuario,
-// 2026-11-11: "ponle un botón para que elija la tarifa y el análisis definitivo que
-// hayamos puesto ahí en esa tarifa como ejemplo... para que trabajemos sobre ese
-// machote y ya le subo los datos que le correspondan". Prioriza las marcadas
-// `propositoDefinitiva: 'muestra'` (pensadas justo para esto); si no hay ninguna
-// todavía, cae a la definitiva más reciente de esa tarifa que exista (aunque sea la
-// entrega real de otro cliente) -- `esFallback` avisa de esto en la UI, para que no
-// se confunda con un ejemplo curado a propósito.
-function mejorDefinitivaPorTarifa(tarifa) {
+// Lista, de CUALQUIER cliente, TODAS las cotizaciones ✅ definitivas con esta tarifa
+// para poder elegir una como ejemplo al dar de alta un estudio nuevo -- pedido
+// explicito del usuario, 2026-11-11: "ponle un botón para que elija la tarifa y el
+// análisis definitivo que hayamos puesto ahí en esa tarifa como ejemplo"; corregido
+// 2026-11-12 porque "no deja seleccionar muestra cuando selecciono la tarifa" -- antes
+// un solo boton escogia SOLO (en silencio) la mejor de todas, sin dejar ver ni elegir
+// si habia mas de una muestra para la misma tarifa. Las marcadas
+// `propositoDefinitiva: 'muestra'` (pensadas justo para esto) van primero; el resto
+// (entregas reales de otros clientes) despues, por si no hay ninguna muestra todavia.
+function candidatosDefinitivaPorTarifa(tarifa) {
   const todas = [];
   for (const c of listarClientes()) {
     for (const p of (c.proyectos || [])) {
@@ -956,41 +959,47 @@ function mejorDefinitivaPorTarifa(tarifa) {
       todas.push({ cliente: c, proyecto: p });
     }
   }
-  if (!todas.length) return null;
-  todas.sort((a, b) => (b.proyecto.actualizadoEn || '').localeCompare(a.proyecto.actualizadoEn || ''));
-  const muestra = todas.find(f => f.proyecto.propositoDefinitiva === 'muestra');
-  return muestra ? { ...muestra, esFallback: false } : { ...todas[0], esFallback: true };
+  return todas.sort((a, b) => {
+    const aMuestra = a.proyecto.propositoDefinitiva === 'muestra' ? 1 : 0;
+    const bMuestra = b.proyecto.propositoDefinitiva === 'muestra' ? 1 : 0;
+    if (aMuestra !== bMuestra) return bMuestra - aMuestra;
+    return (b.proyecto.actualizadoEn || '').localeCompare(a.proyecto.actualizadoEn || '');
+  });
 }
 
-$('btnNuevoProyectoDesdeDefinitiva').addEventListener('click', () => {
-  const nombre = $('inputNombreNuevoProyecto').value.trim();
+function renderListaMuestrasNuevoProyecto() {
+  const cont = $('listaMuestrasNuevoProyecto');
   const estadoEl = $('estadoNuevoProyectoDesdeDefinitiva');
-  if (!nombre) {
-    estadoEl.className = 'nota aviso';
-    estadoEl.textContent = 'Escribe primero un nombre para esta cotización (arriba).';
-    return;
-  }
   const tarifa = $('selectTarifaNuevoProyecto').value;
-  if (!tarifa) {
-    estadoEl.className = 'nota aviso';
-    estadoEl.textContent = 'Elige primero una tarifa.';
-    return;
-  }
-  const candidato = mejorDefinitivaPorTarifa(tarifa);
-  if (!candidato) {
+  cont.innerHTML = '';
+  if (!tarifa) return;
+  const candidatos = candidatosDefinitivaPorTarifa(tarifa);
+  if (!candidatos.length) {
     estadoEl.className = 'nota aviso';
     estadoEl.textContent = `Todavía no hay ninguna cotización ✅ definitiva con tarifa ${tarifa} guardada en ningún cliente -- usa "+ Cotización en blanco" y captura los datos a mano, o marca una cotización como "Definitiva para MUESTRA" primero para poder reusarla después.`;
     return;
   }
-  if (revisarDuplicadoProyecto(nombre, null) && !confirm(`"${clienteActual.nombre}" ya tiene otra cotización llamada "${nombre}" -- ¿crear otra con el mismo nombre de todos modos?`)) return;
-  const nuevo = crearProyectoDesdeOrigen(clienteActual, candidato, { nombre });
-  $('inputNombreNuevoProyecto').value = '';
-  if (candidato.esFallback) {
-    estadoEl.className = 'nota aviso';
-    estadoEl.textContent = `No hay ninguna definitiva marcada como "muestra" para ${tarifa} todavía -- se usó como base la definitiva de "${candidato.cliente.nombre}" (se limpiaron sus datos de identidad/período/historial). Revisa los cargos antes de confiar en ellos.`;
+  estadoEl.className = 'nota';
+  estadoEl.textContent = 'Da clic en la que quieras usar como ejemplo:';
+  for (const { cliente, proyecto } of candidatos) {
+    const div = document.createElement('div');
+    div.className = 'tarjeta-cliente';
+    div.style.cursor = 'pointer';
+    div.innerHTML = `<strong>${escapeHtml(proyecto.nombre)}</strong> ` +
+      (proyecto.propositoDefinitiva === 'muestra' ? '<span class="chip-definitiva">📋 muestra</span>' : '<span class="chip-definitiva">👤 entrega de cliente</span>') +
+      `<div class="nota">Cliente: ${escapeHtml(cliente.nombre)} · ${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</div>`;
+    div.addEventListener('click', () => {
+      const nombre = $('inputNombreNuevoProyecto').value.trim();
+      if (!nombre) { alert('Escribe primero un nombre para esta cotización (arriba).'); return; }
+      if (revisarDuplicadoProyecto(nombre, null) && !confirm(`"${clienteActual.nombre}" ya tiene otra cotización llamada "${nombre}" -- ¿crear otra con el mismo nombre de todos modos?`)) return;
+      const nuevo = crearProyectoDesdeOrigen(clienteActual, { cliente, proyecto }, { nombre });
+      $('inputNombreNuevoProyecto').value = '';
+      abrirProyecto(clienteActual.id, nuevo.id);
+    });
+    cont.append(div);
   }
-  abrirProyecto(clienteActual.id, nuevo.id);
-});
+}
+$('selectTarifaNuevoProyecto').addEventListener('change', renderListaMuestrasNuevoProyecto);
 
 // ---------------- Machote: aplicar una cotizacion ya validada SOBRE la que esta
 // abierta (pedido explicito del usuario, 2026-11-06: "usar la tarifa ya validada o la

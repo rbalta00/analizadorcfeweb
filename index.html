@@ -230,14 +230,18 @@
             <option value="DAC">DAC (doméstica de alto consumo)</option>
           </select>
         </label>
-        <button id="btnNuevoProyectoDesdeDefinitiva" class="btn-secundario">📋 Usar esa definitiva como ejemplo</button>
       </div>
-      <p class="nota" id="estadoNuevoProyectoDesdeDefinitiva">Crea una cotización nueva ya con la tarifa/cargos y
-        TODOS los textos/apagados editados de la definitiva marcada como "muestra" de esa tarifa (identidad,
-        período, kWh e historial quedan en blanco -- captúralos del recibo real de este cliente; el resto de los
-        textos se queda igual que en el machote, edítalos a mano si algo no aplica). Si no hay ninguna marcada como
-        muestra todavía, se usa la definitiva más reciente de esa tarifa que haya, sea de muestra o entregada a otro
-        cliente.</p>
+      <!-- Pedido explicito del usuario, 2026-11-12: "no deja seleccionar muestra
+           cuando selecciono la tarifa" -- antes, elegir la tarifa y dar clic a un
+           solo boton escogia SOLO (en silencio) la mejor definitiva de esa tarifa, sin
+           dejar ver ni elegir entre varias muestras de la misma tarifa si habia mas de
+           una. Ahora, al elegir la tarifa aparece la lista real de definitivas de esa
+           tarifa (las 📋 muestra primero) para dar clic en la que se quiera usar. -->
+      <p class="nota" id="estadoNuevoProyectoDesdeDefinitiva">Elige una tarifa arriba para ver las cotizaciones
+        ✅ definitivas que existan de esa tarifa (las 📋 muestra primero) y dar clic en la que quieras usar como
+        ejemplo -- se crea la cotización nueva ya con su tarifa/cargos y TODOS los textos/apagados editados
+        (identidad, período, kWh e historial quedan en blanco, captúralos del recibo real de este cliente).</p>
+      <div id="listaMuestrasNuevoProyecto" class="lista-clientes"></div>
     </section>
 
     <section class="tarjeta">
