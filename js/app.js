@@ -11,7 +11,7 @@ import {
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
-import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
+import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa, aplicarPlantillaTarifa } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf, generarPdfCompletaDesdeVista } from './propuesta.js';
 import { descargarExcelCotizacion } from './excel.js';
@@ -1407,7 +1407,13 @@ function aplicarFormulario(f) {
 $('aplicaIsr').addEventListener('change', () => { $('tasaIsr').disabled = !$('aplicaIsr').checked; });
 // Escala de costos: se deriva sola de la tarifa (ya no se pide a mano) -- gran demanda
 // (GDMTO/GDMTH/GDBT) = comercial, pequeña demanda/domestica (PDBT/01/DAC) = residencial.
-$('tarifa').addEventListener('change', () => { $('escalaCostos').value = escalaCostosParaTarifa($('tarifa').value); });
+$('tarifa').addEventListener('change', () => {
+  $('escalaCostos').value = escalaCostosParaTarifa($('tarifa').value);
+  // Si hay una plantilla guardada para esta tarifa, ofrecerla (pero no aplicarla automáticamente,
+  // porque el usuario podría haber editado este proyecto a mano y querría conservar sus cambios).
+  // Ver candidatosMachote() más abajo para cómo se muestra en la UI.
+  renderListaMachotes();
+});
 
 function leerInmueble() {
   return {
@@ -2959,7 +2965,9 @@ function renderPlantillasTarifa(r) {
 }
 
 function onGuardarPlantillaTarifa(tarifa) {
-  guardarPlantillaTarifa(tarifa, proyectoActual.textosEditados || {});
+  // Guardar TODO el proyecto como plantilla para esta tarifa: textos editados, apagados,
+  // orden de secciones, pasos, todo. Así el usuario puede reutilizar su formato exacto (2026-11-12).
+  guardarPlantillaTarifa(tarifa, proyectoActual);
   if (ultimoResultado) renderSecciones(ultimoResultado);
 }
 

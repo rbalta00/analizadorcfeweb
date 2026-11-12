@@ -494,15 +494,9 @@ export function aplicarMachoteAProyecto(proyecto, origen) {
   const origenProyecto = origen.proyecto;
   for (const campo of CAMPOS_EDITORIAL_MACHOTE) {
     if (origenProyecto[campo] === undefined) continue;
-    if (campo === 'textosEditados') {
-      const limpio = {};
-      for (const [id, texto] of Object.entries(origenProyecto.textosEditados || {})) {
-        if (typeof texto === 'string' && PATRON_POSIBLE_NUMERO_CALCULADO.test(texto)) continue;
-        limpio[id] = texto;
-      }
-      proyecto.textosEditados = limpio;
-      continue;
-    }
+    // Copiar textosEditados COMPLETO, sin filtrar números. La heurística
+    // detectarTextosConNumerosSospechosos() es una ADVERTENCIA posterior, no un filtro.
+    // El usuario escribió esos textos así -- conservarlos tal cual (2026-11-12).
     proyecto[campo] = JSON.parse(JSON.stringify(origenProyecto[campo]));
   }
   if (origenProyecto.pasos) {

@@ -67,11 +67,49 @@ export function leerPlantillaTarifa(tarifa) {
   return leerTodasLasPlantillas()[tarifa] || {};
 }
 
-// Reemplaza COMPLETO el snapshot de esta tarifa con `mapaTextos` (normalmente
-// proyecto.textosEditados tal cual, copiado) -- ver nota de diseño arriba.
-export function guardarPlantillaTarifa(tarifa, mapaTextos) {
+// Aplica la plantilla por tarifa COMPLETA a un proyecto:
+// - textosEditados, textosOcultos
+// - seccionesExcluidas, graficosExcluidos, calculosActivos
+// - tablaColumnasOcultas, tablaFilasOcultas
+// - pasos y pasoActivo
+//
+// Se llama después de aplicar un nuevo recibo/tarifa (cuando cambia el tarifa),
+// para restaurar la configuración que el usuario trabajó anteriormente para esa tarifa.
+// NO toca proyecto.formulario ni los datos del recibo -- solo la configuración editorial.
+export function aplicarPlantillaTarifa(proyecto, tarifa) {
+  const plantilla = leerPlantillaTarifa(tarifa);
+  if (!plantilla || !Object.keys(plantilla).length) return; // sin plantilla, no hace nada
+
+  if (plantilla.textosEditados) proyecto.textosEditados = { ...plantilla.textosEditados };
+  if (plantilla.textosOcultos) proyecto.textosOcultos = { ...plantilla.textosOcultos };
+  if (plantilla.seccionesExcluidas) proyecto.seccionesExcluidas = [...plantilla.seccionesExcluidas];
+  if (plantilla.graficosExcluidos) proyecto.graficosExcluidos = [...plantilla.graficosExcluidos];
+  if (plantilla.calculosActivos) proyecto.calculosActivos = [...plantilla.calculosActivos];
+  if (plantilla.tablaColumnasOcultas) proyecto.tablaColumnasOcultas = JSON.parse(JSON.stringify(plantilla.tablaColumnasOcultas));
+  if (plantilla.tablaFilasOcultas) proyecto.tablaFilasOcultas = JSON.parse(JSON.stringify(plantilla.tablaFilasOcultas));
+  if (plantilla.pasos) {
+    proyecto.pasos = JSON.parse(JSON.stringify(plantilla.pasos));
+    proyecto.pasoActivo = plantilla.pasoActivo || 'completo';
+  }
+}
+
+// Reemplaza COMPLETO el snapshot de esta tarifa con todos los campos necesarios
+// para reproducir fielmente su configuración (textos, apagados, pasos, etc.).
+// `proyectoSnapshot` es el proyecto actual -- se copia COMPLETO para que la
+// plantilla capture exactamente cómo está quedando el usuario (2026-11-12).
+export function guardarPlantillaTarifa(tarifa, proyectoSnapshot) {
   const todas = leerTodasLasPlantillas();
-  todas[tarifa] = { ...mapaTextos };
+  todas[tarifa] = {
+    textosEditados: { ...(proyectoSnapshot.textosEditados || {}) },
+    textosOcultos: { ...(proyectoSnapshot.textosOcultos || {}) },
+    seccionesExcluidas: [...(proyectoSnapshot.seccionesExcluidas || [])],
+    graficosExcluidos: [...(proyectoSnapshot.graficosExcluidos || [])],
+    calculosActivos: [...(proyectoSnapshot.calculosActivos || [])],
+    tablaColumnasOcultas: JSON.parse(JSON.stringify(proyectoSnapshot.tablaColumnasOcultas || {})),
+    tablaFilasOcultas: JSON.parse(JSON.stringify(proyectoSnapshot.tablaFilasOcultas || {})),
+    pasos: JSON.parse(JSON.stringify(proyectoSnapshot.pasos || {})),
+    pasoActivo: proyectoSnapshot.pasoActivo || 'completo',
+  };
   guardarTodasLasPlantillas(todas);
 }
 
