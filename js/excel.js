@@ -127,6 +127,13 @@ export function generarExcelCotizacion(r) {
 
   // INFORMACIÓN DEL ESTUDIO
   ws.addRow([]);
+  const seccionInfo = ws.addRow(['INFORMACIÓN DEL ESTUDIO']);
+  seccionInfo.font = { bold: true, color: { argb: COLOR_BLANCO }, size: 11 };
+  seccionInfo.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_NAVY } };
+  seccionInfo.height = 22;
+  seccionInfo.eachCell((cell) => { cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; });
+  ws.mergeCells(seccionInfo.number, 1, seccionInfo.number, maxCols);
+
   const infoTitular = ws.addRow(['TITULAR', r.titular || '—']);
   infoTitular.font = { bold: true, color: { argb: COLOR_NAVY } };
   infoTitular.height = 30;
@@ -138,8 +145,11 @@ export function generarExcelCotizacion(r) {
   infoInmueble.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
 
   if (r.formulario?.tarifa) { const row = ws.addRow(['TARIFA', r.formulario.tarifa]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
-  if (r.formulario?.consumoAnualKWh) { const row = ws.addRow(['CONSUMO ANUAL', `${r.formulario.consumoAnualKWh} kWh`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
-  if (r.formulario?.precioKWh) { const row = ws.addRow(['PRECIO POR kWh', `$${r.formulario.precioKWh.toFixed(2)}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
+  if (r.formulario?.consumoAnualKWh) { const row = ws.addRow(['CONSUMO ANUAL (kWh)', `${r.formulario.consumoAnualKWh}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
+  if (r.formulario?.precioKWh) { const row = ws.addRow(['PRECIO UNITARIO ($/kWh)', `$${r.formulario.precioKWh.toFixed(4)}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
+  if (r.formulario?.gastoAnual) { const row = ws.addRow(['GASTO ANUAL ACTUAL', `$${r.formulario.gastoAnual.toLocaleString('es-MX', { maximumFractionDigits: 2 })}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
+  if (r.formulario?.año) { const row = ws.addRow(['AÑO DE RECIBO', `${r.formulario.año}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
+  if (r.formulario?.mes) { const row = ws.addRow(['MES DE RECIBO', `${r.formulario.mes}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
 
   ws.addRow([]);
 
@@ -152,13 +162,90 @@ export function generarExcelCotizacion(r) {
     seccionResultados.eachCell((cell) => { cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; });
     ws.mergeCells(seccionResultados.number, 1, seccionResultados.number, maxCols);
 
+    // DATOS PRINCIPALES DE LA PROPUESTA
     const invRow = ws.addRow(['INVERSIÓN TOTAL', `$${r.ultimaInversionTotal.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
     invRow.font = { bold: true, color: { argb: COLOR_NAVY } };
-    invRow.height = 18;
+    invRow.height = 28;
     invRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
 
-    if (r.ultimoAhorroAnual) { const ahorroRow = ws.addRow(['AHORRO ANUAL', `$${r.ultimoAhorroAnual.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]); ahorroRow.font = { bold: true, color: { argb: COLOR_NAVY } }; ahorroRow.height = 18; ahorroRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
-    if (r.tasaInterna) { const tirRow = ws.addRow(['TIR', `${(r.tasaInterna * 100).toFixed(1)}%`]); tirRow.font = { bold: true, color: { argb: COLOR_NAVY } }; tirRow.height = 18; tirRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
+    if (r.ultimoAhorroAnual) {
+      const ahorroRow = ws.addRow(['AHORRO ANUAL ESTIMADO', `$${r.ultimoAhorroAnual.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
+      ahorroRow.font = { bold: true, color: { argb: COLOR_NAVY } };
+      ahorroRow.height = 28;
+      ahorroRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
+    // INDICADORES FINANCIEROS
+    if (r.pctAhorro != null) {
+      const pctRow = ws.addRow(['PORCENTAJE DE AHORRO', `${(r.pctAhorro * 100).toFixed(1)}%`]);
+      pctRow.height = 26;
+      pctRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
+    if (r.payback != null) {
+      const paybackRow = ws.addRow(['PAYBACK (AÑOS RECUPERACIÓN)', `${r.payback.toFixed(2)} años`]);
+      paybackRow.height = 26;
+      paybackRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
+    if (r.van != null) {
+      const vanRow = ws.addRow(['VAN (VALOR ACTUAL NETO)', `$${r.van.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
+      vanRow.height = 26;
+      vanRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
+    if (r.tir != null) {
+      const tirRow = ws.addRow(['TIR (TASA INTERNA RETORNO)', `${(r.tir * 100).toFixed(2)}%`]);
+      tirRow.font = { bold: true, color: { argb: COLOR_NAVY } };
+      tirRow.height = 28;
+      tirRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
+    // INFORMACIÓN DE CONSUMO
+    if (r.annualbefore != null) {
+      const consumoRow = ws.addRow(['GASTO ANUAL SIN SISTEMA', `$${r.annualbefore.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
+      consumoRow.height = 26;
+      consumoRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
+    if (r.annualafter != null) {
+      const consumoAftRow = ws.addRow(['GASTO ANUAL CON SISTEMA', `$${r.annualafter.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
+      consumoAftRow.height = 26;
+      consumoAftRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
+    // INFORMACIÓN DEL SISTEMA FOTOVOLTAICO
+    if (r.potenciaPicos != null) {
+      const kwhRow = ws.addRow(['POTENCIA INSTALADA', `${r.potenciaPicos.toFixed(2)} kWp`]);
+      kwhRow.height = 26;
+      kwhRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
+    if (r.paneles != null) {
+      const panRow = ws.addRow(['CANTIDAD DE PANELES', `${r.paneles}`]);
+      panRow.height = 26;
+      panRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
+    // ISR (si aplica)
+    if (r.aplicaIsr && r.paybackNetoIsr != null) {
+      const isr_payback = ws.addRow(['PAYBACK NETO (CON ISR)', `${r.paybackNetoIsr.toFixed(2)} años`]);
+      isr_payback.height = 26;
+      isr_payback.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
+    if (r.aplicaIsr && r.tirNetoIsr != null) {
+      const isr_tir = ws.addRow(['TIR NETO (CON ISR)', `${(r.tirNetoIsr * 100).toFixed(2)}%`]);
+      isr_tir.height = 26;
+      isr_tir.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
+    if (r.aplicaIsr && r.vanNetoIsr != null) {
+      const isr_van = ws.addRow(['VAN NETO (CON ISR)', `$${r.vanNetoIsr.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
+      isr_van.height = 26;
+      isr_van.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    }
+
     ws.addRow([]);
   }
 
