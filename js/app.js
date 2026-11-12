@@ -3082,14 +3082,14 @@ $('btnGenerarPdf').addEventListener('click', async () => {
 // solo en pdf tambien en excel". Lee las TABLAS ya visibles en pantalla (una hoja por
 // tabla, mismo respeto a secciones/graficos/columnas/filas apagadas que el PDF) -- ver
 // js/excel.js.
-$('btnGenerarExcel').addEventListener('click', () => {
+$('btnGenerarExcel').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   const boton = $('btnGenerarExcel');
   boton.disabled = true;
   const textoOriginal = boton.textContent;
   boton.textContent = 'Generando…';
   try {
-    descargarExcelCotizacion(ultimoResultado, nombreArchivoProyecto('Cotizacion', 'xlsx'));
+    await descargarExcelCotizacion(ultimoResultado, nombreArchivoProyecto('Cotizacion', 'xlsx'));
   } catch (err) {
     alert('No se pudo generar el Excel: ' + err.message);
     console.error(err);
