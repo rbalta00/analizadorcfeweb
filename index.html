@@ -262,11 +262,24 @@
       <button id="btnMarcarPlantillaVerificada" class="btn-secundario">✅ Ya verifiqué estos datos contra el recibo real</button>
     </section>
 
+    <!-- Pedido explicito del usuario, 2026-11-11: "realmente son etiquetas, si quiero
+         que se puedan editar y volver a guardar los cambios... pero asi identifico
+         cual es la buena y cual puedo usar como machote" -- se decidio mantener el
+         candado por DEFAULT (evita editarla sin querer) pero con un boton explicito
+         para desbloquearla cuando de verdad haga falta corregir algo, sin perder la
+         etiqueta ✅ Definitiva / 📋 muestra (eso sigue identificando cual es cual). -->
     <section class="tarjeta" id="avisoProyectoBloqueado" hidden>
       <p class="nota aviso">🔒 <strong>Esta es la versión DEFINITIVA ya entregada al cliente -- quedó congelada.</strong>
-        No se puede editar ni volver a guardar (cualquier cambio se ignora). Si necesitas seguir ajustando esta
-        cotización, abre la que sigue en curso (sin el candado) o usa "Desde cotización ya validada" para reusar
-        esta como base de una cotización nueva.</p>
+        No se puede editar ni volver a guardar mientras esté así. Si necesitas corregir algo puntual, desbloquéala
+        abajo -- se queda identificada igual (✅ Definitiva / 📋 muestra), solo deja de estar protegida contra
+        cambios hasta que la vuelvas a bloquear.</p>
+      <button type="button" id="btnDesbloquearProyecto" class="btn-secundario">🔓 Desbloquear para editar</button>
+    </section>
+    <section class="tarjeta" id="avisoProyectoDesbloqueado" hidden>
+      <p class="nota aviso">🔓 <strong>Esta definitiva está desbloqueada temporalmente</strong> -- los cambios que
+        hagas SÍ se guardan. Vuelve a bloquearla cuando termines de corregir, para protegerla de cambios
+        accidentales otra vez.</p>
+      <button type="button" id="btnBloquearProyecto" class="btn-secundario">🔒 Volver a bloquear</button>
     </section>
 
     <section class="tarjeta" id="tabSeguimiento">

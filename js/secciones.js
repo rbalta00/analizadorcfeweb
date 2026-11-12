@@ -2219,6 +2219,12 @@ export const TITULOS_SECCIONES = [
 // clientes.js). El parrafo SIEMPRE se ve aqui en pantalla (atenuado si esta oculto),
 // el estado es lo que decide si queda incluido.
 export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggleCalculo, onGuardarGlobal, onQuitarGlobal, onOcultarTexto, onToggleGrafico, onToggleColumna, onToggleFila) {
+  // Bug real encontrado 2026-11-11: esta asignacion faltaba -- _bloqueadaActual se
+  // quedaba SIEMPRE false (su valor inicial), asi que el candado de una definitiva
+  // nunca llegaba a desactivar de verdad la edicion de texto, pese a que
+  // guardarProyecto() si rechazaba el guardado. Ahora SI se lee de r.bloqueada (ver
+  // calcularYRenderizar en app.js, que lo copia de proyectoActual.bloqueada).
+  _bloqueadaActual = !!r.bloqueada;
   _overridesActuales = r.textosEditados || {};
   _onEditarTextoActual = onEditarTexto || (() => {});
   _calculosActivosActual = r.calculosActivos || [];

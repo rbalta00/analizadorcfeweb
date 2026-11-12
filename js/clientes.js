@@ -377,6 +377,30 @@ export function eliminarProyecto(cliente, proyectoId) {
   return guardarCliente(cliente);
 }
 
+// Desbloquear/bloquear una definitiva -- pedido explicito del usuario, 2026-11-11:
+// "realmente son etiquetas, si quiero que se puedan editar y volver a guardar los
+// cambios... pero asi identifico cual es la buena y cual puedo usar como machote...
+// basicamente la que quiero que no se pueda sobre escribir tan facil es la muestra o
+// machote". El candado se queda por DEFAULT (protege de ediciones accidentales,
+// sobre todo a las muestras, que otros clientes reusan como machote), pero ya no es
+// definitivo -- estas 2 funciones tocan DIRECTO el campo `bloqueada` sin pasar por
+// guardarProyecto() (que de por si rechaza cualquier escritura mientras
+// existente.bloqueada sea true -- por diseño no puede usarse para quitar su propio
+// candado). La etiqueta (definitiva/propositoDefinitiva) nunca se toca aqui -- sigue
+// identificando cual es cual, solo cambia si esta protegida contra escritura o no.
+export function desbloquearProyecto(cliente, proyectoId) {
+  const p = (cliente.proyectos || []).find(x => x.id === proyectoId);
+  if (!p) return cliente;
+  p.bloqueada = false;
+  return guardarCliente(cliente);
+}
+export function bloquearProyecto(cliente, proyectoId) {
+  const p = (cliente.proyectos || []).find(x => x.id === proyectoId);
+  if (!p) return cliente;
+  p.bloqueada = true;
+  return guardarCliente(cliente);
+}
+
 // Clona un proyecto COMPLETO (todo su estado real: formulario, textos
 // editados/ocultos, secciones/graficos/tablas apagados, archivos adjuntos, orden de
 // secciones, etc.) en un registro NUEVO e independiente del mismo cliente, marcado

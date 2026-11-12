@@ -7,6 +7,7 @@ import {
   recuperarTextosEditadosOrfanados,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
   aplicarMachoteAProyecto, clonarProyectoCongelado, crearProyectoDesdeOrigen, detectarTextosConNumerosSospechosos,
+  desbloquearProyecto, bloquearProyecto,
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
@@ -1049,6 +1050,35 @@ $('btnMarcarPlantillaVerificada').addEventListener('click', () => {
   guardarProyecto(clienteActual, proyectoActual);
   renderAvisoPlantillaOrigen();
 });
+
+// Candado de definitivas -- pedido explicito del usuario, 2026-11-11: "realmente son
+// etiquetas, si quiero que se puedan editar y volver a guardar los cambios... pero asi
+// identifico cual es la buena y cual puedo usar como machote... basicamente la que
+// quiero que no se pueda sobre escribir tan facil es la muestra o machote". Por
+// default sigue sin poder tocarse (protege de ediciones accidentales, sobre todo a las
+// muestras que otros clientes reusan), pero con un boton explicito para desbloquearla
+// cuando de verdad haga falta corregir algo -- la etiqueta (✅ Definitiva/📋 muestra) no
+// se toca, solo si esta protegida contra escritura o no.
+function renderAvisoBloqueo() {
+  $('avisoProyectoBloqueado').hidden = !proyectoActual.bloqueada;
+  $('avisoProyectoDesbloqueado').hidden = !(proyectoActual.definitiva && !proyectoActual.bloqueada);
+}
+$('btnDesbloquearProyecto').addEventListener('click', () => {
+  if (!confirm(`¿Desbloquear "${proyectoActual.nombre}" para editarla? Mientras esté desbloqueada, cualquier cambio que hagas (y "Calcular") SÍ se guarda -- vuelve a bloquearla cuando termines.`)) return;
+  // desbloquearProyecto() muta proyectoActual EN SITIO (es el mismo objeto dentro de
+  // clienteActual.proyectos) y devuelve solo true/false (ver guardarCliente) -- bug
+  // real encontrado en la propia prueba de este cambio: reasignar clienteActual/
+  // proyectoActual desde ese valor los dejaba rotos (true.proyectos no existe),
+  // abortando el resto del handler en silencio.
+  desbloquearProyecto(clienteActual, proyectoActual.id);
+  renderAvisoBloqueo();
+  if (ultimoResultado) { ultimoResultado.bloqueada = false; renderSecciones(ultimoResultado); }
+});
+$('btnBloquearProyecto').addEventListener('click', () => {
+  bloquearProyecto(clienteActual, proyectoActual.id);
+  renderAvisoBloqueo();
+  if (ultimoResultado) { ultimoResultado.bloqueada = true; renderSecciones(ultimoResultado); }
+});
 // (el aviso de "plantilla sin verificar" se consolido en avisosPendientesParaDocumento(),
 // mas abajo en este archivo, junto con los demas avisos antes de generar un documento)
 
@@ -1159,11 +1189,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('proyectoNombreBarra').textContent = proyectoActual.nombre;
   $('inputNombreProyecto').value = proyectoActual.nombre || '';
   renderAvisoPlantillaOrigen();
-  // Congelada (ver clonarProyectoCongelado en clientes.js): se puede ver/generar su
-  // PDF para consulta, pero nunca editarla ni volver a guardarla -- guardarProyecto()
-  // ya lo rechaza de todas formas, este aviso es solo para que no sorprenda que un
-  // cambio "no se guardó".
-  $('avisoProyectoBloqueado').hidden = !proyectoActual.bloqueada;
+  renderAvisoBloqueo();
   // Si se abre con camposIniciales, viene de subir una foto nueva (nuevo proyecto o
   // "nuevo proyecto en blanco" sin fotos) -- se conserva lo acumulado para poder seguir
   // agregando fotos del mismo recibo aqui dentro. Si se abre SIN camposIniciales (un
@@ -2158,6 +2184,11 @@ function calcularYRenderizar() {
   // recuperarTextosEditadosOrfanados en clientes.js) -- no se pisa nada, solo se
   // completa lo que el id nuevo todavia no tenga, usando el id viejo si existe.
   r.textosEditados = recuperarTextosEditadosOrfanados(proyectoActual.textosEditados || {}, r);
+  // Copiado para que secciones.js sepa si debe desactivar la edicion de texto (ver
+  // _bloqueadaActual en secciones.js) -- bug real encontrado 2026-11-11, esta linea
+  // nunca se habia agregado, asi que el candado de una definitiva nunca desactivaba de
+  // verdad los campos de texto (aunque guardarProyecto() si rechazaba el guardado).
+  r.bloqueada = !!proyectoActual.bloqueada;
   r.textosOcultos = proyectoActual.textosOcultos || {};
   r.fotoSembrado = proyectoActual.fotoSembrado || null;
   r.fotosInmueble = proyectoActual.fotosInmueble || [];
