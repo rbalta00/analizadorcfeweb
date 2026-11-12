@@ -108,20 +108,20 @@ export function generarExcelCotizacion(r) {
   const maxCols = filasEstructuradas.reduce((m, f) => Math.max(m, f.valores.length), 1);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Estudio', { pageSetup: { fitToPage: true, fitToWidth: 1, orientation: 'portrait' } });
-  ws.getColumn(1).width = 45;
-  for (let c = 2; c <= maxCols; c++) ws.getColumn(c).width = 35;
+  ws.getColumn(1).width = 55;
+  for (let c = 2; c <= maxCols; c++) ws.getColumn(c).width = 45;
 
   // ENCABEZADO DEL DOCUMENTO
   const titulo = ws.addRow(['ANALIZADOR DE SISTEMAS FOTOVOLTAICOS — CFE']);
   titulo.font = { bold: true, size: 14, color: { argb: COLOR_BLANCO } };
   titulo.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_NAVY } };
-  titulo.height = 30;
+  titulo.height = 35;
   titulo.eachCell((cell) => { cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; });
   ws.mergeCells(titulo.number, 1, titulo.number, maxCols);
 
   const subtitulo = ws.addRow(['GESTORIA Y PROYECTOS SOELRB · la estudio sale del análisis, no al revés']);
   subtitulo.font = { italic: true, size: 10 };
-  subtitulo.height = 25;
+  subtitulo.height = 30;
   subtitulo.eachCell((cell) => { cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; });
   ws.mergeCells(subtitulo.number, 1, subtitulo.number, maxCols);
 
@@ -129,17 +129,17 @@ export function generarExcelCotizacion(r) {
   ws.addRow([]);
   const infoTitular = ws.addRow(['TITULAR', r.titular || '—']);
   infoTitular.font = { bold: true, color: { argb: COLOR_NAVY } };
-  infoTitular.height = 24;
+  infoTitular.height = 30;
   infoTitular.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
 
   const infoInmueble = ws.addRow(['INMUEBLE', r.inmueble || '—']);
   infoInmueble.font = { bold: true, color: { argb: COLOR_NAVY } };
-  infoInmueble.height = 24;
+  infoInmueble.height = 30;
   infoInmueble.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
 
-  if (r.formulario?.tarifa) { const row = ws.addRow(['TARIFA', r.formulario.tarifa]); row.height = 20; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
-  if (r.formulario?.consumoAnualKWh) { const row = ws.addRow(['CONSUMO ANUAL', `${r.formulario.consumoAnualKWh} kWh`]); row.height = 20; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
-  if (r.formulario?.precioKWh) { const row = ws.addRow(['PRECIO POR kWh', `$${r.formulario.precioKWh.toFixed(2)}`]); row.height = 20; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
+  if (r.formulario?.tarifa) { const row = ws.addRow(['TARIFA', r.formulario.tarifa]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
+  if (r.formulario?.consumoAnualKWh) { const row = ws.addRow(['CONSUMO ANUAL', `${r.formulario.consumoAnualKWh} kWh`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
+  if (r.formulario?.precioKWh) { const row = ws.addRow(['PRECIO POR kWh', `$${r.formulario.precioKWh.toFixed(2)}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
 
   ws.addRow([]);
 
@@ -182,7 +182,7 @@ export function generarExcelCotizacion(r) {
         cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
       });
     } else if (tipo === 'encabezado') {
-      row.height = 24;
+      row.height = 30;
       row.eachCell((cell) => {
         cell.font = { bold: true, color: { argb: COLOR_NAVY } };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_TEAL_TINT } };
@@ -190,7 +190,7 @@ export function generarExcelCotizacion(r) {
         cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
       });
     } else if (tipo === 'dato') {
-      row.height = 22;
+      row.height = 28;
       row.eachCell((cell) => {
         cell.border = { top: BORDE_FINO, bottom: BORDE_FINO, left: BORDE_FINO, right: BORDE_FINO };
         cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
