@@ -440,52 +440,6 @@ export function clonarProyectoCongelado(cliente, proyecto, proposito = 'cliente'
   return clon;
 }
 
-// Crea un proyecto nuevo CLONANDO los datos de tarifa/cargos de un proyecto YA
-// GUARDADO (de este cliente o de cualquier otro) -- pedido explicito del usuario,
-// 2026-11-06: "cuando haga un proyecto o cotizacion nueva... usar la tarifa ya
-// validada o la cotizacion ya validada". Copia TODO el formulario (tarifa, cargos,
-// escalones domesticos, clasificacion $/kW, BT/factor de potencia, modulo/cobertura/
-// horas-sol/costos/ISR) como punto de partida -- pero limpia los campos que son
-// especificos de CADA cliente real (identidad + consumo del periodo + historial), que
-// SIEMPRE tienen que venir del recibo real de este cliente nuevo, nunca clonarse.
-// `plantillaOrigen` se guarda para poder avisar en la UI que estos datos vienen de
-// otra cotizacion y no se han verificado todavia contra el recibo real de ESTE
-// cliente -- mismo criterio de transparencia que el resto del proyecto (reconciliacion,
-// avisos de OCR, etc.): nunca dejar que un dato sin verificar se vea identico a uno ya
-// confirmado.
-function clonarFormularioParaMachote(formularioOrigen) {
-  const f = formularioOrigen ? JSON.parse(JSON.stringify(formularioOrigen)) : null;
-  if (f) {
-    f.titular = ''; f.domicilio = ''; f.noServicio = '';
-    f.periodoDias = ''; f.periodoKwh = '';
-    f.dPeriodoDias = ''; f.dPeriodoKwh = '';
-    f.historialNoDom = Array(12).fill(null);
-    f.historialDom = Array(6).fill(null);
-    // Pedido explicito del usuario, 2026-11-12: "cuando se utilice de machote si se
-    // pueda extraer toda su informacion a excepcion de los calculos, ya que estos
-    // cambian por cada servicio o recibo CFE" -- antes solo se limpiaba identidad +
-    // consumo, pero los MONTOS en pesos de cada cargo (Suministro/Distribucion/.../DAP/
-    // BT/bonificacion) son igual de especificos de CADA recibo real (un inmueble
-    // distinto, aunque sea la misma tarifa, casi nunca paga los mismos pesos) -- se
-    // quedaban copiados tal cual del machote, dando la falsa impresion de un dato ya
-    // capturado cuando en realidad es el del cliente ORIGEN. Se limpian a 0/false para
-    // que sea obvio que faltan por capturar del recibo real de este servicio nuevo.
-    // Lo que SI se queda (son criterios/estructura reusables, no cambian recibo a
-    // recibo): rkDist/rkCap (clasificacion $/kW de la tarifa), escalones domesticos
-    // (tarifa oficial publicada por CFE), moduloWp/cobertura/horasUtiles/escalaCostos/
-    // escalamiento (criterios del estudio).
-    if (f.cargos) {
-      for (const k of Object.keys(f.cargos)) f.cargos[k] = 0;
-    }
-    f.dap = 0;
-    f.traeBt = false; f.btMonto = 0;
-    f.traeBonus = false; f.bonusMonto = 0;
-    f.traeRecargoFp = false; f.recargoFpMonto = 0;
-    f.dDap = 0; f.dCargoFijo = 0;
-  }
-  return f;
-}
-
 // Aplica un machote (otra cotizacion ya validada) SOBRE un proyecto que ya existe --
 // pedido explicito del usuario, 2026-11-09: "ya hay un boton de nuevo cliente al final
 // de la cotizacion donde se trabaja... permite elegir que cliente, el nombre de la
@@ -493,9 +447,6 @@ function clonarFormularioParaMachote(formularioOrigen) {
 // ("Desde cotizacion ya validada", quitado de index.html por redundante), esto se usa
 // desde el panel "Guardar cotizacion" de una cotizacion YA ABIERTA (tipicamente recien
 // creada en blanco): nombre/cliente se deciden con los controles que ya existian ahi.
-// Comparte la misma logica de limpieza de campos que crearProyectoDesdeOrigen()
-// (clonarFormularioParaMachote) -- nunca se clona identidad/consumo real, siempre
-// viene del recibo real de ESTE cliente.
 //
 // CAMPOS_EDITORIAL_MACHOTE: bug real reportado por el usuario, 2026-11-12 -- "cuando
 // usamos como machote... se cambiaron textos, solo modifica los calculos los textos
@@ -512,53 +463,48 @@ function clonarFormularioParaMachote(formularioOrigen) {
 // algo especifico del cliente ORIGEN (ej. su ubicacion) viajaria igual al nuevo -- "ya
 // si sale algo mal yo lo modifico manual" (el aviso de "plantilla sin verificar" ya
 // existente sigue recordando revisar antes de confiar en el resultado).
+//
+// IMPORTANTE, pedido explicito del usuario 2026-11-12 (version final, tras dos vueltas
+// de ajuste en el mismo dia): "el machote solo sea que se jalen los textos editados
+// manuales" + "revisa que se recalcule y se tome bien la informacion del nuevo
+// recibo" -- el machote YA NO toca `proyecto.formulario` para NADA (ni identidad, ni
+// consumo, ni cargos, ni tarifa, ni criterios como modulo/cobertura/clasificacion
+// $/kW) -- intentos anteriores de "rellenar lo que faltara" seguian arriesgando que un
+// dato del cliente ORIGEN se mezclara con el calculo del cliente nuevo. Ahora el
+// machote aporta UNICAMENTE lo editorial (CAMPOS_EDITORIAL_MACHOTE) + la estructura de
+// pasos -- toda la tarifa/cargos/periodo/kWh del calculo tiene que salir siempre de
+// leer el recibo real de este cliente (antes o despues de elegir el machote, en
+// cualquier orden), nunca del machote.
+//
+// "Y SOLO NECESITO LOS TEXTOS QUE SE EDITARON" + "esos numeros son del machote que se
+// ocupo" (usuario, 2026-11-12): dentro de textosEditados, algunos "textos" en realidad
+// son numeros del CALCULO del cliente origen pegados en una oracion (ej. "...pasar de
+// pagar una facturacion anual de $80,645.36 a $49,245.65...", "...sugiere 21 paneles
+// mas...") -- esos NUNCA deben copiarse al machote nuevo, porque el numero es del
+// servicio/recibo ORIGEN, no del nuevo. Se filtran con la MISMA deteccion que ya existia
+// como aviso (PATRON_POSIBLE_NUMERO_CALCULADO, ver detectarTextosConNumerosSospechosos
+// mas abajo) -- un texto editado SIN ningun numero/%/kWh/años/paneles pegado (redaccion
+// pura) si se copia tal cual; uno que si trae un numero de ese tipo se omite, para que
+// el cliente nuevo muestre el texto GENERICO con el numero ya recalculado en su lugar.
 const CAMPOS_EDITORIAL_MACHOTE = [
   'textosEditados', 'textosOcultos', 'seccionesExcluidas', 'graficosExcluidos',
   'calculosActivos', 'tablaColumnasOcultas', 'tablaFilasOcultas', 'ordenSecciones',
 ];
-
-// Campos de identidad/consumo/cargos que SI pueden venir ya reales en ESTE proyecto
-// (ej. de un recibo/verificacion que ya se subio) ANTES de elegir un machote -- no
-// deben perderse si ya estan capturados. Mismas llaves que regresa leerFormularioRecibo().
-const CAMPOS_PROPIOS_SOBRE_MACHOTE = [
-  'titular', 'domicilio', 'noServicio', 'periodoDias', 'periodoKwh', 'dap', 'cargos',
-  'traeBt', 'btMonto', 'traeBonus', 'bonusMonto', 'traeRecargoFp', 'recargoFpMonto',
-  'dDap', 'dCargoFijo', 'dPeriodoDias', 'dPeriodoKwh', 'historialNoDom', 'historialDom',
-];
-
-function tieneValorReal(v) {
-  if (v == null) return false;
-  if (Array.isArray(v)) return v.some((x) => tieneValorReal(x));
-  if (typeof v === 'object') return Object.values(v).some((x) => tieneValorReal(x));
-  if (typeof v === 'number') return v !== 0 && !Number.isNaN(v);
-  if (typeof v === 'boolean') return v === true;
-  return v.toString().trim() !== '';
-}
-
-// Pedido explicito del usuario, 2026-11-12: "cree una nueva cotizacion, le subi el
-// recibo y la verificacion, y solo esperaba elegir el machote para hacer el calculo"
-// -- antes, aplicar un machote SIEMPRE sobreescribia TODO proyecto.formulario con la
-// version limpia del origen (clonarFormularioParaMachote), sin importar que este
-// proyecto YA tuviera datos reales capturados de su propio recibo -- esos datos reales
-// se perdian en silencio, dejando identidad/consumo/cargos en blanco otra vez pese a
-// que el usuario ya los habia subido. Ahora, cualquier campo de
-// CAMPOS_PROPIOS_SOBRE_MACHOTE que YA tuviera un valor real en este proyecto se
-// conserva tal cual -- el machote solo rellena lo que todavia estuviera vacio, y
-// siempre aporta tarifa/criterios (rkDist/rkCap/escalaCostos/moduloWp/etc.) y lo
-// editorial (CAMPOS_EDITORIAL_MACHOTE, arriba).
 export function aplicarMachoteAProyecto(proyecto, origen) {
   const origenProyecto = origen.proyecto;
   for (const campo of CAMPOS_EDITORIAL_MACHOTE) {
-    if (origenProyecto[campo] !== undefined) proyecto[campo] = JSON.parse(JSON.stringify(origenProyecto[campo]));
-  }
-  const propio = proyecto.formulario;
-  const nuevo = clonarFormularioParaMachote(origenProyecto.formulario);
-  if (nuevo && propio) {
-    for (const campo of CAMPOS_PROPIOS_SOBRE_MACHOTE) {
-      if (tieneValorReal(propio[campo])) nuevo[campo] = propio[campo];
+    if (origenProyecto[campo] === undefined) continue;
+    if (campo === 'textosEditados') {
+      const limpio = {};
+      for (const [id, texto] of Object.entries(origenProyecto.textosEditados || {})) {
+        if (typeof texto === 'string' && PATRON_POSIBLE_NUMERO_CALCULADO.test(texto)) continue;
+        limpio[id] = texto;
+      }
+      proyecto.textosEditados = limpio;
+      continue;
     }
+    proyecto[campo] = JSON.parse(JSON.stringify(origenProyecto[campo]));
   }
-  proyecto.formulario = nuevo;
   if (origenProyecto.pasos) {
     proyecto.pasos = JSON.parse(JSON.stringify(origenProyecto.pasos));
     proyecto.pasoActivo = origenProyecto.pasoActivo || 'completo';
@@ -575,14 +521,14 @@ export function aplicarMachoteAProyecto(proyecto, origen) {
 }
 
 // Heurística de aviso, no un bloqueo: un texto editado a mano puede llevar pegado un
-// número/monto/porcentaje calculado del cliente ORIGEN del machote (ej. "el ahorro es
-// de $46,860 pesos" tecleado como texto libre) -- ese número nunca se actualiza solo
-// al aplicar el machote a un cliente nuevo, porque para el sistema es texto editorial
-// igual que cualquier otro (pedido explícito del usuario 2026-11-11: "todos los textos
-// editados... se quedan a excepcion si vienen del calculo del nuevo servicio, obvio").
-// Esto NO detecta todos los casos (es imposible saberlo con certeza desde el texto
-// solo) -- es un recordatorio dirigido para que el usuario revise esos textos en
-// particular en vez de los 25+ que puede tener una cotización completa.
+// número/monto/porcentaje. Desde 2026-11-12, aplicarMachoteAProyecto() YA filtra (con
+// este mismo patrón) los textosEditados del machote que traigan un número así -- por
+// eso, justo despues de aplicar un machote, esta funcion normalmente no encuentra nada.
+// Sigue existiendo como red de seguridad para el caso que SI puede pasar despues: el
+// usuario edita a mano un parrafo de ESTE cliente y pega sin querer un numero que ya no
+// es el actual (ej. copio y pego de otro documento). Esto NO detecta todos los casos
+// (es imposible saberlo con certeza desde el texto solo) -- es un recordatorio
+// dirigido para revisar esos textos en particular en vez de los 25+ de la cotización.
 const PATRON_POSIBLE_NUMERO_CALCULADO = /\$\s?[\d,]+(\.\d+)?|\d+(\.\d+)?\s?%|\d+(\.\d+)?\s?(kwh|kwp|kw)\b|\d+(\.\d+)?\s*años|\d+\s*paneles/i;
 export function detectarTextosConNumerosSospechosos(textosEditados) {
   if (!textosEditados) return [];
