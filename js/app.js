@@ -113,6 +113,24 @@ function claseTipo(tipo) {
   if (t === 'particular') return 'chip-tipo-particular';
   return 'chip-tipo-otro';
 }
+// Aviso de nombre duplicado -- pedido explicito del usuario, 2026-11-11: "avísame si
+// ya hay alguna con ese mismo nombre y cliente" (tras encontrarse con 4 cotizaciones
+// "Carreteras de Cuota" sin saber por que). No bloquea nada (puede ser intencional),
+// solo avisa para que no se repita sin querer.
+function revisarDuplicadoCliente() {
+  if (!clienteActual) return;
+  const otro = listarClientes().some(c => c.id !== clienteActual.id && c.nombre.trim().toLowerCase() === clienteActual.nombre.trim().toLowerCase());
+  const texto = otro ? `⚠️ Ya hay otro cliente llamado "${clienteActual.nombre}"` : '';
+  const a = $('avisoNombreClienteDup'); if (a) { a.hidden = !otro; a.textContent = texto; }
+  const b = $('avisoNombreClienteDupProyectos'); if (b) { b.hidden = !otro; b.textContent = texto; }
+}
+function revisarDuplicadoProyecto(nombre, idExcluir) {
+  if (!clienteActual) return false;
+  const otro = (clienteActual.proyectos || []).some(p => p.id !== idExcluir && p.nombre.trim().toLowerCase() === nombre.trim().toLowerCase());
+  const a = $('avisoNombreProyectoDup');
+  if (a) { a.hidden = !otro; a.textContent = otro ? `⚠️ "${clienteActual.nombre}" ya tiene otra cotización llamada "${nombre}"` : ''; }
+  return otro;
+}
 function poblarDatalistTipos() {
   const dl = $('listaTiposCliente');
   if (!dl) return;
@@ -865,6 +883,7 @@ function mostrarPantallaProyectos(clienteId) {
   $('clienteTipoBarraProyectos').textContent = etiquetaTipo(clienteActual.tipo);
   $('clienteTipoBarraProyectos').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
   $('estadoReciboNuevoProyecto').textContent = '';
+  revisarDuplicadoCliente();
   renderListaProyectos();
 }
 
@@ -883,6 +902,7 @@ function renombrarClienteActual(nuevoNombreCrudo) {
   clienteActual.nombre = nuevo;
   guardarCliente(clienteActual);
   sincronizarInputsNombreCliente();
+  revisarDuplicadoCliente();
 }
 function sincronizarInputsNombreCliente() {
   if (!clienteActual) return;
@@ -895,6 +915,7 @@ $('clienteNombreBarra').addEventListener('blur', () => renombrarClienteActual($(
 $('btnNuevoProyectoBlanco').addEventListener('click', () => {
   const nombre = $('inputNombreNuevoProyecto').value.trim();
   if (!nombre) { alert('Escribe primero un nombre para esta cotización.'); return; }
+  if (revisarDuplicadoProyecto(nombre, null) && !confirm(`"${clienteActual.nombre}" ya tiene otra cotización llamada "${nombre}" -- ¿crear otra con el mismo nombre de todos modos?`)) return;
   const proyecto = crearProyecto(clienteActual, { nombre });
   $('inputNombreNuevoProyecto').value = '';
   abrirProyecto(clienteActual.id, proyecto.id);
@@ -943,6 +964,7 @@ $('btnNuevoProyectoDesdeDefinitiva').addEventListener('click', () => {
     estadoEl.textContent = `Todavía no hay ninguna cotización ✅ definitiva con tarifa ${tarifa} guardada en ningún cliente -- usa "+ Cotización en blanco" y captura los datos a mano, o marca una cotización como "Definitiva para MUESTRA" primero para poder reusarla después.`;
     return;
   }
+  if (revisarDuplicadoProyecto(nombre, null) && !confirm(`"${clienteActual.nombre}" ya tiene otra cotización llamada "${nombre}" -- ¿crear otra con el mismo nombre de todos modos?`)) return;
   const nuevo = crearProyectoDesdeOrigen(clienteActual, candidato, { nombre });
   $('inputNombreNuevoProyecto').value = '';
   if (candidato.esFallback) {
@@ -1190,6 +1212,8 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('inputNombreProyecto').value = proyectoActual.nombre || '';
   renderAvisoPlantillaOrigen();
   renderAvisoBloqueo();
+  revisarDuplicadoCliente();
+  revisarDuplicadoProyecto(proyectoActual.nombre, proyectoActual.id);
   // Si se abre con camposIniciales, viene de subir una foto nueva (nuevo proyecto o
   // "nuevo proyecto en blanco" sin fotos) -- se conserva lo acumulado para poder seguir
   // agregando fotos del mismo recibo aqui dentro. Si se abre SIN camposIniciales (un
@@ -3309,6 +3333,7 @@ $('inputNombreProyecto').addEventListener('blur', () => {
   if (!nuevo || nuevo === proyectoActual.nombre) return;
   proyectoActual.nombre = nuevo;
   $('proyectoNombreBarra').textContent = nuevo;
+  revisarDuplicadoProyecto(nuevo, proyectoActual.id);
   const resultado = guardarProyectoRespetandoRenombre(clienteActual, proyectoActual);
   if (resultado.esNuevo) {
     proyectoActual = resultado.proyecto;

@@ -191,6 +191,7 @@
       <button id="btnVolverClientesDesdeProyectos" class="btn-link">← Clientes</button>
       <input type="text" id="clienteNombreBarraProyectos" class="input-nombre-cliente" title="Editar nombre del cliente">
       <span id="clienteTipoBarraProyectos" class="chip-tipo"></span>
+      <span id="avisoNombreClienteDupProyectos" class="nota aviso" hidden></span>
     </div>
 
     <section class="tarjeta">
@@ -251,6 +252,7 @@
       <input type="text" id="clienteNombreBarra" class="input-nombre-cliente" title="Editar nombre del cliente">
       <span id="clienteTipoBarra" class="chip-tipo"></span>
       <span class="chip-proyecto">· <span id="proyectoNombreBarra"></span></span>
+      <span id="avisoNombreClienteDup" class="nota aviso" hidden></span>
     </div>
 
     <section class="tarjeta" id="avisoPlantillaOrigen" hidden>
@@ -707,6 +709,7 @@
         <label>Nombre de esta cotización
           <input type="text" id="inputNombreProyecto" placeholder="Ej. Casa del Abue — GDMTO — Opción 40 paneles">
         </label>
+        <span id="avisoNombreProyectoDup" class="nota aviso" hidden></span>
         <label>Guardar esta cotización con el cliente
           <select id="selectClienteGuardar"></select>
         </label>
