@@ -1208,7 +1208,6 @@ function s25(r, _leido, onToggle) {
   }
   art.append(campoEditableConId('p', null, conclusion, 's20-conclusion'));
   art.append(bloqueCalculo(20, [
-    p(`Fórmula de la diferencia (ambos escenarios usan el mismo motor -- sección ${refSeccion(6, r)}/${refSeccion(11, r)}/${refSeccion(13, r)} -- solo cambia "n"):`),
     graficoToggle('g20-calc-formula', 'Tabla de fórmula de la diferencia', tabla(['Variable', 'Fórmula', 'Sustitución'], [
       ['Diferencia de paneles', 'Paneles verificación − paneles calculados', `${ev.n} − ${r.n} = ${dif > 0 ? '+' : ''}${dif}`],
       ['Diferencia de inversión', 'Inversión verificación − inversión calculada', `${M(ev.investment)} − ${M(r.investment)} = ${M(ev.investment - r.investment)}`],
