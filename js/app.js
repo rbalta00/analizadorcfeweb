@@ -666,13 +666,25 @@ function tarjetaEnvio(envio) {
   const acciones = document.createElement('div');
   acciones.className = 'acciones-envio';
   const selectCliente = document.createElement('select');
-  const optNuevo = document.createElement('option');
-  optNuevo.value = '__nuevo__';
-  optNuevo.textContent = '+ Crear cliente nuevo';
-  selectCliente.append(optNuevo);
+  // Pedido explicito del usuario, 2026-11-12: "no hay tipo de cliente, solo hay
+  // cliente registrado, deja elegir uno" -- antes esta pantalla mostraba por default
+  // el mini-formulario de "crear cliente nuevo" (con su campo Tipo), aunque el envio
+  // casi siempre corresponde a un cliente que YA existe (ej. el mismo SEDIF con varios
+  // inmuebles). Ahora el default es elegir de la lista de clientes YA registrados --
+  // el campo Tipo solo aparece si de verdad se elige "+ Crear cliente nuevo".
   // Mismo bug/fix que poblarSelectClienteGuardar() -- clientesAgrupadosPorTipo() ya no
   // regresa {gobierno, particular} fijos (ver commit 9668ac9).
-  for (const { tipo, clientes: lista } of clientesAgrupadosPorTipo()) {
+  const gruposClientes = clientesAgrupadosPorTipo();
+  const hayClientesRegistrados = gruposClientes.some(g => g.clientes.length);
+  if (hayClientesRegistrados) {
+    const optVacio = document.createElement('option');
+    optVacio.value = '';
+    optVacio.textContent = '-- Elige un cliente registrado --';
+    optVacio.disabled = true;
+    optVacio.selected = true;
+    selectCliente.append(optVacio);
+  }
+  for (const { tipo, clientes: lista } of gruposClientes) {
     if (!lista.length) continue;
     const og = document.createElement('optgroup');
     og.label = etiquetaTipo(tipo);
@@ -684,12 +696,17 @@ function tarjetaEnvio(envio) {
     }
     selectCliente.append(og);
   }
+  const optNuevo = document.createElement('option');
+  optNuevo.value = '__nuevo__';
+  optNuevo.textContent = '+ Crear cliente nuevo';
+  selectCliente.append(optNuevo);
+  if (!hayClientesRegistrados) selectCliente.value = '__nuevo__'; // no hay nadie que elegir todavia
 
   const filaNuevo = document.createElement('div');
   filaNuevo.className = 'fila fila-nuevo-cliente-envio';
   filaNuevo.innerHTML = `<label>Nombre del cliente nuevo<input type="text" class="input-nombre-nuevo" value="${escapeHtml(envio.nombre_declarado || '')}" /></label>
-    <label>Tipo<select class="select-tipo-nuevo"><option value="particular">Particular</option><option value="gobierno">Gobierno</option></select></label>`;
-  filaNuevo.hidden = false; // "+ Crear cliente nuevo" es la opcion por defecto del select
+    <label>Tipo<input type="text" class="select-tipo-nuevo" list="listaTiposCliente" placeholder="Gobierno, Particular, u otro..."></label>`;
+  filaNuevo.hidden = selectCliente.value !== '__nuevo__';
   selectCliente.addEventListener('change', () => { filaNuevo.hidden = selectCliente.value !== '__nuevo__'; });
 
   const btnAsignar = document.createElement('button');
@@ -733,6 +750,7 @@ function formularioDesdeEnvio(envio) {
 
 async function asignarEnvio(envio, selectCliente, filaNuevo, btnAsignar) {
   let cliente;
+  if (!selectCliente.value) { alert('Elige un cliente registrado, o "+ Crear cliente nuevo".'); return; }
   if (selectCliente.value === '__nuevo__') {
     const nombre = filaNuevo.querySelector('.input-nombre-nuevo').value.trim();
     if (!nombre) { alert('Escribe el nombre del cliente nuevo.'); return; }
@@ -1018,7 +1036,8 @@ function renderListaMachotes() {
     }));
     return;
   }
-  for (const { cliente, proyecto } of candidatos) {
+
+  const tarjetaMachote = ({ cliente, proyecto }) => {
     const div = document.createElement('div');
     div.className = 'tarjeta-cliente';
     div.style.cursor = 'pointer';
@@ -1041,7 +1060,39 @@ function renderListaMachotes() {
       renderListaMachotes();
       $('tabCaptura').scrollIntoView({ behavior: 'smooth' });
     });
-    cont.append(div);
+    return div;
+  };
+
+  // Pedido explicito del usuario, 2026-11-12: "las cotizaciones guardadas como
+  // muestra guardalas de acuerdo a su tarifa y deja elegir una para machote" -- cuando
+  // no hay un filtro de tarifa especifico elegido (select en "Todas las tarifas"),
+  // se agrupan con su propio encabezado por tarifa (orden alfabetico) en vez de una
+  // sola lista plana ordenada solo por fecha; dentro de cada tarifa, las 📋 muestra
+  // van primero (son el machote pensado para esto), despues el resto, ambas por
+  // fecha mas reciente. Si ya hay un filtro de tarifa elegido no tiene sentido
+  // agrupar (todas las tarjetas comparten la misma tarifa), se deja la lista plana.
+  const tarifaFiltro = $('filtroTarifaMachote').value;
+  if (tarifaFiltro) {
+    for (const fila of candidatos) cont.append(tarjetaMachote(fila));
+    return;
+  }
+  const porTarifa = new Map();
+  for (const fila of candidatos) {
+    const t = fila.proyecto.formulario.tarifa || 'Sin tarifa';
+    if (!porTarifa.has(t)) porTarifa.set(t, []);
+    porTarifa.get(t).push(fila);
+  }
+  for (const tarifa of [...porTarifa.keys()].sort()) {
+    const filas = porTarifa.get(tarifa).sort((a, b) => {
+      const aMuestra = a.proyecto.propositoDefinitiva === 'muestra' ? 1 : 0;
+      const bMuestra = b.proyecto.propositoDefinitiva === 'muestra' ? 1 : 0;
+      if (aMuestra !== bMuestra) return bMuestra - aMuestra;
+      return (b.proyecto.actualizadoEn || '').localeCompare(a.proyecto.actualizadoEn || '');
+    });
+    const h4 = document.createElement('h4');
+    h4.textContent = `Tarifa ${tarifa}`;
+    cont.append(h4);
+    for (const fila of filas) cont.append(tarjetaMachote(fila));
   }
 }
 
