@@ -826,7 +826,10 @@ $('btnVolverClientesDesdeProyectos').addEventListener('click', mostrarPantallaCl
 $('btnVolverProyectos').addEventListener('click', () => mostrarPantallaProyectos(clienteActual.id));
 
 $('btnNuevoProyectoBlanco').addEventListener('click', () => {
-  const proyecto = crearProyecto(clienteActual, {});
+  const nombre = $('inputNombreNuevoProyecto').value.trim();
+  if (!nombre) { alert('Escribe primero un nombre para esta cotización.'); return; }
+  const proyecto = crearProyecto(clienteActual, { nombre });
+  $('inputNombreNuevoProyecto').value = '';
   abrirProyecto(clienteActual.id, proyecto.id);
 });
 
@@ -854,8 +857,14 @@ function mejorDefinitivaPorTarifa(tarifa) {
 }
 
 $('btnNuevoProyectoDesdeDefinitiva').addEventListener('click', () => {
-  const tarifa = $('selectTarifaNuevoProyecto').value;
+  const nombre = $('inputNombreNuevoProyecto').value.trim();
   const estadoEl = $('estadoNuevoProyectoDesdeDefinitiva');
+  if (!nombre) {
+    estadoEl.className = 'nota aviso';
+    estadoEl.textContent = 'Escribe primero un nombre para esta cotización (arriba).';
+    return;
+  }
+  const tarifa = $('selectTarifaNuevoProyecto').value;
   if (!tarifa) {
     estadoEl.className = 'nota aviso';
     estadoEl.textContent = 'Elige primero una tarifa.';
@@ -867,7 +876,8 @@ $('btnNuevoProyectoDesdeDefinitiva').addEventListener('click', () => {
     estadoEl.textContent = `Todavía no hay ninguna cotización ✅ definitiva con tarifa ${tarifa} guardada en ningún cliente -- usa "+ Cotización en blanco" y captura los datos a mano, o marca una cotización como "Definitiva para MUESTRA" primero para poder reusarla después.`;
     return;
   }
-  const nuevo = crearProyectoDesdeOrigen(clienteActual, candidato, {});
+  const nuevo = crearProyectoDesdeOrigen(clienteActual, candidato, { nombre });
+  $('inputNombreNuevoProyecto').value = '';
   if (candidato.esFallback) {
     estadoEl.className = 'nota aviso';
     estadoEl.textContent = `No hay ninguna definitiva marcada como "muestra" para ${tarifa} todavía -- se usó como base la definitiva de "${candidato.cliente.nombre}" (se limpiaron sus datos de identidad/período/historial). Revisa los cargos antes de confiar en ellos.`;

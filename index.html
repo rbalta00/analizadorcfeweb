@@ -198,6 +198,18 @@
         (ej. anverso y reverso), selecciónalas todas juntas.</p>
       <input type="file" id="archivoReciboNuevoProyecto" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
       <p class="nota" id="estadoReciboNuevoProyecto"></p>
+
+      <!-- Pedido explicito del usuario, 2026-11-11: "primero creamos cliente... luego
+           creamos cotizacion le ponemos el nombre... luego seleccionamos una cotizacion
+           de muestra como machote" -- antes "+ Cotizacion en blanco" y "Usar esa
+           definitiva como ejemplo" creaban la cotizacion con un nombre generico
+           ("Cotización N") sin preguntar, lo que ayudo a que se acumularan varias con
+           el mismo nombre sin querer. Ahora el nombre se pide PRIMERO, antes de
+           cualquiera de los 2 botones (la subida de recibo se deja igual -- ya se
+           auto-nombra con el titular detectado del recibo real). -->
+      <label>Nombre de esta cotización nueva (en blanco o desde una muestra)
+        <input type="text" id="inputNombreNuevoProyecto" placeholder="Ej. Casa del Abue Sur SEDIF — GDMTO">
+      </label>
       <div class="acciones">
         <button id="btnNuevoProyectoBlanco" class="btn-secundario">+ Cotización en blanco</button>
       </div>
