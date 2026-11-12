@@ -764,8 +764,22 @@ function s01(r, _leido, onToggle) {
   const nodosComparativo = [];
   if (ev) {
     art.append(subtitulo(1, 'verificacion-sitio', `Su proyecto según la verificación en sitio (ver sección ${refSeccion(19, r)})`));
-    art.append(p(`Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la verificación en ` +
-      `campo, en vez de los ${r.n} que calcula este sistema a partir del consumo real.`));
+    // BUG REAL encontrado y corregido 2026-11-11: este parrafo (y el avisoCream de mas
+    // abajo, dentro de este mismo "if (ev)") usaban p()/avisoCream(), que consumen
+    // siguienteTextoId() -- un contador SECUENCIAL. Como este bloque entero SOLO se
+    // ejecuta cuando hay escenario verificado, el parrafo "Esta cotización es válida
+    // hasta..." (unas lineas mas abajo, fuera de este if) tenia un id DISTINTO segun si
+    // esta cotizacion tenia o no verificacion en sitio (s1-t2 sin verificacion, s1-t4
+    // con ella) -- el mismo reporte real del usuario: "el texto del N13... dice [texto
+    // viejo]" en vez del texto que el edito, porque su edicion se guardo bajo el id que
+    // tenia MIENTRAS escribia (con o sin verificacion activa) y al aplicarse a otra
+    // cotizacion con el estado de verificacion contrario, ese id ya apuntaba a OTRO
+    // parrafo -- el parrafo real (con su id de ESE contexto) se quedaba sin override,
+    // mostrando su texto de fabrica. Fix: id FIJO (mismo criterio que subtitulo() de
+    // arriba) para que activar/desactivar la verificacion en sitio nunca vuelva a
+    // desfasar ningun otro parrafo de esta seccion.
+    art.append(campoEditableConId('p', null, `Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la verificación en ` +
+      `campo, en vez de los ${r.n} que calcula este sistema a partir del consumo real.`, 's1-verif-texto'));
     art.append(graficoToggle('g01-tarjetas-verificado-principales', 'Tarjetas: inversión, recuperación y ahorro año 1 (verificación en sitio)', tarjetas([
       [M(ev.investment), 'Lo que costaría el sistema, IVA incluido'],
       [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se pagaría solo'],
@@ -792,12 +806,13 @@ function s01(r, _leido, onToggle) {
       ['Recuperación simple', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', '—'],
       ['% de ahorro de factura', PCT(ev.pctAhorro), PCT(r.pctAhorro), '—'],
     ], { small: true, id: 'g01-comparativo-verificacion' })));
-    nodosComparativo.push(avisoCream(dif === 0
+    // Mismo fix de id FIJO que el parrafo de arriba -- ver ese comentario.
+    nodosComparativo.push(campoEditableConId('div', 'aviso-cream', dif === 0
       ? 'El número de paneles coincide con el de la verificación en campo -- ambos escenarios salen iguales.'
       : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que ` +
         'calcula este sistema a partir del consumo real del recibo -- ambos criterios son válidos y conviene presentarle al cliente las dos ' +
         'referencias antes de decidir el tamaño final. Ambos escenarios se calcularon con el mismo motor (mismo recibo, misma tarifa, ' +
-        'mismos costos) -- no implica que ambos tamaños quepan físicamente en el espacio disponible.'));
+        'mismos costos) -- no implica que ambos tamaños quepan físicamente en el espacio disponible.', 's1-verif-aviso'));
   }
   // Pedido explicito del usuario, 2026-11-10: este aviso (el №13 del editor en la
   // seccion 1 con verificacion en sitio) va con el MISMO tamaño y tipo de letra que el

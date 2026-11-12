@@ -2586,32 +2586,54 @@ function renderSecciones(r) {
 // ---------------- Numeracion de TODO el contenido editable (pedido explicito del
 // usuario, 2026-11-09: "ponle numeracion a cada texto editable... para poder revisar
 // que todo este bien o decirte cual no esta funcionando") ----------------
-// Funciona sobre UN SOLO hecho ya existente en secciones.js, no una lista nueva que
-// mantener: cada parrafo/titulo/subtitulo (campoEditableConId), celda de tabla
-// (celdaEditable) y etiqueta de tarjeta/leyenda de grafica (textoChico) YA le pone a su
-// elemento `dataset.textoId = <id interno>` -- aqui solo se recorren en orden de
-// aparicion en pantalla y se les pega un numero correlativo visible (№1, №2...) justo
-// antes de cada uno. El numero es solo para esta sesion/este render (no se guarda en
-// ningun lado): si se apaga una secccion o se cambia de paso, el conteo se recalcula
-// desde 1 sobre lo que queda VISIBLE -- asi "el número 47" siempre se refiere a lo que
-// Isaac esta viendo ahora, no a un indice fijo que se desfasaria cada vez que algo se
-// apaga/prende.
+// BUG REAL encontrado y corregido 2026-11-11: la version original numeraba por POSICION
+// en pantalla (№1, №2, №3... contando de arriba hacia abajo, recalculado desde cero en
+// cada render). El usuario reporto "el texto del N13 es viejo" comparando el N13 de la
+// cotizacion ORIGEN (machote) contra el N13 de la cotizacion NUEVA -- pero como el
+// conteo depende de CUANTOS elementos editables hay antes de ese punto (que varia entre
+// cotizaciones -- distinto historial, distintas secciones activas, etc.), "№13" en una
+// cotizacion y "№13" en otra pueden ser dos parrafos completamente distintos. No era que
+// el texto editado se perdiera (confirmado aparte): era que el numero nunca referencio
+// al MISMO parrafo entre dos cotizaciones -- la propia funcion original ya avisaba esto
+// en su comentario ("el numero... se recalcula... no es un indice fijo"), pero en la
+// practica el usuario SI lo estaba usando como si fuera fijo para comparar entre
+// cotizaciones, que es justo el caso que no estaba cubierto.
+// Fix: la etiqueta ya NO cuenta nada -- se arma leyendo directo el id interno ESTABLE
+// que cada elemento ya tiene (dataset.textoId, el mismo que se guarda en
+// proyecto.textosEditados) y dandole un formato corto y legible. Con esto, el mismo
+// parrafo SIEMPRE muestra la MISMA etiqueta sin importar que otras secciones esten
+// activas, que cliente sea, o si se aplico un machote -- justo lo que se necesita para
+// poder decir "modifica el texto de la etiqueta tal" de forma confiable.
+function etiquetaLegibleDeId(id) {
+  let m;
+  if ((m = id.match(/^s(\d+)-t(\d+)$/))) return `S${m[1]}.${Number(m[2]) + 1}`;
+  if ((m = id.match(/^s(\d+)-titulo$/))) return `S${m[1]}.Título`;
+  if ((m = id.match(/^s(\d+)-pregunta$/))) return `S${m[1]}.Pregunta`;
+  if ((m = id.match(/^s(\d+)-sub-(.+)$/))) return `S${m[1]}.Sub-${m[2]}`;
+  if ((m = id.match(/^s(\d+)-card(\d+)$/))) return `S${m[1]}.C${Number(m[2]) + 1}`;
+  if ((m = id.match(/^(.+)-nota-alt$/))) return `${m[1]}·Nota`;
+  if ((m = id.match(/^(.+)-h(\d+)$/))) return `${m[1]}·H${Number(m[2]) + 1}`;
+  if ((m = id.match(/^(.+)-r(\d+)c(\d+)$/))) return `${m[1]}·F${Number(m[2]) + 1}C${Number(m[3]) + 1}`;
+  return id; // id con forma no reconocida -- se muestra tal cual, nunca se oculta
+}
 function numerarContenidoEditable() {
   const cont = $('contenedorSecciones');
   if (!cont) return;
   cont.querySelectorAll('.badge-num-editable').forEach((b) => b.remove());
   const nodos = cont.querySelectorAll('[data-texto-id]');
-  nodos.forEach((nodo, i) => {
+  nodos.forEach((nodo) => {
+    const id = nodo.dataset.textoId;
+    const etiqueta = etiquetaLegibleDeId(id);
     const badge = document.createElement('span');
     badge.className = 'badge-num-editable';
-    badge.textContent = '№' + (i + 1);
-    badge.title = `Elemento editable №${i + 1} (id interno "${nodo.dataset.textoId}") -- usa este número si necesitas avisar que algo aquí no funciona.`;
+    badge.textContent = etiqueta;
+    badge.title = `Etiqueta fija "${etiqueta}" (id interno "${id}") -- SIEMPRE es la misma para este párrafo/celda, sin importar qué más esté prendido/apagado o de qué cliente sea. Úsala si necesitas avisar que algo aquí no funciona o decirme qué modificar.`;
     nodo.parentNode.insertBefore(badge, nodo);
   });
   const contador = $('contadorEditables');
   if (contador) {
     contador.textContent = nodos.length
-      ? `${nodos.length} elementos editables numerados (№1 a №${nodos.length}) en lo que ves ahora -- apagar/prender secciones vuelve a numerar desde 1.`
+      ? `${nodos.length} elementos editables, cada uno con su propia etiqueta fija (ej. "S4.2") -- esa etiqueta nunca cambia para ese párrafo, pase lo que pase en el resto de la cotización.`
       : '';
   }
 }

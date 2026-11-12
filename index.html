@@ -602,11 +602,14 @@
     <!-- Las 21 secciones se insertan aquí dinámicamente tras calcular -->
     <p class="nota nota-ayuda-edicion" id="ayudaEdicion" hidden>✎ Todo el texto, cada celda de tabla y cada
       etiqueta de tarjeta/gráfica es editable: haz clic directo, escribe, y clic afuera para guardar (se marca
-      en dorado). Borra todo el texto para restaurar el original. Cada elemento editable lleva un número chico
-      <span class="badge-num-editable" style="opacity:.6">№</span> justo antes -- úsalo si necesitas avisar que
-      algo específico no funciona. "Cotización completa" lee esta misma vista para el <strong>paso de entrega
-      activo</strong> (arriba): tus ediciones y lo que apagues/enciendas ahí sí se incluyen en el PDF que se
-      genera.</p>
+      en dorado). Borra todo el texto para restaurar el original. Cada elemento editable lleva una etiqueta
+      fija <span class="badge-num-editable" style="opacity:.6">S4.2</span> justo antes -- esa etiqueta SIEMPRE
+      es la misma para ese párrafo exacto, sin importar qué más esté prendido/apagado o de qué cliente sea
+      (no es un conteo que cambie). Dime esa etiqueta si necesitas avisar que algo específico no funciona o
+      pedirme que modifique un texto en particular. Cada sección también trae su propio número fijo
+      ("Sección Nºxx") junto al número de posición. "Cotización completa" lee esta misma vista para el
+      <strong>paso de entrega activo</strong> (arriba): tus ediciones y lo que apagues/enciendas ahí sí se
+      incluyen en el PDF que se genera.</p>
     <div id="contenedorSecciones"></div>
 
     <section class="tarjeta" id="tabEditorPrecios" hidden>
