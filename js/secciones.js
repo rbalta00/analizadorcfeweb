@@ -720,6 +720,17 @@ function crearSeccion(numero, titulo, pregunta, r, onToggle) {
   const header = el('div', 'seccion-header');
   const etiquetaNumero = pos > 0 ? `${String(pos).padStart(2, '0')} de ${activos.length}` : '🚫 Apagada';
   header.append(el('div', 'seccion-numero' + (pos > 0 ? '' : ' seccion-numero-apagada'), etiquetaNumero));
+  // Etiqueta FIJA (numero real 1-25, no la posicion entre activas) -- bug real
+  // encontrado 2026-11-11: el usuario reporto "el texto del N13 que ya edite... en la
+  // nueva cotizacion sale otro texto", y la causa NO era que el machote perdiera texto
+  // (eso ya se copia bien) sino que "13" es la POSICION entre secciones activas, que se
+  // recorre si la cotizacion de origen tenia la seccion 19 (comparativo-verificacion)
+  // activa y la nueva no (o viceversa) -- lo que el admin ve como "13" en una
+  // cotizacion puede ser literalmente una seccion distinta en otra. Esta etiqueta
+  // NUNCA cambia de cotizacion a cotizacion ni al apagar/mover secciones -- es el
+  // numero a usar para decirle a Claude "modifica el texto/tabla de la sección Nº13".
+  // Solo aparece en pantalla (admin), nunca en el PDF que ve el cliente.
+  header.append(el('div', 'seccion-numero-fijo', `Sección Nº${numero}`));
   header.append(tituloEditable(numero, titulo));
   // Editable con id ESTABLE (no siguienteTextoId()) -- hueco real encontrado en el
   // barrido final de 2026-11-05 continuacion 9: la "pregunta" de cada seccion (debajo

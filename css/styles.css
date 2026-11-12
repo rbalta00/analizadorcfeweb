@@ -387,6 +387,11 @@ input[type="file"] { padding: 6px 0; }
 .seccion-numero { display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
   color: var(--cfe-gold); text-transform: uppercase; margin-bottom: 4px; }
 .seccion-numero-apagada { color: var(--grey); }
+/* Numero FIJO de seccion (1-25, no la posicion entre activas) -- ver secciones.js,
+   crearSeccion(). A proposito discreto (chico, gris) para no competir visualmente con
+   el numero de posicion, que es el que ve el cliente en el PDF final. */
+.seccion-numero-fijo { display: inline-block; font-size: 0.68rem; color: var(--grey);
+  margin-left: 8px; font-family: monospace; }
 .seccion-header h2 { margin: 2px 0 4px; color: var(--navy); font-size: 1.15rem; }
 @media (prefers-color-scheme: dark) { .seccion-header h2 { color: #8fd0e0; } }
 /* Titulo de seccion editable: mas grande y en mayusculas, pedido explicito del
