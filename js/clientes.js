@@ -461,6 +461,27 @@ function clonarFormularioParaMachote(formularioOrigen) {
     f.dPeriodoDias = ''; f.dPeriodoKwh = '';
     f.historialNoDom = Array(12).fill(null);
     f.historialDom = Array(6).fill(null);
+    // Pedido explicito del usuario, 2026-11-12: "cuando se utilice de machote si se
+    // pueda extraer toda su informacion a excepcion de los calculos, ya que estos
+    // cambian por cada servicio o recibo CFE" -- antes solo se limpiaba identidad +
+    // consumo, pero los MONTOS en pesos de cada cargo (Suministro/Distribucion/.../DAP/
+    // BT/bonificacion) son igual de especificos de CADA recibo real (un inmueble
+    // distinto, aunque sea la misma tarifa, casi nunca paga los mismos pesos) -- se
+    // quedaban copiados tal cual del machote, dando la falsa impresion de un dato ya
+    // capturado cuando en realidad es el del cliente ORIGEN. Se limpian a 0/false para
+    // que sea obvio que faltan por capturar del recibo real de este servicio nuevo.
+    // Lo que SI se queda (son criterios/estructura reusables, no cambian recibo a
+    // recibo): rkDist/rkCap (clasificacion $/kW de la tarifa), escalones domesticos
+    // (tarifa oficial publicada por CFE), moduloWp/cobertura/horasUtiles/escalaCostos/
+    // escalamiento (criterios del estudio).
+    if (f.cargos) {
+      for (const k of Object.keys(f.cargos)) f.cargos[k] = 0;
+    }
+    f.dap = 0;
+    f.traeBt = false; f.btMonto = 0;
+    f.traeBonus = false; f.bonusMonto = 0;
+    f.traeRecargoFp = false; f.recargoFpMonto = 0;
+    f.dDap = 0; f.dCargoFijo = 0;
   }
   return f;
 }
@@ -495,12 +516,49 @@ const CAMPOS_EDITORIAL_MACHOTE = [
   'textosEditados', 'textosOcultos', 'seccionesExcluidas', 'graficosExcluidos',
   'calculosActivos', 'tablaColumnasOcultas', 'tablaFilasOcultas', 'ordenSecciones',
 ];
+
+// Campos de identidad/consumo/cargos que SI pueden venir ya reales en ESTE proyecto
+// (ej. de un recibo/verificacion que ya se subio) ANTES de elegir un machote -- no
+// deben perderse si ya estan capturados. Mismas llaves que regresa leerFormularioRecibo().
+const CAMPOS_PROPIOS_SOBRE_MACHOTE = [
+  'titular', 'domicilio', 'noServicio', 'periodoDias', 'periodoKwh', 'dap', 'cargos',
+  'traeBt', 'btMonto', 'traeBonus', 'bonusMonto', 'traeRecargoFp', 'recargoFpMonto',
+  'dDap', 'dCargoFijo', 'dPeriodoDias', 'dPeriodoKwh', 'historialNoDom', 'historialDom',
+];
+
+function tieneValorReal(v) {
+  if (v == null) return false;
+  if (Array.isArray(v)) return v.some((x) => tieneValorReal(x));
+  if (typeof v === 'object') return Object.values(v).some((x) => tieneValorReal(x));
+  if (typeof v === 'number') return v !== 0 && !Number.isNaN(v);
+  if (typeof v === 'boolean') return v === true;
+  return v.toString().trim() !== '';
+}
+
+// Pedido explicito del usuario, 2026-11-12: "cree una nueva cotizacion, le subi el
+// recibo y la verificacion, y solo esperaba elegir el machote para hacer el calculo"
+// -- antes, aplicar un machote SIEMPRE sobreescribia TODO proyecto.formulario con la
+// version limpia del origen (clonarFormularioParaMachote), sin importar que este
+// proyecto YA tuviera datos reales capturados de su propio recibo -- esos datos reales
+// se perdian en silencio, dejando identidad/consumo/cargos en blanco otra vez pese a
+// que el usuario ya los habia subido. Ahora, cualquier campo de
+// CAMPOS_PROPIOS_SOBRE_MACHOTE que YA tuviera un valor real en este proyecto se
+// conserva tal cual -- el machote solo rellena lo que todavia estuviera vacio, y
+// siempre aporta tarifa/criterios (rkDist/rkCap/escalaCostos/moduloWp/etc.) y lo
+// editorial (CAMPOS_EDITORIAL_MACHOTE, arriba).
 export function aplicarMachoteAProyecto(proyecto, origen) {
   const origenProyecto = origen.proyecto;
   for (const campo of CAMPOS_EDITORIAL_MACHOTE) {
     if (origenProyecto[campo] !== undefined) proyecto[campo] = JSON.parse(JSON.stringify(origenProyecto[campo]));
   }
-  proyecto.formulario = clonarFormularioParaMachote(origenProyecto.formulario);
+  const propio = proyecto.formulario;
+  const nuevo = clonarFormularioParaMachote(origenProyecto.formulario);
+  if (nuevo && propio) {
+    for (const campo of CAMPOS_PROPIOS_SOBRE_MACHOTE) {
+      if (tieneValorReal(propio[campo])) nuevo[campo] = propio[campo];
+    }
+  }
+  proyecto.formulario = nuevo;
   if (origenProyecto.pasos) {
     proyecto.pasos = JSON.parse(JSON.stringify(origenProyecto.pasos));
     proyecto.pasoActivo = origenProyecto.pasoActivo || 'completo';
