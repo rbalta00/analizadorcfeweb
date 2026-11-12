@@ -450,7 +450,18 @@ function botonOcultarColFila(oculto, onClick) {
 // se queda atenuada (clase col-oculta-tabla/fila-oculta-tabla) con su propio boton para
 // reactivarla, igual que el resto de "lo apagado" en este proyecto se sigue viendo en
 // la vista de edicion del admin.
-function tabla(headers, filas, { small = false, textCols = [], id = null } = {}) {
+// `idsFilas`: claves ESTABLES por fila (mismo largo que `filas`), para tablas armadas
+// con filas CONDICIONALES -- ej. g03-calc-pasos, donde "+ 2% de baja tensión"/
+// "Bonificación por factor de potencia" solo aparecen si ese recibo los trae. Sin esto,
+// el id de celda de cada fila se arma con su INDICE (`${id}-r${fi}c${i}`) -- si dos
+// clientes tienen distintas filas presentes, el indice de las filas de ABAJO se corre,
+// y una celda editada en un cliente (ej. renombrar "Subtotal") queda guardada bajo un
+// indice que en otro cliente apunta a una fila distinta. Bug real reportado por el
+// usuario, 2026-11-11 ("todos los textos que edité no salen en la cotización nueva"),
+// mismo patron ya corregido para parrafos sueltos (ver commits 9ecd60a/6b712ab) pero
+// aqui aplicado a celdas de tabla. Si no se pasa, el comportamiento es IDENTICO al de
+// siempre (usa el indice `fi`).
+function tabla(headers, filas, { small = false, textCols = [], id = null, idsFilas = null } = {}) {
   const wrap = el('div', 'tabla-wrap');
   const t = el('table', 'tabla-seccion' + (small ? ' tabla-chica' : ''));
   const clase = (i) => (i === 0 ? null : textCols.includes(i) ? 'texto' : 'num');
@@ -477,12 +488,13 @@ function tabla(headers, filas, { small = false, textCols = [], id = null } = {})
   filas.forEach((fila, fi) => {
     const ocultaFila = filasOcultas.has(fi);
     const tr = el('tr', ocultaFila ? 'fila-oculta-tabla' : null);
+    const claveFila = idsFilas && idsFilas[fi] != null ? idsFilas[fi] : fi;
     fila.forEach((c, i) => {
       const claseBase = clase(i);
       const td = document.createElement('td');
       if (claseBase) td.className = claseBase;
       if (colsOcultas.has(i)) td.classList.add('col-oculta-tabla');
-      if (esEditable(i)) td.append(celdaEditable(`${id}-r${fi}c${i}`, String(c))); else td.append(document.createTextNode(String(c)));
+      if (esEditable(i)) td.append(celdaEditable(`${id}-r${claveFila}c${i}`, String(c))); else td.append(document.createTextNode(String(c)));
       tr.append(td);
     });
     if (id != null) {
@@ -1278,21 +1290,29 @@ function calculoReciboConDemanda(r) {
       `${r.meta.energyRate.toFixed(4)} $/kWh × ${r.periodoKwh.toLocaleString('en-US')} kWh`, M(cargoVariableMonto)],
     ['3', 'Cargo base del período', 'Paso 1 + Paso 2', M(fd.base)],
   ];
-  if (r.btPct) pasos.push([String(pasos.length + 1), '+ 2% de baja tensión', `${PCT(r.btPct)} × ${M(fd.base)}`, M(fd.bt)]);
-  if (r.fpBonusPct) pasos.push([String(pasos.length + 1), '− Bonificación por factor de potencia', `${PCT(r.fpBonusPct)} × (cargo base + BT)`, '−' + M(fd.bonus)]);
-  if (r.recargoFpPct) pasos.push([String(pasos.length + 1), '+ Recargo por factor de potencia (FP bajo)', `${PCT(r.recargoFpPct)} × (cargo base + BT)`, '+' + M(fd.recargo)]);
-  pasos.push([String(pasos.length + 1), 'Subtotal (antes de IVA)', 'Suma de los pasos anteriores', M(fd.subtotal)]);
-  pasos.push([String(pasos.length + 1), '+ IVA (16%)', `16% × ${M(fd.subtotal)}`, M(fd.iva)]);
-  pasos.push([String(pasos.length + 1), '+ DAP (alumbrado público, lo cobra el municipio, no CFE)', 'Importe fijo de este período', M(fd.dap)]);
-  pasos.push(['=', 'TOTAL de este período', '', M(fd.total)]);
+  // clavesPasos: una clave ESTABLE por cada fila de `pasos` (ver idsFilas en tabla()) --
+  // las filas de BT/bonificación/recargo son condicionales (dependen del recibo de cada
+  // cliente), asi que sin esto una celda editada aqui se desfasaria entre clientes.
+  const clavesPasos = ['fijo', 'variable', 'base'];
+  if (r.btPct) { pasos.push([String(pasos.length + 1), '+ 2% de baja tensión', `${PCT(r.btPct)} × ${M(fd.base)}`, M(fd.bt)]); clavesPasos.push('bt'); }
+  if (r.fpBonusPct) { pasos.push([String(pasos.length + 1), '− Bonificación por factor de potencia', `${PCT(r.fpBonusPct)} × (cargo base + BT)`, '−' + M(fd.bonus)]); clavesPasos.push('fpBonus'); }
+  if (r.recargoFpPct) { pasos.push([String(pasos.length + 1), '+ Recargo por factor de potencia (FP bajo)', `${PCT(r.recargoFpPct)} × (cargo base + BT)`, '+' + M(fd.recargo)]); clavesPasos.push('fpRecargo'); }
+  pasos.push([String(pasos.length + 1), 'Subtotal (antes de IVA)', 'Suma de los pasos anteriores', M(fd.subtotal)]); clavesPasos.push('subtotal');
+  pasos.push([String(pasos.length + 1), '+ IVA (16%)', `16% × ${M(fd.subtotal)}`, M(fd.iva)]); clavesPasos.push('iva');
+  pasos.push([String(pasos.length + 1), '+ DAP (alumbrado público, lo cobra el municipio, no CFE)', 'Importe fijo de este período', M(fd.dap)]); clavesPasos.push('dap');
+  pasos.push(['=', 'TOTAL de este período', '', M(fd.total)]); clavesPasos.push('total');
   return [
     p(`En resumen: de los ${M(fd.total)} que paga por este período, ${M(cargoFijoMonto)} son cargo FIJO ` +
       `(no cambian sin importar cuántos paneles se instalen) y ${M(cargoVariableMonto)} dependen del CONSUMO ` +
       `(esta es la parte que sí se puede sustituir con energía solar). El resto de la tabla de abajo son ajustes ` +
       `(baja tensión, bonificación, IVA, DAP) sobre esos dos montos.`),
     ...(esGdmth ? [
-      p('Esta tarifa (GDMTH) factura la Energía en 3 franjas horarias con su propio precio cada una, impresas tal ' +
-        'cual en el recibo como "Generación Base/Intermedia/Punta" — no es un solo precio por kWh:'),
+      // Id FIJO -- mismo motivo que los demas: este parrafo (y el avisoCream de abajo)
+      // solo se crean para tarifa GDMTH, asi que sin id fijo los parrafos de abajo
+      // ("Asi se arma, paso a paso...", etc.) se desfasarian entre un cliente GDMTH y
+      // uno GDMTO/GDBT/PDBT (todos pasan por esta misma funcion).
+      campoEditableConId('p', null, 'Esta tarifa (GDMTH) factura la Energía en 3 franjas horarias con su propio precio cada una, impresas tal ' +
+        'cual en el recibo como "Generación Base/Intermedia/Punta" — no es un solo precio por kWh:', 's3-gdmth-intro'),
       // textCols: col4 ("Ahorro máximo") solo se agrega cuando coberturaCompleta --
       // filaAhorroConcepto() (linea ~79) regresa un MONTO normalmente ("$X (100%)"),
       // pero cuando la cobertura ya es 100% regresa una ORACION explicativa completa
@@ -1310,14 +1330,14 @@ function calculoReciboConDemanda(r) {
         ['Punta', M(r.cargos.energia_punta || 0), `No — ${razonNoReducible('energia_punta')}`,
           ...filaAhorroConcepto(false, r.cargos.energia_punta || 0, r)],
       ], { small: true, textCols: coberturaRealizadaPct(r) >= 1 ? [2, 4] : [2], id: 'g03-calc-franjas' })),
-      avisoCream('Importante y específico de GDMTH: "Energía Punta" se agrupa en el Paso 1 (cargo fijo) de la tabla ' +
+      campoEditableConId('div', 'aviso-cream', 'Importante y específico de GDMTH: "Energía Punta" se agrupa en el Paso 1 (cargo fijo) de la tabla ' +
         'de abajo, pero NO es porque sea un cargo fijo como Suministro/Distribución/Capacidad — sí depende de ' +
         'cuánto consume. La razón real es de horario: los paneles solares generan con luz de sol, y la franja ' +
         '"Punta" de CFE normalmente cae en la tarde/noche cuando ya no hay generación solar, así que esa parte de ' +
-        'la factura no se puede sustituir con energía propia -- por eso se agrupa con lo que no baja, no por ser fijo.'),
+        'la factura no se puede sustituir con energía propia -- por eso se agrupa con lo que no baja, no por ser fijo.', 's3-gdmth-aviso'),
     ] : []),
     p('Así se arma, paso a paso, el total exacto de este período (los mismos números que ya calculó el sistema, no una reconstrucción aparte):'),
-    graficoToggle('g03-calc-pasos', 'Tabla de pasos del cálculo del recibo', tabla(['Paso', 'Qué incluye', 'Operación', 'Resultado'], pasos, { small: true, textCols: [1, 2], id: 'g03-calc-pasos' })),
+    graficoToggle('g03-calc-pasos', 'Tabla de pasos del cálculo del recibo', tabla(['Paso', 'Qué incluye', 'Operación', 'Resultado'], pasos, { small: true, textCols: [1, 2], id: 'g03-calc-pasos', idsFilas: clavesPasos })),
     avisoCream(`Fórmula base según el Acuerdo de la Comisión Nacional de Energía para tarifas finales de ` +
       `suministro básico (apartados 3.1.2, 5.1, 5.2 y 5.5): "cargo fijo por los días del período" + "tarifa por ` +
       `kWh × energía neta consumida", antes de BT/bonificación/IVA/DAP. El DAP es un cobro municipal aparte, no de ` +
@@ -1359,6 +1379,9 @@ function calculoReciboDomestico(r) {
     ['4', '+ DAP (alumbrado público, lo cobra el municipio, no CFE)', 'Importe fijo de este período', M(fd.dap)],
     ['=', 'TOTAL de este período', '', M(fd.total)],
   ];
+  // clavesPasos: ver nota de arriba en calculoReciboConDemanda -- "1b" (cargo fijo) es
+  // condicional (tieneCargoFijo), asi que las filas de abajo se desfasarian sin esto.
+  const clavesPasos = ['energia', ...(tieneCargoFijo ? ['cargoFijo'] : []), 'subtotal', 'iva', 'dap', 'total'];
   return [
     p(`En resumen: de los ${M(fd.total)} que paga por este período, prácticamente todo (${M(fd.base)}) depende ` +
       `del consumo (kWh) -- a diferencia de GDMTO/GDMTH/GDBT, esta tarifa NO tiene ningún cargo fijo de demanda, ` +
@@ -1370,7 +1393,7 @@ function calculoReciboDomestico(r) {
       : 'Esta tarifa usa un único precio por kWh para todo el consumo del período, sin tramos ni cargo fijo de demanda:'),
     graficoToggle('g03-calc-tramos', 'Tabla de tramos de consumo', tabla(['Tramo', 'Alcance', 'Precio'], filasEsc, { small: true, textCols: [1], id: 'g03-calc-tramos' })),
     p('Así se arma, paso a paso, el total exacto de este período:'),
-    graficoToggle('g03-calc-pasos', 'Tabla de pasos del cálculo del recibo', tabla(['Paso', 'Qué incluye', 'Operación', 'Resultado'], pasos, { small: true, textCols: [1, 2], id: 'g03-calc-pasos' })),
+    graficoToggle('g03-calc-pasos', 'Tabla de pasos del cálculo del recibo', tabla(['Paso', 'Qué incluye', 'Operación', 'Resultado'], pasos, { small: true, textCols: [1, 2], id: 'g03-calc-pasos', idsFilas: clavesPasos })),
     avisoCream(`A diferencia de GDMTO/GDMTH/GDBT, aquí NO hay cargo de demanda contratada: prácticamente todo el ` +
       `consumo que se cubra con energía solar se refleja en el ahorro -- ver sección ${refSeccion(4, r)}.`),
   ];
@@ -1432,7 +1455,11 @@ function s04(r, _leido, onToggle) {
         ...filaAhorroConcepto(true, r.cargos[k] || 0, r)]),
       ...r.meta.noReducibles.map(k => [listaConceptos([k]), 'No baja', razonNoReducible(k),
         ...filaAhorroConcepto(false, r.cargos[k] || 0, r)]),
-    ], { small: true, textCols: coberturaRealizadaPct(r) >= 1 ? [1, 2, 4] : [1, 2], id: 'g04-calc-clasificacion' })),
+      // idsFilas: la propia clave del concepto (ej. 'distribucion','capacidad') en vez
+      // del indice -- que un concepto sea reducible o no, o que existan mas/menos
+      // conceptos, varia por tarifa/recibo de cada cliente, y antes eso corria el
+      // indice de las celdas editadas (ver nota en tabla()).
+    ], { small: true, textCols: coberturaRealizadaPct(r) >= 1 ? [1, 2, 4] : [1, 2], id: 'g04-calc-clasificacion', idsFilas: [...r.meta.reducibles, ...r.meta.noReducibles] })),
     avisoCream('Esta clasificación es la misma para cualquier recibo con la misma tarifa y el mismo patrón en la ' +
       'columna "$/kW" -- no es un supuesto por tarifa, se lee directo del recibo de cada cliente.'),
   ], r));
