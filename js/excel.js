@@ -1,8 +1,8 @@
 // Exportar la cotizacion a Excel (.xlsx) -- pedido explicito del usuario, 2026-11-11:
-// "un boton para descargar la cotizacion no solo en pdf tambien en excel". A
-// diferencia del PDF (que reconstruye el diseño visual), esto exporta las TABLAS de
-// datos crudas -- una hoja por tabla -- para que se puedan revisar o reusar los
-// numeros, no para copiar el diseño.
+// "un boton para descargar la cotizacion no solo en pdf tambien en excel", despues
+// ajustado a "en una sola hoja casi que se imprima como el PDF" -- UNA sola hoja,
+// todas las tablas en el mismo orden que se ven en pantalla/PDF, con el titulo de cada
+// sección y cada tabla como fila separadora, lista para imprimir de corrido.
 //
 // Lee directo el DOM ya renderizado (#contenedorSecciones), igual que
 // generarPdfCompletaDesdeVista() en propuesta.js -- asi respeta automaticamente el
@@ -54,41 +54,42 @@ function limpiarParaExcel(tabla) {
   return clon;
 }
 
-function nombreHojaUnico(base, usados) {
-  // Excel: maximo 31 caracteres, sin \ / ? * [ ] : , y nombre unico por libro.
-  let limpio = base.replace(/[\\/?*[\]:]/g, ' ').trim().slice(0, 28) || 'Tabla';
-  let nombre = limpio;
-  let i = 2;
-  while (usados.has(nombre.toLowerCase())) {
-    nombre = `${limpio} (${i})`.slice(0, 31);
-    i++;
-  }
-  usados.add(nombre.toLowerCase());
-  return nombre;
+function filasDeTabla(clon) {
+  return [...clon.querySelectorAll('tr')]
+    .map((tr) => [...tr.querySelectorAll('th,td')].map((c) => c.textContent.trim()))
+    .filter((fila) => fila.length);
 }
 
 export function generarExcelCotizacion(r) {
   const cont = document.getElementById('contenedorSecciones');
   if (!cont) throw new Error('No hay cotización calculada todavía.');
   const activos = new Set(seccionesActivasEnOrden(r));
-  const wb = XLSX.utils.book_new();
-  const usados = new Set();
-  let hojasAgregadas = 0;
+  const filas = [];
+  let tablasAgregadas = 0;
   cont.querySelectorAll('.seccion').forEach((seccionEl) => {
     const numero = Number((seccionEl.id || '').replace('seccion-', ''));
     if (!activos.has(numero)) return; // seccion apagada -- no se exporta
-    seccionEl.querySelectorAll('.tabla-wrap > table').forEach((tabla) => {
+    const tablasDeEstaSeccion = [...seccionEl.querySelectorAll('.tabla-wrap > table')].filter(tablaVisible);
+    if (!tablasDeEstaSeccion.length) return; // nada que exportar de esta seccion
+    const h2 = seccionEl.querySelector('h2');
+    filas.push([`SECCIÓN ${numero}: ${(h2 ? h2.textContent.trim() : '').toUpperCase()}`]);
+    tablasDeEstaSeccion.forEach((tabla) => {
       const wrap = tabla.closest('.tabla-wrap');
-      if (!tablaVisible(tabla)) return;
-      const clon = limpiarParaExcel(tabla);
-      if (!clon.querySelector('tr')) return; // tabla vacia tras limpiar (nada que exportar)
-      const ws = XLSX.utils.table_to_sheet(clon, { raw: false });
-      const nombre = nombreHojaUnico(`${numero}. ${etiquetaDeTabla(tabla, wrap)}`, usados);
-      XLSX.utils.book_append_sheet(wb, ws, nombre);
-      hojasAgregadas++;
+      const filasTabla = filasDeTabla(limpiarParaExcel(tabla));
+      if (!filasTabla.length) return; // tabla vacia tras limpiar (nada que exportar)
+      filas.push([etiquetaDeTabla(tabla, wrap)]);
+      filasTabla.forEach((f) => filas.push(f));
+      filas.push([]); // separador entre tabla y la siguiente
+      tablasAgregadas++;
     });
+    filas.push([]); // separador entre secciones
   });
-  if (!hojasAgregadas) throw new Error('No se encontró ninguna tabla visible para exportar (revisa que no estén todas apagadas).');
+  if (!tablasAgregadas) throw new Error('No se encontró ninguna tabla visible para exportar (revisa que no estén todas apagadas).');
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  const maxCols = filas.reduce((m, f) => Math.max(m, f.length), 1);
+  ws['!cols'] = Array.from({ length: maxCols }, (_, i) => ({ wch: i === 0 ? 48 : 22 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Cotización');
   return wb;
 }
 
