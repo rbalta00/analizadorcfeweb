@@ -154,7 +154,7 @@ export function generarExcelCotizacion(r) {
   ws.addRow([]);
 
   // DATOS DE CÁLCULO (si están disponibles)
-  if (r.ultimaInversionTotal != null) {
+  if (r.investment != null) {
     const seccionResultados = ws.addRow(['RESULTADOS DEL ANÁLISIS']);
     seccionResultados.font = { bold: true, color: { argb: COLOR_BLANCO }, size: 11 };
     seccionResultados.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_NAVY } };
@@ -163,13 +163,13 @@ export function generarExcelCotizacion(r) {
     ws.mergeCells(seccionResultados.number, 1, seccionResultados.number, maxCols);
 
     // DATOS PRINCIPALES DE LA PROPUESTA
-    const invRow = ws.addRow(['INVERSIÓN TOTAL', `$${r.ultimaInversionTotal.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
+    const invRow = ws.addRow(['INVERSIÓN TOTAL', `$${r.investment.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
     invRow.font = { bold: true, color: { argb: COLOR_NAVY } };
     invRow.height = 28;
     invRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
 
-    if (r.ultimoAhorroAnual) {
-      const ahorroRow = ws.addRow(['AHORRO ANUAL ESTIMADO', `$${r.ultimoAhorroAnual.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
+    if (r.ahorroAnual) {
+      const ahorroRow = ws.addRow(['AHORRO ANUAL ESTIMADO', `$${r.ahorroAnual.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
       ahorroRow.font = { bold: true, color: { argb: COLOR_NAVY } };
       ahorroRow.height = 28;
       ahorroRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
@@ -215,14 +215,14 @@ export function generarExcelCotizacion(r) {
     }
 
     // INFORMACIÓN DEL SISTEMA FOTOVOLTAICO
-    if (r.potenciaPicos != null) {
-      const kwhRow = ws.addRow(['POTENCIA INSTALADA', `${r.potenciaPicos.toFixed(2)} kWp`]);
+    if (r.kwp != null) {
+      const kwhRow = ws.addRow(['POTENCIA INSTALADA', `${r.kwp.toFixed(2)} kWp`]);
       kwhRow.height = 26;
       kwhRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
     }
 
-    if (r.paneles != null) {
-      const panRow = ws.addRow(['CANTIDAD DE PANELES', `${r.paneles}`]);
+    if (r.n != null) {
+      const panRow = ws.addRow(['CANTIDAD DE PANELES', `${r.n}`]);
       panRow.height = 26;
       panRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
     }
