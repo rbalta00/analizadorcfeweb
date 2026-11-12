@@ -1054,16 +1054,25 @@ function renderListaMachotes() {
       `<div class="nota">Cliente: ${escapeHtml(cliente.nombre)} · Tarifa: ${escapeHtml(proyecto.formulario.tarifa)} · ` +
       `${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</div>`;
     div.addEventListener('click', () => {
-      if (!confirm(`¿Aplicar "${proyecto.nombre}" (${cliente.nombre}) como machote sobre esta cotización? Se reemplazan tarifa/cargos/pasos y TODOS los textos/apagados editados (se quedan igual que en el machote) -- el titular/domicilio/historial de este cliente se quedan en blanco, hay que capturarlos de su recibo real.`)) return;
+      if (!confirm(`¿Aplicar "${proyecto.nombre}" (${cliente.nombre}) como machote sobre esta cotización? Se reemplazan los pasos y TODOS los textos/apagados editados (se quedan igual que en el machote, salvo los que traigan pegado un número/monto del cálculo del cliente anterior) -- tarifa, cargos, identidad y consumo de ESTE cliente NO se tocan, se quedan tal cual ya los tengas capturados.`)) return;
+      // Pedido explicito del usuario, 2026-11-12: "revisa por que no jala la direccion
+      // actual, se queda con la del machote" -- aplicarMachoteAProyecto() ya NO toca
+      // proyecto.formulario (ver clientes.js), pero este handler seguia llamando
+      // aplicarFormulario(proyectoActual.formulario) despues -- si el titular/domicilio
+      // ya escritos en pantalla todavia no se habian guardado en memoria (no se habia
+      // dado "Calcular" todavia), esto los pisaba de vuelta con el ultimo formulario
+      // GUARDADO (vacio en un proyecto nuevo, o el de antes de escribir) -- se veian
+      // "regresar" al estado viejo aunque el machote mismo nunca los tocara. Ya no hace
+      // falta volver a aplicar el formulario: como el machote no lo modifica, lo que
+      // esta en pantalla ahora mismo sigue siendo exactamente lo correcto.
       aplicarMachoteAProyecto(proyectoActual, { cliente, proyecto });
       guardarProyecto(clienteActual, proyectoActual);
-      aplicarFormulario(proyectoActual.formulario);
       ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
       $('contenedorSecciones').innerHTML = '';
       $('tabEditorPrecios').hidden = true;
       $('tabFinanciamiento').hidden = true;
       $('estadoCalculo').className = 'nota aviso';
-      $('estadoCalculo').textContent = 'Machote aplicado -- revisa los datos (sobre todo titular/domicilio/período/historial, que quedaron en blanco) y pulsa "Calcular".';
+      $('estadoCalculo').textContent = 'Machote aplicado -- pulsa "Calcular" para ver la cotización con los textos del machote y los datos de este cliente.';
       $('tabPdf').hidden = true;
       renderAvisoPlantillaOrigen();
       renderListaMachotes();
