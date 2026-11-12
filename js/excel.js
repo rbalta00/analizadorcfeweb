@@ -110,6 +110,45 @@ export function generarExcelCotizacion(r) {
   const ws = wb.addWorksheet('Estudio', { pageSetup: { fitToPage: true, fitToWidth: 1, orientation: 'portrait' } });
   ws.getColumn(1).width = 48;
   for (let c = 2; c <= maxCols; c++) ws.getColumn(c).width = 22;
+
+  // ENCABEZADO DEL DOCUMENTO
+  const titulo = ws.addRow(['ANALIZADOR DE SISTEMAS FOTOVOLTAICOS — CFE']);
+  titulo.font = { bold: true, size: 14, color: { argb: COLOR_BLANCO } };
+  titulo.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_NAVY } };
+  ws.mergeCells(titulo.number, 1, titulo.number, maxCols);
+
+  const subtitulo = ws.addRow(['GESTORIA Y PROYECTOS SOELRB · la estudio sale del análisis, no al revés']);
+  subtitulo.font = { italic: true, size: 10 };
+  ws.mergeCells(subtitulo.number, 1, subtitulo.number, maxCols);
+
+  // INFORMACIÓN DEL ESTUDIO
+  ws.addRow([]);
+  const infoTitular = ws.addRow(['TITULAR', r.titular || '—']);
+  infoTitular.font = { bold: true, color: { argb: COLOR_NAVY } };
+
+  const infoInmueble = ws.addRow(['INMUEBLE', r.inmueble || '—']);
+  infoInmueble.font = { bold: true, color: { argb: COLOR_NAVY } };
+
+  if (r.formulario?.tarifa) ws.addRow(['TARIFA', r.formulario.tarifa]);
+  if (r.formulario?.consumoAnualKWh) ws.addRow(['CONSUMO ANUAL', `${r.formulario.consumoAnualKWh} kWh`]);
+  if (r.formulario?.precioKWh) ws.addRow(['PRECIO POR kWh', `$${r.formulario.precioKWh.toFixed(2)}`]);
+
+  ws.addRow([]);
+
+  // DATOS DE CÁLCULO (si están disponibles)
+  if (r.ultimaInversionTotal != null) {
+    const seccionResultados = ws.addRow(['RESULTADOS DEL ANÁLISIS']);
+    seccionResultados.font = { bold: true, color: { argb: COLOR_BLANCO }, size: 11 };
+    seccionResultados.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_NAVY } };
+    ws.mergeCells(seccionResultados.number, 1, seccionResultados.number, maxCols);
+
+    ws.addRow(['INVERSIÓN TOTAL', `$${r.ultimaInversionTotal.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
+    if (r.ultimoAhorroAnual) ws.addRow(['AHORRO ANUAL', `$${r.ultimoAhorroAnual.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
+    if (r.tasaInterna) ws.addRow(['TIR', `${(r.tasaInterna * 100).toFixed(1)}%`]);
+    ws.addRow([]);
+  }
+
+  // TABLAS Y SECCIONES
   filasEstructuradas.forEach(({ tipo, valores }) => {
     const row = ws.addRow(valores);
     if (tipo === 'seccion') {
