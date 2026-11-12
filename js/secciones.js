@@ -170,6 +170,16 @@ let _columnasOcultasActual = {};
 let _filasOcultasActual = {};
 let _onToggleColumnaActual = () => {};
 let _onToggleFilaActual = () => {};
+// BUG REAL encontrado 2026-11-11: una cotizacion "bloqueada" (congelada como definitiva,
+// ver clonarProyectoCongelado en clientes.js) seguia dejando CLIC Y ESCRIBIR en
+// cualquier texto/celda -- guardarProyecto() ya rechazaba el guardado en silencio
+// (console.warn, sin nada visible), asi que el usuario veia su edicion aceptada en
+// pantalla pero se perdia sola en el siguiente render/recarga, sin ningun aviso de por
+// que. El banner "🔒 Esta es la version DEFINITIVA..." ya existia pero era solo
+// informativo -- no impedia editar, solo avisaba. Ahora los campos mismos se vuelven de
+// solo lectura cuando el proyecto esta bloqueado, para que sea imposible escribir algo
+// que de todas formas nunca se iba a guardar.
+let _bloqueadaActual = false;
 
 function siguienteTextoId() {
   return `s${_seccionActual}-t${_contadorTexto++}`;
@@ -211,7 +221,8 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   e.classList.add('texto-editable');
-  e.contentEditable = 'true';
+  e.contentEditable = _bloqueadaActual ? 'false' : 'true';
+  if (_bloqueadaActual) e.title = 'Esta cotización está congelada (ya se entregó como definitiva) -- no se puede editar.';
   e.spellcheck = false;
   e.dataset.textoId = id;
   const tieneProyecto = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
@@ -247,6 +258,11 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   // vuelve el predeterminado/machote para las futuras. Para volver al texto de
   // fábrica, se borra el texto y se guarda -- eso YA revierte ambos lados (ver
   // onGuardarTextoGlobal), no hace falta un botón aparte para eso.
+  if (_bloqueadaActual) {
+    wrap.append(el('span', 'nota-texto-oculto', '🔒 Cotización congelada -- no editable'));
+    if (oculto) wrap.append(el('span', 'nota-texto-oculto', 'Apagado -- no aparece en la cotización final'));
+    return wrap;
+  }
   const btnGuardar = document.createElement('button');
   btnGuardar.type = 'button';
   btnGuardar.className = 'btn-guardar-texto';
@@ -298,7 +314,8 @@ function textoChico(textoDefecto, idOverride) {
   const wrap = el('span', 'texto-chico-editable');
   const span = document.createElement('span');
   span.className = 'texto-editable-chico' + (tieneProyecto ? ' texto-editable-chico-editado' : '');
-  span.contentEditable = 'true';
+  span.contentEditable = _bloqueadaActual ? 'false' : 'true';
+  if (_bloqueadaActual) span.title = 'Esta cotización está congelada -- no se puede editar.';
   span.spellcheck = false;
   span.dataset.textoId = id;
   span.textContent = tieneProyecto ? _overridesActuales[id] : base;
@@ -309,6 +326,7 @@ function textoChico(textoDefecto, idOverride) {
   });
   span.addEventListener('focusout', () => _onEditarTextoActual(id, span.textContent, base));
   wrap.append(span);
+  if (_bloqueadaActual) return wrap;
   // Un solo botón "💾 Guardar" (ver nota en campoEditableConId) -- el apagado de este
   // texto chico vive a nivel de grupo completo (tarjeta/gráfica, checkbox "Mostrar:
   // ..." de graficoToggle), no aquí individualmente, por espacio.
@@ -363,11 +381,13 @@ function celdaEditable(id, textoDefecto) {
   const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : (tieneGlobal ? _globalesActuales[id] : textoDefecto);
   const span = document.createElement('span');
   span.className = 'celda-editable' + (tieneProyecto ? ' celda-editada' : (tienePlantillaTarifa || tieneGlobal) ? ' celda-con-global' : '');
-  span.contentEditable = 'true';
+  span.contentEditable = _bloqueadaActual ? 'false' : 'true';
   span.spellcheck = false;
   span.dataset.textoId = id;
   span.textContent = tieneProyecto ? _overridesActuales[id] : base;
-  span.title = tieneProyecto
+  span.title = _bloqueadaActual
+    ? 'Esta cotización está congelada -- no se puede editar.'
+    : tieneProyecto
     ? 'Editado para este cliente -- borra el texto y vuelve a escribir el original para restaurar el de fábrica.'
     : 'Clic para editar esta etiqueta/descripción (los montos y porcentajes calculados no son editables aquí).';
   span.addEventListener('paste', (ev) => {
@@ -378,6 +398,7 @@ function celdaEditable(id, textoDefecto) {
   span.addEventListener('focusout', () => _onEditarTextoActual(id, span.textContent, base));
   const frag = document.createDocumentFragment();
   frag.append(span);
+  if (_bloqueadaActual) return frag;
   // Un solo botón "💾 Guardar" (ver nota en campoEditableConId, 2026-11-09) -- guarda
   // para esta cotización Y lo deja como machote para las futuras, en un clic. El
   // apagado de la celda vive en botonOcultarColFila (columna/fila completa, más abajo
@@ -867,8 +888,12 @@ function s02(r, leido, onToggle) {
   art.append(p(`Titular: ${r.titular}. Domicilio: ${(r.domicilio || 'por confirmar').replace(/\.$/, '')}.`));
   art.append(p(`Tarifa ${r.tarifa}: ${EXPLICACION_TARIFA[r.tarifa] || 'tarifa de CFE; consultar al emisor el detalle de su clasificación.'}`));
   if (r.tituloRecibo && r.tituloRecibo.trim().toUpperCase() !== r.titular.trim().toUpperCase()) {
-    art.append(avisoRojo(`El nombre impreso en el recibo de CFE es "${r.tituloRecibo}", distinto al nombre con el ` +
-      `que se identifica este inmueble ("${r.titular}"). Verificar que ambos correspondan al mismo servicio antes de continuar.`));
+    // Id FIJO (mismo motivo que s5-historial-intro, ver commit mas reciente): este
+    // aviso solo aparece cuando el nombre del recibo no coincide con el titular -- si
+    // eso difiere entre dos clientes, los parrafos de esta seccion que vienen despues
+    // (avisoCream, bloqueMapa, etc.) se desfasarian de id.
+    art.append(campoEditableConId('div', 'nota aviso', `El nombre impreso en el recibo de CFE es "${r.tituloRecibo}", distinto al nombre con el ` +
+      `que se identifica este inmueble ("${r.titular}"). Verificar que ambos correspondan al mismo servicio antes de continuar.`, 's2-aviso-nombre'));
   }
   const filasRecibo = [['Período', `${r.periodoDias || '?'} días`], ['Consumo del período', r.periodoKwh ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh` : 'por confirmar']];
   if (r.demandaContratadaKw) filasRecibo.push(['Demanda contratada', `${r.demandaContratadaKw.toFixed(0)} kW`]);
@@ -1420,8 +1445,19 @@ function s05(r, _leido, onToggle) {
   const historial = r.historial;
   if (historial && historial.length >= 3) {
     art.append(badgeEstado('comprobado'));
-    art.append(p(`El propio recibo trae impreso un historial de ${historial.length} períodos ya facturados — es ` +
-      'la base más confiable para calcular el consumo anual, mejor que suponer que todos los meses son iguales al último período.'));
+    // BUG REAL encontrado y corregido 2026-11-11, mismo patron que s01 (ver commit
+    // 9ecd60a): este parrafo SOLO se crea cuando ya hay >=3 periodos de historial -- un
+    // cliente nuevo normalmente arranca SIN historial todavia, mientras que una
+    // cotizacion ya definitiva/validada casi siempre si lo tiene. Usaba p() (id
+    // secuencial), asi que TODOS los parrafos de esta seccion que vienen despues
+    // (incluyendo los del bloqueCalculo de abajo) se recorrian un id segun si el
+    // cliente tenia o no historial -- exactamente la clase de bug que el usuario
+    // reporto ("en la definitiva me abre con el texto que puse, en una cotizacion nueva
+    // me pone el texto general"): un cliente nuevo tipicamente NO tiene historial
+    // todavia, asi que cualquier edicion guardada con historial presente apuntaba a un
+    // parrafo distinto al abrir sin historial. Id FIJO para que esto ya no se repita.
+    art.append(campoEditableConId('p', null, `El propio recibo trae impreso un historial de ${historial.length} períodos ya facturados — es ` +
+      'la base más confiable para calcular el consumo anual, mejor que suponer que todos los meses son iguales al último período.', 's5-historial-intro'));
     const meses = historial.map(x => `${x.mes}${x.anio}`);
     // Bug real reportado por el usuario, 2026-11-01: esta grafica usaba el kWh CRUDO de
     // cada periodo (tal como viene impreso) para la barra Y TAMBIEN para la linea de
@@ -1558,8 +1594,14 @@ function s06(r, _leido, onToggle) {
     art.append(avisoCream('Sin datos capturados todavía del sitio. Completar en "Datos y recibo → Condiciones ' +
       'del inmueble" cuando se tenga la visita o la información del cliente.'));
   } else {
-    art.append(p('Resumen de la situación actual, según lo capturado (ver estados: declarado = lo dijo el ' +
-      'cliente; pendiente = falta confirmarlo).'));
+    // Ids FIJOS (este y el de abajo, 'recuadro-implica') -- mismo motivo que
+    // s5-historial-intro/s2-aviso-nombre: este bloque entero (y por tanto estos 2
+    // parrafos) solo existe cuando ya hay datos del inmueble capturados -- un cliente
+    // nuevo normalmente NO los tiene todavia, a diferencia de una cotizacion ya
+    // definitiva. Sin id fijo, los parrafos que vienen despues en esta seccion se
+    // desfasarian segun si hayDatos es true o false.
+    art.append(campoEditableConId('p', null, 'Resumen de la situación actual, según lo capturado (ver estados: declarado = lo dijo el ' +
+      'cliente; pendiente = falta confirmarlo).', 's6-inmueble-resumen'));
     const filaCondicion = (etiqueta, valor) => [etiqueta, valor || '— pendiente —'];
     art.append(graficoToggle('g06-inmueble', 'Tabla de condiciones actuales del inmueble', tabla(['Condición', 'Dato'], [
       filaCondicion('Actividad del inmueble', inm.actividad),
@@ -1582,10 +1624,10 @@ function s06(r, _leido, onToggle) {
     // proyecto -- el pegado ya se sanitiza a texto plano a proposito), asi que se
     // pierde el <strong> del prefijo al volverse editable; se prefiere eso a dejarlo
     // sin poder editar.
-    art.append(textoEditable('div', 'recuadro-implica',
+    art.append(campoEditableConId('div', 'recuadro-implica',
       'Qué implica para la propuesta: estos datos son los que la persona declaró o se observaron ' +
       'en sitio; no reemplazan un levantamiento técnico. No se deduce tensión o fases solo por el número de hilos ' +
-      'del recibo, y ninguna fotografía o inspección visual aquí descrita es un dictamen estructural.'));
+      'del recibo, y ninguna fotografía o inspección visual aquí descrita es un dictamen estructural.', 's6-inmueble-implica'));
   }
   const fotosInm = r.fotosInmueble || [];
   if (fotosInm.length) {
@@ -1897,13 +1939,17 @@ function s13(r, _leido, onToggle) {
       ['VAN neto con ISR', r.vanNetoIsr != null ? M(r.vanNetoIsr) : 'no calculable'],
       ['TIR neta con ISR', r.tirNetoIsr != null ? PCT(r.tirNetoIsr) : 'no calculable'],
     ], { small: true, id: 'g13-isr' })));
-    art.append(avisoCream('Deducción del 100% del costo (antes de IVA) en el ejercicio de la compra, de equipo ' +
+    // Id FIJO -- mismo motivo que los anteriores: este bloque solo existe para
+    // clientes particulares/comerciales (r.aplicaIsr, "no aplica a gobierno"), asi que
+    // el bloqueCalculo(13,...) que viene justo despues se desfasaria entre un cliente
+    // de gobierno y uno particular sin esto.
+    art.append(campoEditableConId('div', 'aviso-cream', 'Deducción del 100% del costo (antes de IVA) en el ejercicio de la compra, de equipo ' +
       'renovable (Art. 34 fracción XIII LISR) -- este cálculo trata ese beneficio como si se recibiera junto ' +
       'con la inversión; en la práctica se recibe de forma escalonada durante el ejercicio fiscal (pagos ' +
       'provisionales o declaración anual), no el día de la compra, y requiere que el equipo permanezca en ' +
       'operación al menos 5 años (Art. 35 LISR). Es una estimación general, no asesoría fiscal -- confirmar ' +
       'con el contador o fiscalista del cliente antes de prometerlo en una oferta firme. No aplica a ' +
-      'gobierno/instituciones públicas.'));
+      'gobierno/instituciones públicas.', 's13-isr-aviso'));
   }
   art.append(bloqueCalculo(13, [
     p('Fórmulas con los números reales de este estudio:'),
@@ -1936,7 +1982,10 @@ function s14(r, _leido, onToggle) {
     const filasFlujo = flujo25.filter(x => x.anio > 0).map(x => [
       x.reposicionMxn ? `${x.anio} *` : x.anio, M(x.ahorroMxn), M(x.flujoMxn), M(x.acumuladoMxn)]);
     art.append(detalle('Ver tabla completa', tabla(['Año', 'Ahorro factura', 'Flujo neto', 'Acumulado'], filasFlujo, { small: true, id: 'g14-detalle-flujo' })));
-    if (reposicionAnio) art.append(p('* Año con reposición de inversor incluida en el Flujo neto.'));
+    // Id FIJO -- mismo motivo que los anteriores: solo aparece si el inversor se repone
+    // dentro del horizonte de 25 años (depende del tamaño del sistema de cada cliente),
+    // asi que sin esto el avisoCream de abajo se desfasaria entre clientes.
+    if (reposicionAnio) art.append(campoEditableConId('p', null, '* Año con reposición de inversor incluida en el Flujo neto.', 's14-nota-reposicion'));
   } else {
     art.append(p('Flujo a 25 años no disponible para este cálculo.'));
   }
