@@ -1383,6 +1383,7 @@ function leerInmueble() {
     sombras: $('inmSombras').value, sistemasExistentes: $('inmSistemasExistentes').value,
     fechaVisita: $('inmFechaVisita').value, notas: $('inmNotas').value,
     panelesVerificacion: $('inmPanelesVerificacion').value ? Number($('inmPanelesVerificacion').value) : null,
+    nombreVerificacion: $('inmNombreVerificacion').value.trim() || null,
   };
 }
 
@@ -1403,6 +1404,7 @@ function aplicarInmueble(inm) {
   $('inmFechaVisita').value = inm?.fechaVisita || '';
   $('inmNotas').value = inm?.notas || '';
   $('inmPanelesVerificacion').value = inm?.panelesVerificacion ?? '';
+  $('inmNombreVerificacion').value = inm?.nombreVerificacion || '';
 }
 
 // ---------------- Archivos originales del recibo (PDF/fotos tal cual se subieron) ----------------

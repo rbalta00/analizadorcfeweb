@@ -109,6 +109,22 @@ div.campo-no-detectado {
   font-size: 0.85em; cursor: help; opacity: 0.85;
 }
 
+/* Campo de puro REFERENCIA tomado de la verificacion en sitio (ej. nombre al que hace
+   referencia ese documento) -- pedido explicito del usuario, 2026-11-12: "resaltado a
+   un lado como referencia de verificacion en sitio", a diferencia de
+   .campo-usado-calculo (que SI alimenta un calculo), este nunca entra a ningun
+   calculo, solo se guarda para comparar a simple vista contra el titular/nombre real. */
+.campo-ref-verificacion {
+  background: #e4f0f2; border: 1px solid #7fa8ae; border-radius: 8px; padding: 8px;
+}
+.campo-ref-verificacion::before {
+  content: '\1F4CC '; /* 📌 */
+  font-size: 0.9em;
+}
+@media (prefers-color-scheme: dark) {
+  .campo-ref-verificacion { background: #16302f; border-color: #3f6b70; }
+}
+
 .input-precio-material { width: 110px; padding: 4px 6px; }
 
 .lista-archivos-recibo { margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }
