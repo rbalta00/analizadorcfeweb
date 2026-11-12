@@ -105,11 +105,11 @@ function construirFilasEstructuradas(r) {
 
 export function generarExcelCotizacion(r) {
   const filasEstructuradas = construirFilasEstructuradas(r);
-  const maxCols = filasEstructuradas.reduce((m, f) => Math.max(m, f.valores.length), 1);
+  const maxCols = Math.max(filasEstructuradas.reduce((m, f) => Math.max(m, f.valores.length), 1), 7);
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Estudio', { pageSetup: { fitToPage: true, fitToWidth: 1, orientation: 'portrait' } });
-  ws.getColumn(1).width = 55;
-  for (let c = 2; c <= maxCols; c++) ws.getColumn(c).width = 45;
+  const ws = wb.addWorksheet('Estudio', { pageSetup: { fitToPage: true, fitToWidth: 1, orientation: 'landscape' } });
+  ws.getColumn(1).width = 65;
+  for (let c = 2; c <= maxCols; c++) ws.getColumn(c).width = 60;
 
   // ENCABEZADO DEL DOCUMENTO
   const titulo = ws.addRow(['ANALIZADOR DE SISTEMAS FOTOVOLTAICOS — CFE']);
