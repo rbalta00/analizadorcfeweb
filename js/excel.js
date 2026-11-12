@@ -77,7 +77,7 @@ function filasDeTabla(clon) {
 // primera fila de cada tabla (nombres de columna), 'dato' el resto, 'vacio' separador.
 function construirFilasEstructuradas(r) {
   const cont = document.getElementById('contenedorSecciones');
-  if (!cont) throw new Error('No hay cotización calculada todavía.');
+  if (!cont) throw new Error('No hay estudio calculada todavía.');
   const activos = new Set(seccionesActivasEnOrden(r));
   const filas = [];
   let tablasAgregadas = 0;
@@ -107,7 +107,7 @@ export function generarExcelCotizacion(r) {
   const filasEstructuradas = construirFilasEstructuradas(r);
   const maxCols = filasEstructuradas.reduce((m, f) => Math.max(m, f.valores.length), 1);
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Cotización', { pageSetup: { fitToPage: true, fitToWidth: 1, orientation: 'portrait' } });
+  const ws = wb.addWorksheet('Estudio', { pageSetup: { fitToPage: true, fitToWidth: 1, orientation: 'portrait' } });
   ws.getColumn(1).width = 48;
   for (let c = 2; c <= maxCols; c++) ws.getColumn(c).width = 22;
   filasEstructuradas.forEach(({ tipo, valores }) => {

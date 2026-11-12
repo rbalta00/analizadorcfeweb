@@ -1,4 +1,4 @@
-// Clientes del cotizador, guardados en localStorage del navegador (ver ESTADO.md: la
+// Clientes del analizador, guardados en localStorage del navegador (ver ESTADO.md: la
 // decision de usar Supabase para compartir entre dispositivos sigue pendiente -- esto
 // es el minimo viable para poder agrupar por cliente mientras tanto). Cada cliente
 // puede ser 'gobierno' o 'particular' -- no todos los servicios son del lote de
@@ -42,7 +42,7 @@ function migrarClienteSiHaceFalta(c) {
   const ahora = c.actualizadoEn || new Date().toISOString();
   const proyecto = {
     id: uuid(),
-    nombre: (c.formulario && c.formulario.titular) || 'Cotización 1',
+    nombre: (c.formulario && c.formulario.titular) || 'Estudio 1',
     creadoEn: c.creadoEn || ahora,
     actualizadoEn: ahora,
     formulario: c.formulario || null,
@@ -186,7 +186,7 @@ export function crearProyecto(cliente, { nombre } = {}) {
   const ahora = new Date().toISOString();
   const proyecto = {
     id: uuid(),
-    nombre: nombre || `Cotización ${(cliente.proyectos || []).length + 1}`,
+    nombre: nombre || `Estudio ${(cliente.proyectos || []).length + 1}`,
     creadoEn: ahora,
     actualizadoEn: ahora,
     formulario: null,
@@ -210,7 +210,7 @@ export function crearProyecto(cliente, { nombre } = {}) {
     // automatico (ver abajo) -- siempre gana la ultima que se guarde, no hay bandera de cual fuente esta "prendida".
     sembradoFuente: 'manual', // 'manual' | 'auto' -- solo recuerda que pestaña dejar abierta al reabrir, cosmetico
     // sembradorAuto: estado editable del sembrador automatico (pedido explicito del usuario, 2026-11-02 -- "sembrador
-    // de paneles", portado de js/sembrador.js a partir del repo cotizador-fv-cfe/sembrador_de_paneles). Independiente
+    // de paneles", portado de js/sembrador.js a partir del repo analizador-fv-cfe/sembrador_de_paneles). Independiente
     // de fotoSembrado para poder seguir ajustando el diseño sin perderlo aunque la foto manual sea la activa ahorita.
     sembradorAuto: null, // { imagenDataUrl, anchoImg, altoImg, cotaP1, cotaP2, cotaMetros, techoP1, techoP2, techoP3, angulo, paneles }
     // La captura se consigue abriendo Google Maps gratis (boton "Abrir en Google Maps") y subiendo una captura de
@@ -363,7 +363,7 @@ export function eliminarPaso(proyecto, idPaso) {
 export function guardarProyecto(cliente, proyecto) {
   const existente = (cliente.proyectos || []).find(p => p.id === proyecto.id);
   if (existente && existente.bloqueada) {
-    console.warn(`Cotización "${proyecto.nombre}" está bloqueada (ya se entregó como definitiva) -- se ignora este intento de modificarla.`);
+    console.warn(`Estudio "${proyecto.nombre}" está bloqueada (ya se entregó como definitiva) -- se ignora este intento de modificarla.`);
     return cliente;
   }
   proyecto.actualizadoEn = new Date().toISOString();
@@ -522,7 +522,7 @@ export function aplicarMachoteAProyecto(proyecto, origen) {
 // usuario edita a mano un parrafo de ESTE cliente y pega sin querer un numero que ya no
 // es el actual (ej. copio y pego de otro documento). Esto NO detecta todos los casos
 // (es imposible saberlo con certeza desde el texto solo) -- es un recordatorio
-// dirigido para revisar esos textos en particular en vez de los 25+ de la cotización.
+// dirigido para revisar esos textos en particular en vez de los 25+ de la estudio.
 const PATRON_POSIBLE_NUMERO_CALCULADO = /\$\s?[\d,]+(\.\d+)?|\d+(\.\d+)?\s?%|\d+(\.\d+)?\s?(kwh|kwp|kw)\b|\d+(\.\d+)?\s*años|\d+\s*paneles/i;
 export function detectarTextosConNumerosSospechosos(textosEditados) {
   if (!textosEditados) return [];

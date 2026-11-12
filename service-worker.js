@@ -1,9 +1,9 @@
-// Service worker del Cotizador FV CFE. Mismo patron (red primero, cache de respaldo)
-// que cotizador-soelrb/service-worker.js, ya probado y funcionando como PWA instalada
+// Service worker del Analizador FV CFE. Mismo patron (red primero, cache de respaldo)
+// que analizador-soelrb/service-worker.js, ya probado y funcionando como PWA instalada
 // en esta maquina -- ver web/ESTADO.md. Los datos (historial de cotizaciones) nunca
 // pasan por aqui, viven en localStorage del navegador, no en este cache.
 
-const CACHE_NOMBRE = "cfe-cotizador-v72";
+const CACHE_NOMBRE = "cfe-analizador-v72";
 
 const ARCHIVOS_APP_SHELL = [
   "./",

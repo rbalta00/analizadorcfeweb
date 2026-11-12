@@ -1,9 +1,9 @@
 // Sembrador automatico de paneles: dado un rectangulo del techo (2 esquinas marcadas a
 // mano sobre una foto satelital/aerea que el usuario sube) y la escala real (2 puntos +
 // distancia conocida, tambien marcados a mano), coloca en rejilla los N paneles que ya
-// calculo el cotizador (r.n -- no se recalcula aqui, para no tener dos criterios de
+// calculo el analizador (r.n -- no se recalcula aqui, para no tener dos criterios de
 // dimensionamiento distintos corriendo a la vez). Port directo de
-// sembrar_paneles.py/planear_techo.py y editor_paneles.html (repo cotizador-fv-cfe,
+// sembrar_paneles.py/planear_techo.py y editor_paneles.html (repo analizador-fv-cfe,
 // carpeta sembrador_de_paneles/, 2026-11-02) a JS puro, sin librerias de geometria --
 // version rectangular (no poligonal), pensada para ajustarse a mano despues con el mismo
 // editor de arrastrar/girar que ya se probo ahi.
@@ -136,7 +136,7 @@ export function panelesEnTecho({ p1, p2, p3, n, panelWpx, panelHpx, gapPx = 0, a
 // ---------------------------------------------------------------------------
 // Editor interactivo: mover (arrastrar panel), girar (arrastrar el circulo blanco),
 // seleccion multiple (shift+clic), teclado (flechas/[ ]/Supr). Mismo comportamiento que
-// editor_paneles.html del repo cotizador-fv-cfe -- probado en vivo ahi antes de portarlo
+// editor_paneles.html del repo analizador-fv-cfe -- probado en vivo ahi antes de portarlo
 // (mover y girar funcionan igual). Aqui se adapta a un <svg> ya existente en la pagina
 // (en vez de una pagina standalone), con getters/setters para sincronizar con el estado
 // del proyecto en app.js.

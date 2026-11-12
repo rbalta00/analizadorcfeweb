@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Analizador FV CFE",
   "short_name": "Analizador FV",
-  "description": "Analizador y diseñador de sistemas fotovoltaicos (industrial, comercial, residencial) para las tarifas de CFE -- la cotización sale del análisis. Gestoria y Proyectos SOELRB.",
+  "description": "Analizador y diseñador de sistemas fotovoltaicos (industrial, comercial, residencial) para las tarifas de CFE -- la estudio sale del análisis. Gestoria y Proyectos SOELRB.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

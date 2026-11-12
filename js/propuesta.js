@@ -113,8 +113,8 @@ function pagina01(doc, r, numero) {
     `Se conserva el gasto observado de ${listaConceptos(r.meta.noReducibles)} sin anticipar ahorro adicional. ` +
     'Los precios deberán actualizarse antes de contratar.');
   y = spacer(y, 4);
-  notice(doc, y, `Esta cotización es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días desde el estudio). ` +
-    'Los precios de materiales son una provisión de mercado, no una cotización fija de proveedor.');
+  notice(doc, y, `Esta estudio es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días desde el estudio). ` +
+    'Los precios de materiales son una provisión de mercado, no una estudio fija de proveedor.');
 }
 
 // ---------- Pagina 2: recibo ----------
@@ -352,7 +352,7 @@ function paginaDocumentoAdjunto(doc, r, numero, titulo, imagenes, seccionEl) {
   const resultado = textoVisibleDe(seccionEl, '.texto-editable:not(.titulo-seccion-grande):not(.seccion-pregunta)');
   if (resultado !== 'oculto') {
     const texto = resultado === 'no-encontrado'
-      ? 'Documento adjunto a esta cotización, tal como se subió -- no se extrajo ningún dato nuevo ' +
+      ? 'Documento adjunto a esta estudio, tal como se subió -- no se extrajo ningún dato nuevo ' +
         'de él aquí (ver la sección de "Su recibo: datos comprobados" para la trazabilidad de cada dato).'
       : resultado;
     y = bodyX(doc, y, texto);
@@ -582,7 +582,7 @@ function pagina12(doc, r, numero) {
   }
   y = bodyX(doc, y, `Subtotal: ${M(r.ventaSinIva)} · IVA: ${M(r.iva)} · Inversión con IVA: ${M(r.investment)}.`);
   notice(doc, y, 'Las capacidades, longitudes y accesorios son provisiones. El modelo de inversor, calibres y ' +
-    'cantidades finales se ajustarán mediante ingeniería y cotización vigente antes de contratar.');
+    'cantidades finales se ajustarán mediante ingeniería y estudio vigente antes de contratar.');
 }
 
 // ---------- Pagina 13: recuperacion ----------
@@ -687,7 +687,7 @@ function pagina16(doc, r, numero) {
 // ---------- Pagina 17: que falta ----------
 function pagina17(doc, r, numero) {
   let y = encabezado(doc, numero, 'Qué hace falta para cerrar el ahorro', r.titular);
-  y = bodyX(doc, y, 'Esta cotización se calculó únicamente con la información del recibo de CFE que se ' +
+  y = bodyX(doc, y, 'Esta estudio se calculó únicamente con la información del recibo de CFE que se ' +
     'cargó o capturó — sin importar si ese recibo venía completo o no, esto SIEMPRE hace falta confirmar ' +
     'antes de poder ofrecer un presupuesto real y firme de este servicio:');
   if (graficoIncluido(r, 'g21-pendientes')) {

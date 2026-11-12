@@ -13,7 +13,7 @@
 <body>
   <header class="topbar">
     <h1>Analizador de sistemas fotovoltaicos — CFE</h1>
-    <p class="subtitulo">GESTORIA Y PROYECTOS SOELRB · la cotización sale del análisis, no al revés</p>
+    <p class="subtitulo">GESTORIA Y PROYECTOS SOELRB · la estudio sale del análisis, no al revés</p>
     <div class="topbar-acciones">
       <button id="btnRefrescar" class="btn-refrescar" title="Actualiza la app a la última versión y vuelve a leer tus clientes, proyectos y cotizaciones guardados">⟳ Actualizar</button>
       <button id="btnInstalar" class="btn-instalar" hidden>Instalar en esta PC</button>
@@ -25,7 +25,7 @@
   <main id="pantallaClientes">
     <section class="tarjeta">
       <h2>Clientes</h2>
-      <p class="nota">Cada cotización se guarda por cliente, en este navegador. No todos son del lote de
+      <p class="nota">Cada estudio se guarda por cliente, en este navegador. No todos son del lote de
         gobierno: agrupa cada quien como gobierno o particular.</p>
       <!-- Pedido explicito del usuario, 2026-11-11: "no tengo que elegir entre
            particular y gobierno... puede ser gobierno u otro termino no
@@ -119,7 +119,7 @@
     <section class="tarjeta">
       <p class="nota">Cuando alguien llena <a href="cliente.html" target="_blank" id="linkPaginaCliente">la página
         pública</a> con los datos de su recibo, aparece aquí. Asígnalo a un cliente (nuevo o ya registrado) para
-        convertirlo en una cotización, o descártalo si no aplica.</p>
+        convertirlo en una estudio, o descártalo si no aplica.</p>
       <div class="acciones"><button id="btnRefrescarEnvios" class="btn-secundario">↻ Refrescar envíos</button></div>
     </section>
     <section class="tarjeta">
@@ -140,7 +140,7 @@
     <section class="tarjeta">
       <div id="dashboardTotales" class="tarjetas-metricas"></div>
       <p class="nota">"Total cotizado"/"Ahorro anual proyectado" suman la ÚLTIMA inversión/ahorro que se calculó en
-        cada cotización -- si una cotización nunca se calculó, no cuenta todavía.</p>
+        cada estudio -- si una estudio nunca se calculó, no cuenta todavía.</p>
     </section>
     <section class="tarjeta">
       <h3>Cotizaciones por etapa</h3>
@@ -152,7 +152,7 @@
         <button id="btnExportarDashboardCsv" class="btn-secundario">⬇️ Exportar todo a CSV</button>
         <button id="btnRefrescarDashboard" class="btn-secundario">↻ Refrescar</button>
       </div>
-      <p class="nota">Clic en "Abrir" para entrar directo a esa cotización -- útil para tomar una ya definitiva de
+      <p class="nota">Clic en "Abrir" para entrar directo a esa estudio -- útil para tomar una ya definitiva de
         otro cliente, cambiarle el nombre (se separa sola, sin pisar la original) y guardarla con el cliente que
         corresponda.</p>
       <div id="dashboardTabla"></div>
@@ -168,7 +168,7 @@
     <section class="tarjeta">
       <p class="nota">Elige una tarifa para ver los ejemplos de cotizaciones ya marcadas como ✅ definitiva con esa
         tarifa (de cualquier cliente) -- puede haber una, varias, o ninguna todavía. Clic en "Abrir" para entrar
-        directo a esa cotización, usarla de referencia, y guardarla (con otro nombre y/o otro cliente) sin tocar
+        directo a esa estudio, usarla de referencia, y guardarla (con otro nombre y/o otro cliente) sin tocar
         la original.</p>
       <label>Tarifa
         <select id="selectTarifaDefinitivas">
@@ -198,7 +198,7 @@
     <section class="tarjeta">
       <h2>Cotizaciones de este cliente</h2>
       <p class="nota">Un mismo cliente puede tener varias cotizaciones (distintos tamaños de sistema,
-        actualizaciones, o predios distintos del mismo cliente). Sube un recibo para crear una cotización
+        actualizaciones, o predios distintos del mismo cliente). Sube un recibo para crear una estudio
         nueva con los datos ya detectados, o arranca una en blanco. Si el recibo llega en varias fotos
         (ej. anverso y reverso), selecciónalas todas juntas.</p>
       <input type="file" id="archivoReciboNuevoProyecto" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
@@ -208,15 +208,15 @@
            creamos cotizacion le ponemos el nombre... luego seleccionamos una cotizacion
            de muestra como machote" -- antes "+ Cotizacion en blanco" y "Usar esa
            definitiva como ejemplo" creaban la cotizacion con un nombre generico
-           ("Cotización N") sin preguntar, lo que ayudo a que se acumularan varias con
+           ("Estudio N") sin preguntar, lo que ayudo a que se acumularan varias con
            el mismo nombre sin querer. Ahora el nombre se pide PRIMERO, antes de
            cualquiera de los 2 botones (la subida de recibo se deja igual -- ya se
            auto-nombra con el titular detectado del recibo real). -->
-      <label>Nombre de esta cotización nueva (en blanco o desde una muestra)
+      <label>Nombre de esta estudio nueva (en blanco o desde una muestra)
         <input type="text" id="inputNombreNuevoProyecto" placeholder="Ej. Casa del Abue Sur SEDIF — GDMTO">
       </label>
       <div class="acciones">
-        <button id="btnNuevoProyectoBlanco" class="btn-secundario">+ Cotización en blanco</button>
+        <button id="btnNuevoProyectoBlanco" class="btn-secundario">+ Estudio en blanco</button>
       </div>
       <div class="fila">
         <label>Partir de la definitiva de muestra de una tarifa
@@ -239,7 +239,7 @@
            tarifa (las 📋 muestra primero) para dar clic en la que se quiera usar. -->
       <p class="nota" id="estadoNuevoProyectoDesdeDefinitiva">Elige una tarifa arriba para ver las cotizaciones
         ✅ definitivas que existan de esa tarifa (las 📋 muestra primero) y dar clic en la que quieras usar como
-        ejemplo -- se crea la cotización nueva ya con su tarifa/cargos y TODOS los textos/apagados editados
+        ejemplo -- se crea la estudio nueva ya con su tarifa/cargos y TODOS los textos/apagados editados
         (identidad, período, kWh e historial quedan en blanco, captúralos del recibo real de este cliente).</p>
       <div id="listaMuestrasNuevoProyecto" class="lista-clientes"></div>
     </section>
@@ -257,17 +257,17 @@
       <input type="text" id="clienteNombreBarra" class="input-nombre-cliente" title="Editar nombre del cliente">
       <span class="icono-editar-nombre" aria-hidden="true">✏️</span>
       <span id="clienteTipoBarra" class="chip-tipo"></span>
-      <span class="chip-proyecto">· <input type="text" id="proyectoNombreBarraInput" class="input-nombre-cliente" title="Editar nombre de la cotización"></span>
+      <span class="chip-proyecto">· <input type="text" id="proyectoNombreBarraInput" class="input-nombre-cliente" title="Editar nombre de la estudio"></span>
       <span class="icono-editar-nombre" aria-hidden="true">✏️</span>
       <span id="avisoNombreClienteDup" class="nota aviso" hidden></span>
     </div>
 
     <section class="tarjeta" id="avisoPlantillaOrigen" hidden>
-      <p class="nota aviso">🛑 <strong>Esta cotización se creó a partir de otra ya guardada</strong> (<span id="txtPlantillaOrigen"></span>) --
+      <p class="nota aviso">🛑 <strong>Esta estudio se creó a partir de otra ya guardada</strong> (<span id="txtPlantillaOrigen"></span>) --
         la tarifa, cargos y escalones son de ESE recibo, no del cliente actual. Captura el titular, domicilio, número de
         servicio y período/kWh reales de este cliente (sube su recibo o edítalos a mano) antes de generar cualquier documento.</p>
       <div id="listaTextosSospechososMachote" hidden></div>
-      <button id="btnMarcarPlantillaVerificada" class="btn-secundario">✅ Ya revisé esta cotización para este cliente</button>
+      <button id="btnMarcarPlantillaVerificada" class="btn-secundario">✅ Ya revisé esta estudio para este cliente</button>
     </section>
 
     <!-- Pedido explicito del usuario, 2026-11-11: "realmente son etiquetas, si quiero
@@ -292,7 +292,7 @@
 
     <section class="tarjeta" id="tabSeguimiento">
       <div class="seccion-header">
-        <h2>📋 Seguimiento de esta cotización</h2>
+        <h2>📋 Seguimiento de esta estudio</h2>
         <label class="toggle-seccion"><input type="checkbox" id="chkPanelSeguimiento" checked /> Mostrar este panel</label>
       </div>
       <div class="panel-contenido" id="contenidoSeguimiento">
@@ -329,7 +329,7 @@
     </nav>
 
     <section class="tarjeta" id="barraPasosEntrega">
-      <h3>📑 Paso de entrega de esta cotización</h3>
+      <h3>📑 Paso de entrega de esta estudio</h3>
       <p class="nota">Elige qué tanto vas a mostrar/entregar ahora -- todos los pasos comparten exactamente los
         mismos datos y cálculos, solo cambia qué secciones/gráficas/tablas se ven en pantalla y se incluyen en el
         PDF. <strong>"Análisis completo" nunca se borra</strong> -- siempre representa el estudio íntegro, aunque
@@ -357,13 +357,13 @@
       <p class="nota">Los campos y secciones marcados con <span class="campo-usado-calculo"></span> sí alimentan el
         cálculo del sistema (paneles, inversión, ahorro) -- pasa el cursor sobre la marca para ver exactamente
         para qué se usa ese dato. Los demás (titular, domicilio, condiciones del inmueble, etc.) son solo
-        informativos para la cotización.</p>
+        informativos para la estudio.</p>
 
-      <h3>📋 ¿Partir de una cotización ya validada? (opcional, antes de capturar)</h3>
-      <p class="nota">Copia sobre ESTA cotización la tarifa, cargos, escalones, pasos de entrega y configuración
+      <h3>📋 ¿Partir de una estudio ya validada? (opcional, antes de capturar)</h3>
+      <p class="nota">Copia sobre ESTA estudio la tarifa, cargos, escalones, pasos de entrega y configuración
         de la que elijas abajo -- el titular, domicilio, número de servicio, período/kWh e historial de este
         cliente SIEMPRE quedan en blanco, hay que capturarlos de su recibo real. (El nombre y el cliente de esta
-        cotización se ajustan más abajo, en la pestaña de exportar PDF -- "1. Guarda tus cambios".)</p>
+        estudio se ajustan más abajo, en la pestaña de exportar PDF -- "1. Guarda tus cambios".)</p>
       <div class="fila">
         <label><input type="checkbox" id="chkSoloDefinitivasMachote" checked> Mostrar solo las marcadas como ✅ Definitiva</label>
         <select id="filtroTarifaMachote"></select>
@@ -383,7 +383,7 @@
 
       <h3>1b. Verificación en sitio (opcional)</h3>
       <p class="nota">Si ya tienes el formato de verificación en sitio firmado (el de la Agencia de Energía u otro),
-        súbelo aquí -- aparecerá junto con el recibo en la sección "Su recibo: datos comprobados" de la cotización.
+        súbelo aquí -- aparecerá junto con el recibo en la sección "Su recibo: datos comprobados" de la estudio.
         No se lee ni se extrae ningún dato de este archivo, solo se adjunta como evidencia.</p>
       <input type="file" id="archivoVerificacion" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
       <div id="listaArchivosVerificacion" class="lista-archivos-recibo" hidden></div>
@@ -499,7 +499,7 @@
           <select id="escalaCostos" disabled><option value="residencial">Residencial (chico)</option><option value="comercial">Comercial (grande)</option></select>
         </label>
         <label class="campo-usado-calculo" title="Se usa para calcular el flujo a 25 años: cuánto se supone que sube la tarifa de CFE cada año.">Incremento anual estimado de la tarifa CFE (%)<input id="escalamiento" type="number" value="4.0" step="0.5" /></label>
-        <label>Vigencia de la cotización (días)<input id="vigenciaDias" type="number" value="15" min="1" step="1" /></label>
+        <label>Vigencia de la estudio (días)<input id="vigenciaDias" type="number" value="15" min="1" step="1" /></label>
       </div>
       <div class="fila">
         <label class="campo-usado-calculo" title="Se usa para calcular la deducción fiscal (ISR), si aplica -- solo clientes privados/comerciales."><input type="checkbox" id="aplicaIsr" /> Este cliente puede aplicar la deducción 100% inmediata
@@ -531,7 +531,7 @@
           de tu sistema). 3) Súbela aquí abajo. Marca la escala real (2 clics sobre algo que midas, ej. la barra de
           escala que Maps ya dibuja en la esquina) y el techo (3 clics: 2 a lo largo de un lado del techo tal como se
           ve en la foto, 1 más del lado opuesto) -- el sembrador detecta solo el ángulo real del techo en la foto y
-          coloca alineados los <strong id="sembradorAutoN">--</strong> paneles que ya calculó el cotizador. Después puedes
+          coloca alineados los <strong id="sembradorAutoN">--</strong> paneles que ya calculó el analizador. Después puedes
           arrastrar/girar/borrar cada panel a mano. No evita obstáculos (tinacos, equipos) automáticamente -- si un
           panel cae encima de uno, bórralo o muévelo a mano. No es un plano de ingeniería.</p>
         <div class="fila">
@@ -604,7 +604,7 @@
       </div>
       <h4>Fotos de condiciones del inmueble (sombras, cubierta, tablero, etc.)</h4>
       <p class="nota">Hasta 6 fotos (se comprimen automáticamente al subirlas). Ponle una etiqueta corta a cada
-        una (ej. "Cubierta", "Sombra del árbol", "Tablero principal") para que se identifiquen en la cotización.
+        una (ej. "Cubierta", "Sombra del árbol", "Tablero principal") para que se identifiquen en la estudio.
         Distinto de la foto del sembrado de arriba, que es solo la distribución de paneles.</p>
       <input type="file" id="archivoFotoInmueble" accept=".jpg,.jpeg,.png,.webp" multiple />
       <div id="galeriaFotosInmueble" class="galeria-fotos-inmueble" hidden></div>
@@ -631,7 +631,7 @@
          este trabajando. -->
     <div id="avisoErrorGuardado" class="aviso-flotante-cambios aviso-flotante-error" hidden role="alert">
       ⚠️ <strong>No se pudo guardar</strong> -- probablemente la memoria del navegador para esta app está llena.
-      Los últimos cambios NO se guardaron. Borra fotos/archivos viejos de alguna cotización (Datos y recibo →
+      Los últimos cambios NO se guardaron. Borra fotos/archivos viejos de alguna estudio (Datos y recibo →
       Verificación en sitio/fotos) o usa "Guardar copia en la nube" después de liberar espacio.
       <button type="button" id="btnCerrarAvisoErrorGuardado" class="btn-link-flotante">Entendido ✕</button>
     </div>
@@ -644,7 +644,7 @@
       es la misma para ese párrafo exacto, sin importar qué más esté prendido/apagado o de qué cliente sea
       (no es un conteo que cambie). Dime esa etiqueta si necesitas avisar que algo específico no funciona o
       pedirme que modifique un texto en particular. Cada sección también trae su propio número fijo
-      ("Sección Nºxx") junto al número de posición. "Cotización completa" lee esta misma vista para el
+      ("Sección Nºxx") junto al número de posición. "Estudio completa" lee esta misma vista para el
       <strong>paso de entrega activo</strong> (arriba): tus ediciones y lo que apagues/enciendas ahí sí se
       incluyen en el PDF que se genera.</p>
     <div id="contenedorSecciones"></div>
@@ -655,7 +655,7 @@
         <label class="toggle-seccion"><input type="checkbox" id="chkPanelEditorPrecios" checked /> Mostrar este panel</label>
       </div>
       <div class="panel-contenido" id="contenidoEditorPrecios">
-        <p class="nota">Si ya tienes una cotización real de un proveedor (ej. el inversor), sobreescribe el
+        <p class="nota">Si ya tienes una estudio real de un proveedor (ej. el inversor), sobreescribe el
           "Importe" de ese renglón y pulsa Recalcular. Se vuelve a calcular Subtotal, IVA, inversión total, flujo
           a 25 años y recuperación con los precios nuevos. El ahorro de factura (depende del consumo/tarifa, no
           del costo del sistema) no cambia.</p>
@@ -675,8 +675,8 @@
       </div>
       <div class="panel-contenido" id="contenidoComparacion">
         <p class="nota">Si el cliente duda entre varios tamaños de sistema, calcula cada opción y agrégala aquí para
-          verlas una junto a otra. Se guarda por cliente, no por cotización -- sobrevive aunque cambies de
-          cotización o cierres la app.</p>
+          verlas una junto a otra. Se guarda por cliente, no por estudio -- sobrevive aunque cambies de
+          estudio o cierres la app.</p>
         <div class="acciones"><button id="btnAgregarComparacion" class="btn-secundario">➕ Agregar escenario actual</button>
           <button id="btnLimpiarComparacion" class="btn-link">🗑 Limpiar comparación</button></div>
         <div class="tabla-wrap"><table class="tabla-seccion" id="tablaComparacion" hidden>
@@ -710,21 +710,21 @@
     <section class="tarjeta" id="tabPdf" hidden>
       <h2>1. Guarda tus cambios</h2>
       <p class="nota">Primero guarda -- así tus ediciones de texto/tablas, archivos adjuntos y datos quedan
-        completos antes de generar cualquier documento. "Guardar cotización" y "Marcar como definitiva" también
+        completos antes de generar cualquier documento. "Guardar estudio" y "Marcar como definitiva" también
         suben un respaldo a la nube automáticamente (ver abajo).</p>
       <div class="fila fila-guardar">
-        <label>Nombre de esta cotización
+        <label>Nombre de esta estudio
           <input type="text" id="inputNombreProyecto" placeholder="Ej. Casa del Abue — GDMTO — Opción 40 paneles">
         </label>
         <span id="avisoNombreProyectoDup" class="nota aviso" hidden></span>
-        <label>Guardar esta cotización con el cliente
+        <label>Guardar esta estudio con el cliente
           <select id="selectClienteGuardar"></select>
         </label>
-        <button id="btnGuardarCotizacion" class="btn-secundario">💾 Guardar cotización</button>
-        <button id="btnMarcarDefinitivaCliente" class="btn-primario" title="Congela una copia aparte como lo entregado a ESTE cliente; esta cotización se queda igual, sigue editable.">✅ Definitiva para EL CLIENTE (congela una copia)</button>
-        <button id="btnMarcarDefinitivaMuestra" class="btn-secundario" title="Congela una copia aparte marcada como ejemplo reusable para esta tarifa; esta cotización se queda igual, sigue editable.">📋 Definitiva para MUESTRA (ejemplo por tarifa)</button>
+        <button id="btnGuardarCotizacion" class="btn-secundario">💾 Guardar estudio</button>
+        <button id="btnMarcarDefinitivaCliente" class="btn-primario" title="Congela una copia aparte como lo entregado a ESTE cliente; esta estudio se queda igual, sigue editable.">✅ Definitiva para EL CLIENTE (congela una copia)</button>
+        <button id="btnMarcarDefinitivaMuestra" class="btn-secundario" title="Congela una copia aparte marcada como ejemplo reusable para esta tarifa; esta estudio se queda igual, sigue editable.">📋 Definitiva para MUESTRA (ejemplo por tarifa)</button>
       </div>
-      <p class="nota">"Para el cliente" = la entrega final de esta cotización. "Para muestra" = además queda disponible como ejemplo para empezar cotizaciones nuevas de la misma tarifa (ver "+ Cotización en blanco" al crear/abrir un cliente). Ambas quedan congeladas, nunca se vuelven a modificar.</p>
+      <p class="nota">"Para el cliente" = la entrega final de esta estudio. "Para muestra" = además queda disponible como ejemplo para empezar cotizaciones nuevas de la misma tarifa (ver "+ Estudio en blanco" al crear/abrir un cliente). Ambas quedan congeladas, nunca se vuelven a modificar.</p>
       <div class="fila fila-nuevo-cliente-guardar" id="filaNuevoClienteGuardar" hidden>
         <label>Nombre del cliente nuevo
           <input type="text" id="inputNuevoClienteGuardarNombre" placeholder="Ej. Casa del Abue Sur SEDIF">
@@ -736,7 +736,7 @@
         <button id="btnCancelarClienteGuardar" class="btn-link">Cancelar</button>
       </div>
       <p class="nota" id="estadoGuardadoCotizacion"></p>
-      <p class="nota">"Marcar como definitiva" guarda la cotización igual que "Guardar cotización" y además la
+      <p class="nota">"Marcar como definitiva" guarda la estudio igual que "Guardar estudio" y además la
         marca con ✅ en el historial de este cliente, para distinguirla de versiones de prueba/comparación.</p>
 
       <h2>2. Genera el PDF ya guardado</h2>
@@ -753,25 +753,25 @@
       </div>
       <p class="nota">Para un colaborador en OTRO dispositivo (no tu segunda pantalla): genera un link público
         que se actualiza solo cada pocos segundos mientras sigas editando aquí. Cualquiera con el link puede ver
-        esta cotización -- mismo criterio que el resto de esta app (sin contraseña).</p>
+        esta estudio -- mismo criterio que el resto de esta app (sin contraseña).</p>
       <div id="cajaLinkCompartido" hidden class="fila">
         <input type="text" id="inputLinkCompartido" readonly />
         <button type="button" id="btnCopiarLinkCompartido" class="btn-secundario">📋 Copiar link</button>
         <button type="button" id="btnWhatsappLinkCompartido" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
       </div>
-      <p class="nota">"Cotización completa" lee directo lo que ves en pantalla para el <strong>paso activo</strong>
+      <p class="nota">"Estudio completa" lee directo lo que ves en pantalla para el <strong>paso activo</strong>
         elegido arriba -- incluye tus ediciones de texto/tablas, el "Recibo original", la "Verificación en sitio" y
         el comparativo calculado-vs-verificación (lo que aplique y esté encendido en este paso). Revisa el
         documento antes de enviarlo al cliente.</p>
       <div class="acciones acciones-pdf">
-        <button id="btnGenerarPdf" class="btn-primario">Cotización completa (paso activo)</button>
+        <button id="btnGenerarPdf" class="btn-primario">Estudio completa (paso activo)</button>
         <button id="btnEnviarWhatsapp" class="btn-whatsapp">💬 Enviar por WhatsApp</button>
         <button id="btnGenerarExcel" class="btn-secundario">📊 Descargar en Excel</button>
       </div>
       <p class="nota" id="notaAdjuntoWhatsapp">El botón de WhatsApp intenta adjuntar el PDF directo al compartir
         (funciona en celular/Android con Chrome, y algunos navegadores de escritorio recientes); si tu navegador no
         lo permite, abre el chat solo con el texto y hay que adjuntar el PDF a mano (ya descargado arriba).</p>
-      <p class="nota">"Descargar en Excel" exporta las TABLAS de datos de esta cotización en UNA sola hoja, en el
+      <p class="nota">"Descargar en Excel" exporta las TABLAS de datos de esta estudio en UNA sola hoja, en el
         mismo orden que las ves aquí (lista para imprimir de corrido, como el PDF), con formato real (colores de
         sección/tabla/encabezado y bordes, no solo texto plano) -- respeta columnas/filas apagadas.</p>
       <div class="acciones">

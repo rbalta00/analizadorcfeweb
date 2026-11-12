@@ -95,7 +95,7 @@ export function generarNotas(leido, r, esDomestica) {
       'historial de consumo de los últimos 12 meses (app/portal de CFE) para una base más confiable, sobre ' +
       'todo si el consumo varía mucho entre meses.');
   } else {
-    notas.push(`Esta cotización se basa en una ${r.basisConsumo}: pedir al cliente su historial de los ` +
+    notas.push(`Esta estudio se basa en una ${r.basisConsumo}: pedir al cliente su historial de los ` +
       'últimos 12 meses (lo puede descargar de la app/portal de CFE) para una base más confiable, sobre todo ' +
       'si el consumo varía mucho entre meses (clima, temporada, uso del inmueble).');
   }
@@ -121,7 +121,7 @@ export function generarNotas(leido, r, esDomestica) {
 }
 
 // Checklist FIJO, independiente de que el recibo se haya leído completo o no -- pedido
-// explícito del usuario: esta cotización se arma unicamente con la informacion del
+// explícito del usuario: esta estudio se arma unicamente con la informacion del
 // recibo de CFE, asi que esto SIEMPRE hace falta confirmar antes de que se pueda
 // convertir en un presupuesto real de ese servicio (a diferencia de generarNotas(),
 // que solo avisa de problemas puntuales de ESTE recibo en particular).

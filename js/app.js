@@ -128,7 +128,7 @@ function revisarDuplicadoProyecto(nombre, idExcluir) {
   if (!clienteActual) return false;
   const otro = (clienteActual.proyectos || []).some(p => p.id !== idExcluir && p.nombre.trim().toLowerCase() === nombre.trim().toLowerCase());
   const a = $('avisoNombreProyectoDup');
-  if (a) { a.hidden = !otro; a.textContent = otro ? `⚠️ "${clienteActual.nombre}" ya tiene otra cotización llamada "${nombre}"` : ''; }
+  if (a) { a.hidden = !otro; a.textContent = otro ? `⚠️ "${clienteActual.nombre}" ya tiene otra estudio llamada "${nombre}"` : ''; }
   return otro;
 }
 function poblarDatalistTipos() {
@@ -141,7 +141,7 @@ function tarjetaCliente(c) {
   const div = document.createElement('div');
   div.className = 'tarjeta-cliente';
   const n = (c.proyectos || []).length;
-  const estado = n ? `${n} cotización${n === 1 ? '' : 'es'}` : 'sin cotizaciones todavía';
+  const estado = n ? `${n} estudio${n === 1 ? '' : 'es'}` : 'sin cotizaciones todavía';
   div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(c.nombre)}</strong>` +
     `<span class="nota">${estado} · actualizado ${new Date(c.actualizadoEn).toLocaleDateString('es-MX')}</span></div>`;
   div.addEventListener('click', () => mostrarPantallaProyectos(c.id));
@@ -151,7 +151,7 @@ function tarjetaCliente(c) {
   btnBorrar.title = 'Eliminar cliente (y todas sus cotizaciones)';
   btnBorrar.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (confirm(`¿Eliminar a "${c.nombre}" y sus ${n} cotización(es)? Esto borra todo lo guardado en este navegador, no se puede deshacer.`)) {
+    if (confirm(`¿Eliminar a "${c.nombre}" y sus ${n} estudio(es)? Esto borra todo lo guardado en este navegador, no se puede deshacer.`)) {
       eliminarCliente(c.id);
       renderListaClientes();
     }
@@ -205,9 +205,9 @@ $('btnGuiaPresentacionGeneral').addEventListener('click', () => {
 // Isaac elija el contacto desde su propio WhatsApp en vez de mandarlo siempre al mismo
 // numero (a diferencia del boton de WhatsApp de una cotizacion ya calculada, que si
 // tiene un numero fijo -- ver mas abajo).
-const URL_FORMULARIO_PUBLICO = 'https://cotizador-fv-cfe-web.vercel.app/cliente.html';
+const URL_FORMULARIO_PUBLICO = 'https://analizador-fv-cfe-web.vercel.app/cliente.html';
 $('btnEnviarFormularioWhatsapp').addEventListener('click', () => {
-  const mensaje = 'Hola 👋 Para preparar tu cotización de paneles solares, carga los datos de tu recibo ' +
+  const mensaje = 'Hola 👋 Para preparar tu estudio de paneles solares, carga los datos de tu recibo ' +
     `de CFE aquí (elige tu tarifa y sube una foto o el PDF de tu recibo, o llénalo a mano):\n${URL_FORMULARIO_PUBLICO}`;
   window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
 });
@@ -292,7 +292,7 @@ async function cargarSelectClientesNube() {
       const opt = document.createElement('option');
       opt.value = c.id;
       opt.dataset.nombre = c.nombre;
-      opt.textContent = `${c.nombre} (${(c.proyectos || []).length} cotización(es))`;
+      opt.textContent = `${c.nombre} (${(c.proyectos || []).length} estudio(es))`;
       sel.append(opt);
     });
   } catch (err) {
@@ -374,7 +374,7 @@ $('btnListarArchivosNube').addEventListener('click', async () => {
       btnBorrar.className = 'btn-peligro';
       btnBorrar.textContent = '🗑️ Eliminar';
       btnBorrar.addEventListener('click', async () => {
-        if (!confirm(`¿Eliminar "${archivo.name}" de la nube? No se puede deshacer. Si alguna cotización ` +
+        if (!confirm(`¿Eliminar "${archivo.name}" de la nube? No se puede deshacer. Si alguna estudio ` +
                      'guardada todavía lo referencia, ese enlace dejará de funcionar.')) return;
         btnBorrar.disabled = true;
         try {
@@ -497,7 +497,7 @@ function renderDashboardTabla(filas) {
   if (!filas.length) {
     cont.append(Object.assign(document.createElement('p'), {
       className: 'nota',
-      textContent: $('chkSoloDefinitivasDashboard').checked ? 'Ninguna cotización marcada como definitiva todavía.' : 'Sin clientes/cotizaciones todavía.',
+      textContent: $('chkSoloDefinitivasDashboard').checked ? 'Ninguna estudio marcada como definitiva todavía.' : 'Sin clientes/cotizaciones todavía.',
     }));
     return;
   }
@@ -506,7 +506,7 @@ function renderDashboardTabla(filas) {
   const t = document.createElement('table');
   t.className = 'tabla-seccion tabla-chica';
   const thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>Cliente</th><th>Tipo</th><th>Cotización</th><th>Definitiva</th><th>Etapa</th><th>Tarifa</th>' +
+  thead.innerHTML = '<tr><th>Cliente</th><th>Tipo</th><th>Estudio</th><th>Definitiva</th><th>Etapa</th><th>Tarifa</th>' +
     '<th class="num">Inversión</th><th class="num">Ahorro anual</th><th>Creada</th><th>Actualizado</th><th></th></tr>';
   t.append(thead);
   const tbody = document.createElement('tbody');
@@ -549,7 +549,7 @@ function csvEscape(v) {
 function exportarDashboardCsv() {
   const todas = datosDashboard();
   const filas = $('chkSoloDefinitivasDashboard').checked ? todas.filter(f => f.proyecto.definitiva) : todas;
-  const lineas = [['Cliente', 'Tipo', 'Cotización', 'Definitiva', 'Etapa', 'Tarifa', 'Inversión', 'Ahorro anual', 'Creada', 'Actualizado'].join(',')];
+  const lineas = [['Cliente', 'Tipo', 'Estudio', 'Definitiva', 'Etapa', 'Tarifa', 'Inversión', 'Ahorro anual', 'Creada', 'Actualizado'].join(',')];
   for (const { cliente, proyecto } of filas) {
     const etapa = proyecto.etapa || 'cotizado';
     lineas.push([
@@ -602,7 +602,7 @@ function renderDefinitivasPorTarifa() {
   const filas = datosDashboard().filter(f => f.proyecto.definitiva && f.proyecto.formulario?.tarifa === tarifa);
   if (!filas.length) {
     cont.append(Object.assign(document.createElement('p'), {
-      className: 'nota', textContent: `Todavía no hay ninguna cotización definitiva con tarifa ${tarifa}.`,
+      className: 'nota', textContent: `Todavía no hay ninguna estudio definitiva con tarifa ${tarifa}.`,
     }));
     return;
   }
@@ -804,8 +804,8 @@ function tarjetaProyecto(p) {
   const div = document.createElement('div');
   div.className = 'tarjeta-cliente';
   const estado = p.cotizacionGuardadaEn
-    ? `✓ cotización guardada el ${new Date(p.cotizacionGuardadaEn).toLocaleDateString('es-MX')}`
-    : (p.formulario ? 'con datos capturados, cotización sin guardar todavía' : 'sin datos capturados todavía');
+    ? `✓ estudio guardada el ${new Date(p.cotizacionGuardadaEn).toLocaleDateString('es-MX')}`
+    : (p.formulario ? 'con datos capturados, estudio sin guardar todavía' : 'sin datos capturados todavía');
   const etapa = p.etapa || 'cotizado';
   // Pedido explicito del usuario, 2026-11-11: "cotizaciones por tarifa para verlas...
   // ordena todo con coherencia y logica" -- chip visible de la tarifa (si ya se
@@ -823,10 +823,10 @@ function tarjetaProyecto(p) {
   const btnBorrar = document.createElement('button');
   btnBorrar.className = 'btn-link btn-borrar-cliente';
   btnBorrar.textContent = '🗑';
-  btnBorrar.title = 'Eliminar esta cotización';
+  btnBorrar.title = 'Eliminar esta estudio';
   btnBorrar.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (confirm(`¿Eliminar la cotización "${p.nombre}"? No se puede deshacer.`)) {
+    if (confirm(`¿Eliminar la estudio "${p.nombre}"? No se puede deshacer.`)) {
       eliminarProyecto(clienteActual, p.id);
       renderListaProyectos();
     }
@@ -935,8 +935,8 @@ $('clienteNombreBarra').addEventListener('blur', () => renombrarClienteActual($(
 
 $('btnNuevoProyectoBlanco').addEventListener('click', () => {
   const nombre = $('inputNombreNuevoProyecto').value.trim();
-  if (!nombre) { alert('Escribe primero un nombre para esta cotización.'); return; }
-  if (revisarDuplicadoProyecto(nombre, null) && !confirm(`"${clienteActual.nombre}" ya tiene otra cotización llamada "${nombre}" -- ¿crear otra con el mismo nombre de todos modos?`)) return;
+  if (!nombre) { alert('Escribe primero un nombre para esta estudio.'); return; }
+  if (revisarDuplicadoProyecto(nombre, null) && !confirm(`"${clienteActual.nombre}" ya tiene otra estudio llamada "${nombre}" -- ¿crear otra con el mismo nombre de todos modos?`)) return;
   const proyecto = crearProyecto(clienteActual, { nombre });
   $('inputNombreNuevoProyecto').value = '';
   abrirProyecto(clienteActual.id, proyecto.id);
@@ -976,7 +976,7 @@ function renderListaMuestrasNuevoProyecto() {
   const candidatos = candidatosDefinitivaPorTarifa(tarifa);
   if (!candidatos.length) {
     estadoEl.className = 'nota aviso';
-    estadoEl.textContent = `Todavía no hay ninguna cotización ✅ definitiva con tarifa ${tarifa} guardada en ningún cliente -- usa "+ Cotización en blanco" y captura los datos a mano, o marca una cotización como "Definitiva para MUESTRA" primero para poder reusarla después.`;
+    estadoEl.textContent = `Todavía no hay ninguna estudio ✅ definitiva con tarifa ${tarifa} guardada en ningún cliente -- usa "+ Estudio en blanco" y captura los datos a mano, o marca una estudio como "Definitiva para MUESTRA" primero para poder reusarla después.`;
     return;
   }
   estadoEl.className = 'nota';
@@ -990,8 +990,8 @@ function renderListaMuestrasNuevoProyecto() {
       `<div class="nota">Cliente: ${escapeHtml(cliente.nombre)} · ${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</div>`;
     div.addEventListener('click', () => {
       const nombre = $('inputNombreNuevoProyecto').value.trim();
-      if (!nombre) { alert('Escribe primero un nombre para esta cotización (arriba).'); return; }
-      if (revisarDuplicadoProyecto(nombre, null) && !confirm(`"${clienteActual.nombre}" ya tiene otra cotización llamada "${nombre}" -- ¿crear otra con el mismo nombre de todos modos?`)) return;
+      if (!nombre) { alert('Escribe primero un nombre para esta estudio (arriba).'); return; }
+      if (revisarDuplicadoProyecto(nombre, null) && !confirm(`"${clienteActual.nombre}" ya tiene otra estudio llamada "${nombre}" -- ¿crear otra con el mismo nombre de todos modos?`)) return;
       const nuevo = crearProyectoDesdeOrigen(clienteActual, { cliente, proyecto }, { nombre });
       $('inputNombreNuevoProyecto').value = '';
       abrirProyecto(clienteActual.id, nuevo.id);
@@ -1041,7 +1041,7 @@ function renderListaMachotes() {
   if (!candidatos.length) {
     cont.append(Object.assign(document.createElement('p'), {
       className: 'nota',
-      textContent: 'No hay ninguna otra cotización guardada que coincida con este filtro (prueba quitar "solo definitivas" o cambiar la tarifa).',
+      textContent: 'No hay ninguna otra estudio guardada que coincida con este filtro (prueba quitar "solo definitivas" o cambiar la tarifa).',
     }));
     return;
   }
@@ -1054,7 +1054,7 @@ function renderListaMachotes() {
       `<div class="nota">Cliente: ${escapeHtml(cliente.nombre)} · Tarifa: ${escapeHtml(proyecto.formulario.tarifa)} · ` +
       `${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</div>`;
     div.addEventListener('click', () => {
-      if (!confirm(`¿Aplicar "${proyecto.nombre}" (${cliente.nombre}) como machote sobre esta cotización? Se reemplazan los pasos y TODOS los textos/apagados editados (se quedan igual que en el machote, salvo los que traigan pegado un número/monto del cálculo del cliente anterior) -- tarifa, cargos, identidad y consumo de ESTE cliente NO se tocan, se quedan tal cual ya los tengas capturados.`)) return;
+      if (!confirm(`¿Aplicar "${proyecto.nombre}" (${cliente.nombre}) como machote sobre esta estudio? Se reemplazan los pasos y TODOS los textos/apagados editados (se quedan igual que en el machote, salvo los que traigan pegado un número/monto del cálculo del cliente anterior) -- tarifa, cargos, identidad y consumo de ESTE cliente NO se tocan, se quedan tal cual ya los tengas capturados.`)) return;
       // Pedido explicito del usuario, 2026-11-12: "revisa por que no jala la direccion
       // actual, se queda con la del machote" -- aplicarMachoteAProyecto() ya NO toca
       // proyecto.formulario (ver clientes.js), pero este handler seguia llamando
@@ -1072,7 +1072,7 @@ function renderListaMachotes() {
       $('tabEditorPrecios').hidden = true;
       $('tabFinanciamiento').hidden = true;
       $('estadoCalculo').className = 'nota aviso';
-      $('estadoCalculo').textContent = 'Machote aplicado -- pulsa "Calcular" para ver la cotización con los textos del machote y los datos de este cliente.';
+      $('estadoCalculo').textContent = 'Machote aplicado -- pulsa "Calcular" para ver la estudio con los textos del machote y los datos de este cliente.';
       $('tabPdf').hidden = true;
       renderAvisoPlantillaOrigen();
       renderListaMachotes();
@@ -1203,10 +1203,10 @@ $('btnBloquearProyecto').addEventListener('click', () => {
 $('chkSoloDefinitivasMachote').addEventListener('change', renderListaMachotes);
 $('filtroTarifaMachote').addEventListener('change', renderListaMachotes);
 
-// Subir un recibo aquí (antes de abrir ninguna cotización) crea una cotización nueva
+// Subir un recibo aquí (antes de abrir ninguna estudio) crea una estudio nueva
 // con los datos ya detectados -- pedido explícito del usuario. Si en cambio se sube un
-// recibo DENTRO de una cotización ya abierta (sección 1 más abajo), eso actualiza esa
-// MISMA cotización -- no crea una nueva cada vez que se corrige un dato.
+// recibo DENTRO de una estudio ya abierta (sección 1 más abajo), eso actualiza esa
+// MISMA estudio -- no crea una nueva cada vez que se corrige un dato.
 $('archivoReciboNuevoProyecto').addEventListener('change', async (e) => {
   const nuevos = Array.from(e.target.files || []);
   if (!nuevos.length) return;
@@ -1245,7 +1245,7 @@ $('archivoReciboNuevoProyecto').addEventListener('change', async (e) => {
 // =====================================================================
 // Pantalla: una cotizacion/proyecto (captura + 21 secciones)
 // =====================================================================
-// Llena el selector de "con qué cliente registrado guardar esta cotización" --
+// Llena el selector de "con qué cliente registrado guardar esta estudio" --
 // pedido explícito del usuario, para poder reasignarla a otro cliente ya registrado
 // en vez de que quede fija al cliente desde el que se abrió.
 function poblarSelectClienteGuardar() {
@@ -1495,7 +1495,7 @@ async function agregarArchivosReciboAProyecto(files) {
     el.className = 'nota aviso';
     el.textContent = subidos.length
       ? `⚠ Se subieron ${subidos.length} de ${files.length} archivo(s) del recibo -- revisa tu conexión e intenta subir el resto de nuevo.`
-      : '⚠ No se pudo subir el archivo del recibo (revisa tu conexión a internet) -- no quedó adjuntado a esta cotización, intenta subirlo de nuevo.';
+      : '⚠ No se pudo subir el archivo del recibo (revisa tu conexión a internet) -- no quedó adjuntado a esta estudio, intenta subirlo de nuevo.';
   }
   if (!subidos.length) return;
   proyectoActual.archivosRecibo = (proyectoActual.archivosRecibo || []).concat(subidos);
@@ -1555,7 +1555,7 @@ async function agregarArchivosVerificacionAProyecto(files) {
   if (subidos.length < files.length) {
     alert(subidos.length
       ? `Se subieron ${subidos.length} de ${files.length} archivo(s) de verificación -- revisa tu conexión e intenta subir el resto de nuevo.`
-      : 'No se pudo subir el archivo de verificación (revisa tu conexión a internet) -- no quedó adjuntado a esta cotización, intenta subirlo de nuevo.');
+      : 'No se pudo subir el archivo de verificación (revisa tu conexión a internet) -- no quedó adjuntado a esta estudio, intenta subirlo de nuevo.');
   }
   if (!subidos.length) return;
   proyectoActual.archivosVerificacion = (proyectoActual.archivosVerificacion || []).concat(subidos);
@@ -1675,7 +1675,7 @@ $('archivoFotoInmueble').addEventListener('change', async (e) => {
   }
   const porProcesar = nuevos.slice(0, cupo);
   if (nuevos.length > cupo) {
-    alert(`Solo se agregaron ${porProcesar.length} foto(s) -- el máximo son ${MAX_FOTOS_INMUEBLE} por cotización.`);
+    alert(`Solo se agregaron ${porProcesar.length} foto(s) -- el máximo son ${MAX_FOTOS_INMUEBLE} por estudio.`);
   }
   $('archivoFotoInmueble').disabled = true;
   try {
@@ -1821,7 +1821,7 @@ $('archivoAutoSembrado').addEventListener('change', async (e) => {
 // Maps y toma su propia captura de pantalla para subirla abajo. Decision explicita del
 // usuario, 2026-11-02: nada de API de pago, el sembrado se arma a partir de una captura
 // que el propio Isaac toma (igual que sembrar_paneles.py/planear_techo.py del repo
-// cotizador-fv-cfe, que reciben cualquier imagen + su escala, sin depender de Maps API).
+// analizador-fv-cfe, que reciben cualquier imagen + su escala, sin depender de Maps API).
 $('btnAbrirMaps').addEventListener('click', () => {
   const direccion = $('autoDireccionMaps').value.trim();
   if (!direccion) { alert('Escribe o confirma la dirección a buscar.'); return; }
@@ -1832,7 +1832,7 @@ $('btnSembrarAuto').addEventListener('click', () => {
   const est = proyectoActual && proyectoActual.sembradorAuto;
   if (!est || !est.imagenDataUrl) return;
   if (!ultimoResultado || !ultimoResultado.n) {
-    alert('Calcula primero la cotización (botón "Calcular") para saber cuántos paneles sembrar.');
+    alert('Calcula primero la estudio (botón "Calcular") para saber cuántos paneles sembrar.');
     return;
   }
   const cotaMetros = Number($('autoCotaMetros').value);
@@ -2329,7 +2329,7 @@ function calcularYRenderizar() {
   if (!r.archivosVerificacion || !r.archivosVerificacion.length) {
     r.notas = [
       ...(r.notas || []),
-      'Esta cotización se calculó únicamente con base en su consumo real de CFE (su recibo). Pendiente, como ' +
+      'Esta estudio se calculó únicamente con base en su consumo real de CFE (su recibo). Pendiente, como ' +
       'siguiente paso: agendar la verificación en sitio (visita técnica) para confirmar el espacio disponible, la ' +
       'instalación eléctrica y las condiciones del inmueble antes de contratar -- hasta que esa visita se realice ' +
       'y se capture aquí, no existe todavía una sección de comparación contra una propuesta basada en la visita.',
@@ -2337,10 +2337,10 @@ function calcularYRenderizar() {
   }
   ultimoResultado = r;
 
-  // Si el proyecto todavia tiene su nombre generico de creacion ("Cotización N"), se
+  // Si el proyecto todavia tiene su nombre generico de creacion ("Estudio N"), se
   // renombra solo al titular detectado -- asi la lista de cotizaciones del cliente se
   // identifica sin tener que abrir cada una.
-  if (/^Cotización \d+$/.test(proyectoActual.nombre) && titular && titular !== 'Cliente') {
+  if (/^Estudio \d+$/.test(proyectoActual.nombre) && titular && titular !== 'Cliente') {
     proyectoActual.nombre = titular;
     sincronizarInputsNombreProyecto();
   }
@@ -2908,7 +2908,7 @@ function numerarContenidoEditable() {
   const contador = $('contadorEditables');
   if (contador) {
     contador.textContent = nodos.length
-      ? `${nodos.length} elementos editables, cada uno con su propia etiqueta fija (ej. "S4.2") -- esa etiqueta nunca cambia para ese párrafo, pase lo que pase en el resto de la cotización.`
+      ? `${nodos.length} elementos editables, cada uno con su propia etiqueta fija (ej. "S4.2") -- esa etiqueta nunca cambia para ese párrafo, pase lo que pase en el resto de la estudio.`
       : '';
   }
 }
@@ -2960,7 +2960,7 @@ function renderPlantillasTarifa(r) {
   }
   const nota = document.createElement('p');
   nota.className = 'nota';
-  nota.textContent = 'Una cotización nueva de una tarifa con plantilla guardada arranca con esos textos/tablas en vez de los de fábrica -- editar algo en un proyecto específico siempre gana sobre la plantilla.';
+  nota.textContent = 'Una estudio nueva de una tarifa con plantilla guardada arranca con esos textos/tablas en vez de los de fábrica -- editar algo en un proyecto específico siempre gana sobre la plantilla.';
   cont.append(nota);
 }
 
@@ -3042,7 +3042,7 @@ function renderIndice(r) {
     // onToggleSeccion); clic en uno marcado la excluye sin tocar el bloque.
     check.checked = activo;
     check.disabled = bloque === 'resumen';
-    check.title = bloque === 'resumen' ? 'Siempre incluida' : `Incluir en la cotización final (pantalla y PDF) — bloque: ${bloqueEtiqueta}`;
+    check.title = bloque === 'resumen' ? 'Siempre incluida' : `Incluir en la estudio final (pantalla y PDF) — bloque: ${bloqueEtiqueta}`;
     check.addEventListener('change', () => onToggleSeccion(n, check.checked));
     fila.append(check);
     // Botones de mover arriba/abajo -- pedido explicito del usuario ("permite
@@ -3166,7 +3166,7 @@ function avisosPendientesParaDocumento(incluyeEdiciones = false) {
   }
   const nEditados = Object.keys(proyectoActual.textosEditados || {}).length;
   if (nEditados && !incluyeEdiciones) {
-    avisos.push(`• Editaste ${nEditados} párrafo(s)/aviso(s)/celda(s) en pantalla para esta cotización -- este ` +
+    avisos.push(`• Editaste ${nEditados} párrafo(s)/aviso(s)/celda(s) en pantalla para esta estudio -- este ` +
       'documento NO incluye esas ediciones (sigue usando el texto original de la app).');
   }
   // Hallazgo 10, auditoria 2026-11-06: la reconciliacion aritmetica del recibo
@@ -3176,7 +3176,7 @@ function avisosPendientesParaDocumento(incluyeEdiciones = false) {
   const adv = ultimoLeido && ultimoLeido.reconciliacion_advertencia;
   if (adv) avisos.push('• El recibo leído tiene una advertencia de reconciliación sin resolver:\n  ' + adv);
   if (proyectoActual.plantillaOrigen && !proyectoActual.plantillaVerificada) {
-    avisos.push('• Esta cotización se creó desde otra ya guardada y todavía no marcaste que verificaste los ' +
+    avisos.push('• Esta estudio se creó desde otra ya guardada y todavía no marcaste que verificaste los ' +
       'datos contra el recibo real de este cliente.');
   }
   return avisos;
@@ -3203,7 +3203,7 @@ async function archivoAdjuntoAImagenPdf(archivo) {
 
 // Prepara r._archivosReciboImgs/_archivosVerificacionImgs ANTES de generarPdf() -- esas
 // 2 secciones (17/18 en pantalla: "Documento: recibo original"/"Documento: verificación
-// en sitio") nunca tuvieron página propia en "Cotización completa" (hueco documentado
+// en sitio") nunca tuvieron página propia en "Estudio completa" (hueco documentado
 // desde el 2026-10-31, cerrado recien el 2026-11-07 agregando paginaDocumentoRecibo/
 // paginaDocumentoVerificacion en propuesta.js). Si un archivo no se puede descargar
 // (sin internet, url vencida, etc.) se omite ese archivo puntual -- nunca bloquea la
@@ -3310,7 +3310,7 @@ $('btnCompartirVistaPrevia').addEventListener('click', async () => {
 
 $('btnDejarDeCompartir').addEventListener('click', async () => {
   if (!proyectoActual?.compartirToken) return;
-  if (!confirm('¿Dejar de compartir esta cotización? El link dejará de funcionar para quien lo tenga.')) return;
+  if (!confirm('¿Dejar de compartir esta estudio? El link dejará de funcionar para quien lo tenga.')) return;
   try { await supabaseEliminarPorFiltro('vista_compartida', `token=eq.${encodeURIComponent(proyectoActual.compartirToken)}`); }
   catch (err) { console.error('No se pudo borrar la vista compartida en Supabase:', err); }
   delete proyectoActual.compartirToken;
@@ -3329,7 +3329,7 @@ $('btnCopiarLinkCompartido').addEventListener('click', async () => {
 
 $('btnWhatsappLinkCompartido').addEventListener('click', () => {
   const url = $('inputLinkCompartido').value;
-  const texto = encodeURIComponent(`Te comparto la vista previa en vivo de esta cotización -- se va actualizando sola:\n${url}`);
+  const texto = encodeURIComponent(`Te comparto la vista previa en vivo de esta estudio -- se va actualizando sola:\n${url}`);
   window.open(`https://wa.me/?text=${texto}`, '_blank');
 });
 
@@ -3432,8 +3432,8 @@ function guardarProyectoRespetandoRenombre(cliente, proyecto) {
 // "ponerle nombre con su proyecto y su cliente" antes de guardarla como definitiva.
 // Se guarda en blur (igual que los campos editables de texto), no en cada tecla.
 // Pedido explicito del usuario, 2026-11-11 ("no veo donde se puede editar... la
-// cotización"): antes SOLO se podia renombrar desde este input, escondido dentro de la
-// pestaña "Guardar cotización" -- la barra de arriba (visible SIEMPRE) solo mostraba el
+// estudio"): antes SOLO se podia renombrar desde este input, escondido dentro de la
+// pestaña "Guardar estudio" -- la barra de arriba (visible SIEMPRE) solo mostraba el
 // nombre como texto fijo. Ahora esa misma barra tambien es editable (mismo patron que
 // el nombre del cliente), sincronizada con este input via sincronizarInputsNombreProyecto().
 function sincronizarInputsNombreProyecto() {
@@ -3454,14 +3454,14 @@ function renombrarProyectoActual(nuevoNombreCrudo) {
     sincronizarInputsNombreProyecto();
     $('estadoGuardadoCotizacion').className = 'nota aviso';
     $('estadoGuardadoCotizacion').textContent =
-      `✓ Se creó una cotización NUEVA llamada "${nuevo}" con los datos de ahorita -- ` +
+      `✓ Se creó una estudio NUEVA llamada "${nuevo}" con los datos de ahorita -- ` +
       `"${resultado.nombreAnterior}" se quedó intacta tal como estaba guardada.`;
   }
 }
 $('inputNombreProyecto').addEventListener('blur', () => renombrarProyectoActual($('inputNombreProyecto').value));
 $('proyectoNombreBarraInput').addEventListener('blur', () => renombrarProyectoActual($('proyectoNombreBarraInput').value));
 
-// Logica compartida de "Guardar cotización" y "Marcar como definitiva" -- ambos
+// Logica compartida de "Guardar estudio" y "Marcar como definitiva" -- ambos
 // botones guardan/mueven la cotizacion al cliente elegido en el selector.
 //
 // "Marcar como definitiva y guardar" YA NO marca proyecto.definitiva=true sobre el
@@ -3482,7 +3482,7 @@ $('proyectoNombreBarraInput').addEventListener('blur', () => renombrarProyectoAc
 // en la nube") -- a diferencia de "Traer de la nube" (bajarDeNube, SIEMPRE manual con
 // confirmacion porque reemplaza datos locales, ver nube.js), subir NUNCA pisa nada de
 // otro dispositivo, solo empuja lo de este -- es seguro automatizarlo solo en esta
-// direccion. "Guardar cotización" (borrador, no definitiva) se queda solo local, igual
+// direccion. "Guardar estudio" (borrador, no definitiva) se queda solo local, igual
 // que antes -- el respaldo automatico es solo para la version ya validada.
 //
 // `proposito` ('muestra' | 'cliente') -- pedido explicito del usuario, 2026-11-11:
@@ -3498,14 +3498,14 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
   const clienteDestinoId = $('selectClienteGuardar').value;
   // Pedido explicito del usuario, 2026-11-11: "independientemente de que esté congelada
   // o definitiva, sí deja guardarla con el cliente que yo haya creado -- el nombre de
-  // la cotización no cambia, solo con qué cliente va a estar guardada". Una definitiva
+  // la estudio no cambia, solo con qué cliente va a estar guardada". Una definitiva
   // congelada se queda protegida contra EDITAR su contenido o volver a congelarse, pero
   // mover A QUÉ CLIENTE pertenece no cambia ni el nombre ni el contenido -- es solo
   // organizativo, asi que esto SÍ se permite incluso bloqueada.
   if (proyectoActual.bloqueada) {
     const estaMoviendoDeCliente = clienteDestinoId && clienteDestinoId !== clienteActual.id;
     if (definitiva || !estaMoviendoDeCliente) {
-      alert('Esta cotización ya se marcó como definitiva y quedó congelada (es la versión que se le entregó al cliente) -- no se puede volver a guardar ni modificar su contenido. Elige un cliente distinto arriba para solo moverla, o desbloquéala primero si necesitas editarla.');
+      alert('Esta estudio ya se marcó como definitiva y quedó congelada (es la versión que se le entregó al cliente) -- no se puede volver a guardar ni modificar su contenido. Elige un cliente distinto arriba para solo moverla, o desbloquéala primero si necesitas editarla.');
       return false;
     }
   }
@@ -3514,7 +3514,7 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
   if (clienteDestinoId && clienteDestinoId !== clienteActual.id) {
     seMovioDeCliente = true;
     const destino = moverProyecto(clienteActual.id, clienteDestinoId, proyectoActual);
-    if (!destino) { alert('No se pudo mover la cotización a ese cliente.'); return false; }
+    if (!destino) { alert('No se pudo mover la estudio a ese cliente.'); return false; }
     clienteActual = destino;
     $('clienteNombreBarra').value = clienteActual.nombre;
     $('clienteTipoBarra').textContent = etiquetaTipo(clienteActual.tipo);
@@ -3528,7 +3528,7 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
     const resultado = guardarProyectoRespetandoRenombre(clienteActual, proyectoActual);
     if (resultado.esNuevo) {
       proyectoActual = resultado.proyecto;
-      avisoSeparada = ` (se creó como cotización NUEVA -- "${resultado.nombreAnterior}" se quedó intacta.)`;
+      avisoSeparada = ` (se creó como estudio NUEVA -- "${resultado.nombreAnterior}" se quedó intacta.)`;
     }
   }
   // Clona el estado de ahorita en un registro aparte y congelado (ver
@@ -3540,22 +3540,22 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
     guardarProyecto(clienteActual, proyectoActual); // asegura que el clon parta del estado mas reciente
     const clon = clonarProyectoCongelado(clienteActual, proyectoActual, proposito);
     const etiquetaProposito = clon.propositoDefinitiva === 'muestra' ? 'MUESTRA (ejemplo reusable por tarifa)' : 'ENTREGA del cliente';
-    avisoDefinitiva = ` Se creó "${clon.nombre}" como versión DEFINITIVA para ${etiquetaProposito} y quedó congelada (ya no se puede modificar) -- disponible en el historial de este cliente${clon.propositoDefinitiva === 'muestra' ? ' y para usarse como ejemplo al dar de alta un cliente nuevo' : ''}. Esta cotización que ves ahora sigue editable con normalidad.`;
+    avisoDefinitiva = ` Se creó "${clon.nombre}" como versión DEFINITIVA para ${etiquetaProposito} y quedó congelada (ya no se puede modificar) -- disponible en el historial de este cliente${clon.propositoDefinitiva === 'muestra' ? ' y para usarse como ejemplo al dar de alta un cliente nuevo' : ''}. Esta estudio que ves ahora sigue editable con normalidad.`;
   }
   const etiqueta = definitiva ? 'Versión definitiva creada' : 'Guardada';
   $('estadoGuardadoCotizacion').className = 'nota ok';
   $('estadoGuardadoCotizacion').textContent =
-    `✓ ${etiqueta} con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". Subiendo respaldo a la nube...` + avisoSeparada + avisoDefinitiva;
+    `✓ ${etiqueta} con "${clienteActual.nombre}", estudio "${proyectoActual.nombre}". Subiendo respaldo a la nube...` + avisoSeparada + avisoDefinitiva;
   // Pedido explicito del usuario, 2026-11-08 ("tambien se tiene que guardar en la
   // nube"): antes SOLO "Marcar como definitiva" subia a la nube automaticamente --
-  // "Guardar cotización" (borrador) se quedaba solo local a proposito, para no subir
+  // "Guardar estudio" (borrador) se quedaba solo local a proposito, para no subir
   // cada cambio chico mientras se sigue editando. Eso generaba confusion (¿cual guarda
   // en la nube y cual no?) -- ahora los dos suben, simplificando el flujo a "Guarda
   // (local + nube) -> Genera el PDF".
   try {
     await subirANube();
     $('estadoGuardadoCotizacion').textContent =
-      `✓ ${etiqueta} con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". ` +
+      `✓ ${etiqueta} con "${clienteActual.nombre}", estudio "${proyectoActual.nombre}". ` +
       'Respaldo en la nube actualizado.' + avisoSeparada + avisoDefinitiva;
   } catch (err) {
     $('estadoGuardadoCotizacion').className = 'nota aviso';
@@ -3595,7 +3595,7 @@ $('btnCrearClienteGuardar').addEventListener('click', () => {
   $('selectClienteGuardar').value = nuevo.id;
   $('estadoGuardadoCotizacion').className = 'nota ok';
   $('estadoGuardadoCotizacion').textContent =
-    `✓ Cliente "${nuevo.nombre}" creado -- ahora dale clic a "Guardar cotización" o "Marcar como definitiva" para pasarle esta cotización.`;
+    `✓ Cliente "${nuevo.nombre}" creado -- ahora dale clic a "Guardar estudio" o "Marcar como definitiva" para pasarle esta estudio.`;
 });
 
 // El PDF de verdad se intenta adjuntar via Web Share API (navigator.share con un
@@ -3609,13 +3609,13 @@ $('btnEnviarWhatsapp').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
   if (!confirmarSiHayCambiosSinCalcular()) return;
   const r = ultimoResultado;
-  const mensaje = `Cotización ${r.titular}\n` +
+  const mensaje = `Estudio ${r.titular}\n` +
     `Sistema: ${r.n} paneles (${r.kwp.toFixed(2)} kWp)\n` +
     `Inversión: ${M(r.investment)}\n` +
     `Ahorro año 1: ${M(r.ahorroAnual)} (${PCT(r.pctAhorro)})\n` +
     `Recuperación: ${r.payback ? r.payback.toFixed(1) + ' años' : 'N/D'}\n` +
     `VAN 25 años: ${M(r.van)}\n\n` +
-    'Adjunto el PDF de la cotización.';
+    'Adjunto el PDF de la estudio.';
   try {
     // generarPdfCompletaDesdeVista (no generarPdf) -- bug real reportado por el
     // usuario, 2026-11-12: "el S20.6 no se apaga, esta apagado y se imprime en el pdf
@@ -3630,7 +3630,7 @@ $('btnEnviarWhatsapp').addEventListener('click', async () => {
     const blob = doc.output('blob');
     const archivo = new File([blob], nombreArchivoProyecto('Cotizacion'), { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
-      await navigator.share({ files: [archivo], text: mensaje, title: `Cotización ${r.titular}` });
+      await navigator.share({ files: [archivo], text: mensaje, title: `Estudio ${r.titular}` });
       return; // el PDF ya salio adjunto -- no abrir ademas el link de solo texto
     }
   } catch (err) {
@@ -3657,7 +3657,7 @@ $('btnEnviarWhatsapp').addEventListener('click', async () => {
 // Pedido explicito del usuario, 2026-11-11: "no necesariamente me mandes al inicio,
 // igual que se actualice donde este si estoy en la cotizacion" -- location.reload()
 // siempre volvia a la pantalla de Clientes (es el <main> visible por default en el
-// HTML), perdiendo en qué cliente/cotización se estaba trabajando. Se guarda un
+// HTML), perdiendo en qué cliente/estudio se estaba trabajando. Se guarda un
 // marcador de una sola vez en sessionStorage (no localStorage -- es solo para
 // sobrevivir ESTE refresh, no para reabrir la app días después en otro lado) y se
 // restaura al arrancar, más abajo en este archivo.
