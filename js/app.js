@@ -3363,7 +3363,7 @@ function guardarPantallaParaReanudar() {
     sessionStorage.removeItem(CLAVE_REANUDAR);
   }
 }
-$('btnRefrescar').addEventListener('click', async () => {
+async function actualizarApp() {
   if (!$('pantallaCliente').hidden && clienteActual && proyectoActual) {
     try { proyectoActual.formulario = leerFormulario(); guardarProyecto(clienteActual, proyectoActual); } catch (e) { /* no bloquea la recarga si falla */ }
   }
@@ -3373,7 +3373,13 @@ $('btnRefrescar').addEventListener('click', async () => {
     if (reg) await reg.update();
   } catch (e) { /* no bloquea la recarga si falla */ }
   location.reload();
-});
+}
+$('btnRefrescar').addEventListener('click', actualizarApp);
+// Pedido explicito del usuario, 2026-11-11: el mismo boton tambien hasta abajo de la
+// cotizacion -- es una pantalla larga (25 secciones + PDF/Excel) y volver arriba solo
+// para actualizar era incomodo. Mismo handler, ningun comportamiento nuevo que mantener
+// por separado.
+$('btnRefrescarAbajo').addEventListener('click', actualizarApp);
 
 // =====================================================================
 // PWA: service worker + boton de instalar + deteccion de ya-instalada
