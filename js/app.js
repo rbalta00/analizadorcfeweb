@@ -3349,16 +3349,25 @@ $('inputNombreProyecto').addEventListener('blur', () => {
 // cual a clonarProyectoCongelado().
 async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
   if (!ultimoResultado) { alert('Calcula primero.'); return false; }
-  if (proyectoActual.bloqueada) {
-    alert('Esta cotización ya se marcó como definitiva y quedó congelada (es la versión que se le entregó al cliente) -- no se puede volver a guardar ni modificar. Usa "Desde cotización ya validada" para reusarla como base de una cotización nueva.');
-    return false;
-  }
   if ($('selectClienteGuardar').value === '__nuevo__') {
     alert('Primero crea el cliente nuevo con el botón "Crear cliente" (o cancélalo) antes de guardar.');
     return false;
   }
-  proyectoActual.cotizacionGuardadaEn = new Date().toISOString();
   const clienteDestinoId = $('selectClienteGuardar').value;
+  // Pedido explicito del usuario, 2026-11-11: "independientemente de que esté congelada
+  // o definitiva, sí deja guardarla con el cliente que yo haya creado -- el nombre de
+  // la cotización no cambia, solo con qué cliente va a estar guardada". Una definitiva
+  // congelada se queda protegida contra EDITAR su contenido o volver a congelarse, pero
+  // mover A QUÉ CLIENTE pertenece no cambia ni el nombre ni el contenido -- es solo
+  // organizativo, asi que esto SÍ se permite incluso bloqueada.
+  if (proyectoActual.bloqueada) {
+    const estaMoviendoDeCliente = clienteDestinoId && clienteDestinoId !== clienteActual.id;
+    if (definitiva || !estaMoviendoDeCliente) {
+      alert('Esta cotización ya se marcó como definitiva y quedó congelada (es la versión que se le entregó al cliente) -- no se puede volver a guardar ni modificar su contenido. Elige un cliente distinto arriba para solo moverla, o desbloquéala primero si necesitas editarla.');
+      return false;
+    }
+  }
+  proyectoActual.cotizacionGuardadaEn = new Date().toISOString();
   let seMovioDeCliente = false;
   if (clienteDestinoId && clienteDestinoId !== clienteActual.id) {
     seMovioDeCliente = true;
