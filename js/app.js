@@ -12,6 +12,7 @@ import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTiene
 import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf, generarPdfCompletaDesdeVista } from './propuesta.js';
+import { descargarExcelCotizacion } from './excel.js';
 import { generarGuiaPresentacion } from './resumen.js';
 import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida } from './imagenes.js';
@@ -2853,9 +2854,9 @@ function mostrarPdfEnVisor(doc, nombreArchivo) {
   visor.scrollIntoView({ behavior: 'smooth' });
 }
 
-function nombreArchivoProyecto(prefijo) {
+function nombreArchivoProyecto(prefijo, extension = 'pdf') {
   const base = `${clienteActual.nombre}_${proyectoActual.nombre}`.replace(/[^a-z0-9]+/gi, '_');
-  return `${prefijo}_${base}.pdf`;
+  return `${prefijo}_${base}.${extension}`;
 }
 
 // Confirma antes de exportar si el formulario tiene cambios desde el ultimo "Calcular" -- sin
@@ -3071,6 +3072,27 @@ $('btnGenerarPdf').addEventListener('click', async () => {
     // siempre) se deja sin usar pero intacta en propuesta.js, por si hace falta volver.
     const doc = generarPdfCompletaDesdeVista(ultimoResultado);
     mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
+  } finally {
+    boton.disabled = false;
+    boton.textContent = textoOriginal;
+  }
+});
+
+// Pedido explicito del usuario, 2026-11-11: "un boton para descargar la cotizacion no
+// solo en pdf tambien en excel". Lee las TABLAS ya visibles en pantalla (una hoja por
+// tabla, mismo respeto a secciones/graficos/columnas/filas apagadas que el PDF) -- ver
+// js/excel.js.
+$('btnGenerarExcel').addEventListener('click', () => {
+  if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  const boton = $('btnGenerarExcel');
+  boton.disabled = true;
+  const textoOriginal = boton.textContent;
+  boton.textContent = 'Generando…';
+  try {
+    descargarExcelCotizacion(ultimoResultado, nombreArchivoProyecto('Cotizacion', 'xlsx'));
+  } catch (err) {
+    alert('No se pudo generar el Excel: ' + err.message);
+    console.error(err);
   } finally {
     boton.disabled = false;
     boton.textContent = textoOriginal;
