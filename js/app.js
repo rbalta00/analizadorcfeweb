@@ -858,7 +858,7 @@ function mostrarPantallaProyectos(clienteId) {
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaProyectos').hidden = false;
   $('pantallaCliente').hidden = true;
-  $('clienteNombreBarraProyectos').textContent = clienteActual.nombre;
+  $('clienteNombreBarraProyectos').value = clienteActual.nombre;
   $('clienteTipoBarraProyectos').textContent = etiquetaTipo(clienteActual.tipo);
   $('clienteTipoBarraProyectos').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
   $('estadoReciboNuevoProyecto').textContent = '';
@@ -867,6 +867,27 @@ function mostrarPantallaProyectos(clienteId) {
 
 $('btnVolverClientesDesdeProyectos').addEventListener('click', mostrarPantallaClientes);
 $('btnVolverProyectos').addEventListener('click', () => mostrarPantallaProyectos(clienteActual.id));
+
+// Pedido explicito del usuario, 2026-11-11: "permite editar nombre del cliente" --
+// mismo patron ya probado con el nombre de la cotizacion (inputNombreProyecto): se
+// guarda al perder el foco, no en cada tecla. Un solo handler para las 2 barras (la de
+// "Cotizaciones de este cliente" y la de dentro de una cotizacion abierta), ambas
+// terminan renombrando el mismo clienteActual.
+function renombrarClienteActual(nuevoNombreCrudo) {
+  if (!clienteActual) return;
+  const nuevo = nuevoNombreCrudo.trim();
+  if (!nuevo || nuevo === clienteActual.nombre) { sincronizarInputsNombreCliente(); return; }
+  clienteActual.nombre = nuevo;
+  guardarCliente(clienteActual);
+  sincronizarInputsNombreCliente();
+}
+function sincronizarInputsNombreCliente() {
+  if (!clienteActual) return;
+  $('clienteNombreBarraProyectos').value = clienteActual.nombre;
+  $('clienteNombreBarra').value = clienteActual.nombre;
+}
+$('clienteNombreBarraProyectos').addEventListener('blur', () => renombrarClienteActual($('clienteNombreBarraProyectos').value));
+$('clienteNombreBarra').addEventListener('blur', () => renombrarClienteActual($('clienteNombreBarra').value));
 
 $('btnNuevoProyectoBlanco').addEventListener('click', () => {
   const nombre = $('inputNombreNuevoProyecto').value.trim();
@@ -1127,7 +1148,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = false;
-  $('clienteNombreBarra').textContent = clienteActual.nombre;
+  $('clienteNombreBarra').value = clienteActual.nombre;
   $('clienteTipoBarra').textContent = etiquetaTipo(clienteActual.tipo);
   $('clienteTipoBarra').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
   $('proyectoNombreBarra').textContent = proyectoActual.nombre;
@@ -3305,7 +3326,7 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
     const destino = moverProyecto(clienteActual.id, clienteDestinoId, proyectoActual);
     if (!destino) { alert('No se pudo mover la cotización a ese cliente.'); return false; }
     clienteActual = destino;
-    $('clienteNombreBarra').textContent = clienteActual.nombre;
+    $('clienteNombreBarra').value = clienteActual.nombre;
     $('clienteTipoBarra').textContent = etiquetaTipo(clienteActual.tipo);
     $('clienteTipoBarra').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
     poblarSelectClienteGuardar();
