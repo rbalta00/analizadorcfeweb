@@ -27,13 +27,17 @@
       <h2>Clientes</h2>
       <p class="nota">Cada cotización se guarda por cliente, en este navegador. No todos son del lote de
         gobierno: agrupa cada quien como gobierno o particular.</p>
+      <!-- Pedido explicito del usuario, 2026-11-11: "no tengo que elegir entre
+           particular y gobierno... puede ser gobierno u otro termino no
+           predeterminado" -- esto se define UNA VEZ por cliente aqui (no se vuelve a
+           preguntar al crear cada cotizacion de este cliente), y ya no esta limitado a
+           esos 2 valores -- son solo sugerencias del datalist, se puede escribir
+           cualquier otro termino. -->
+      <datalist id="listaTiposCliente"></datalist>
       <div class="fila">
         <label>Nombre o inmueble<input id="nuevoClienteNombre" type="text" placeholder="Ej. Casa del Abue Sur SEDIF" /></label>
         <label>Tipo de cliente
-          <select id="nuevoClienteTipo">
-            <option value="gobierno">Gobierno</option>
-            <option value="particular">Particular</option>
-          </select>
+          <input id="nuevoClienteTipo" type="text" list="listaTiposCliente" placeholder="Gobierno, Particular, u otro...">
         </label>
       </div>
       <h4>Cliente nuevo</h4>
@@ -98,12 +102,11 @@
     </section>
 
     <section class="tarjeta">
-      <h3>Gobierno</h3>
-      <div id="listaGobierno" class="lista-clientes"></div>
-    </section>
-    <section class="tarjeta">
-      <h3>Particulares</h3>
-      <div id="listaParticular" class="lista-clientes"></div>
+      <!-- Pedido explicito del usuario, 2026-11-11: el tipo de cliente ya no esta
+           limitado a Gobierno/Particular -- ver renderListaClientes() en app.js, que
+           arma aqui un grupo por cada valor de tipo que de verdad exista entre los
+           clientes guardados (ya no son 2 secciones fijas). -->
+      <div id="listaClientesAgrupados"></div>
     </section>
   </main>
 
@@ -704,10 +707,7 @@
           <input type="text" id="inputNuevoClienteGuardarNombre" placeholder="Ej. Casa del Abue Sur SEDIF">
         </label>
         <label>Tipo
-          <select id="selectNuevoClienteGuardarTipo">
-            <option value="gobierno">Gobierno</option>
-            <option value="particular">Particular</option>
-          </select>
+          <input type="text" id="selectNuevoClienteGuardarTipo" list="listaTiposCliente" placeholder="Gobierno, Particular, u otro...">
         </label>
         <button id="btnCrearClienteGuardar" class="btn-secundario">Crear cliente</button>
         <button id="btnCancelarClienteGuardar" class="btn-link">Cancelar</button>

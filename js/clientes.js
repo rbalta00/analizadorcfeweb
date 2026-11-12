@@ -97,12 +97,18 @@ export function obtenerCliente(id) {
   return leerTodos().find(c => c.id === id) || null;
 }
 
+// `tipo` ya NO esta limitado a exactamente "gobierno"/"particular" -- pedido explicito
+// del usuario, 2026-11-11: "no tengo que elegir entre particular y gobierno... puede
+// ser gobierno u otro termino no predeterminado". Se guarda tal cual lo que escriba
+// (recortado), con "Particular" como default solo si lo deja vacio -- la UI sigue
+// sugiriendo "Gobierno"/"Particular" (ver datalist en index.html) pero no obliga a
+// esos 2 valores.
 export function crearCliente({ nombre, tipo }) {
   const ahora = new Date().toISOString();
   const cliente = {
     id: uuid(),
     nombre: nombre || 'Cliente sin nombre',
-    tipo: tipo === 'gobierno' ? 'gobierno' : 'particular',
+    tipo: (tipo || '').toString().trim() || 'Particular',
     creadoEn: ahora,
     actualizadoEn: ahora,
     proyectos: [], // ver crearProyecto() -- un cliente arranca sin cotizaciones
@@ -134,12 +140,35 @@ export function reemplazarTodosLosClientes(lista) {
   return guardarTodos(Array.isArray(lista) ? lista : []);
 }
 
+// Agrupa por el VALOR REAL de `tipo` (no solo gobierno/particular -- ver crearCliente).
+// "gobierno"/"particular" (cualquier mayuscula/minuscula, por los clientes viejos
+// creados antes de este cambio) siempre van primero en ese orden; cualquier otro valor
+// que el usuario haya escrito se agrega despues, en orden alfabetico.
 export function clientesAgrupadosPorTipo() {
   const todos = listarClientes();
-  return {
-    gobierno: todos.filter(c => c.tipo === 'gobierno'),
-    particular: todos.filter(c => c.tipo === 'particular'),
+  const grupos = new Map();
+  for (const c of todos) {
+    const clave = (c.tipo || 'Particular').toString();
+    if (!grupos.has(clave)) grupos.set(clave, []);
+    grupos.get(clave).push(c);
+  }
+  const prioridad = (clave) => {
+    const t = clave.toLowerCase();
+    if (t === 'gobierno') return 0;
+    if (t === 'particular') return 1;
+    return 2;
   };
+  return [...grupos.entries()]
+    .sort((a, b) => prioridad(a[0]) - prioridad(b[0]) || a[0].localeCompare(b[0]))
+    .map(([tipo, clientes]) => ({ tipo, clientes }));
+}
+
+// Valores de `tipo` ya usados por algun cliente -- para sugerir en el datalist del
+// formulario de cliente nuevo (ver index.html/app.js), sin limitar a esos valores.
+export function tiposClienteUsados() {
+  const vistos = new Set(['Gobierno', 'Particular']);
+  for (const c of listarClientes()) if (c.tipo) vistos.add(c.tipo);
+  return [...vistos];
 }
 
 // ---------------------------------------------------------------------------

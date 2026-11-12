@@ -300,10 +300,10 @@ input[type="file"] { padding: 6px 0; }
    app.js, pedido explicito del usuario 2026-11-11 ("un lugar para las que se estan
    trabajando, otro para las definitivas, otro para las muestras, otro para las
    vacias/sin querer"). */
-.grupo-proyectos { margin-bottom: 18px; }
-.grupo-proyectos h4 { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
+.grupo-proyectos, .grupo-clientes { margin-bottom: 18px; }
+.grupo-proyectos h4, .grupo-clientes h3 { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
   text-transform: uppercase; color: var(--grey); margin: 0 0 6px; }
-.grupo-proyectos .lista-clientes { margin-bottom: 4px; }
+.grupo-proyectos .lista-clientes, .grupo-clientes .lista-clientes { margin-bottom: 4px; }
 .tarjeta-cliente {
   display: flex; justify-content: space-between; align-items: center;
   background: var(--bg); border-radius: 8px; padding: 10px 12px; cursor: pointer;
@@ -320,6 +320,7 @@ input[type="file"] { padding: 6px 0; }
 .chip-tipo { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; }
 .chip-tipo-gobierno { background: #d8e8f3; color: #16425a; }
 .chip-tipo-particular { background: #f3e3c9; color: #6b4a12; }
+.chip-tipo-otro { background: #e2e2e2; color: #3a3a3a; }
 .chip-etapa { font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
 .chip-etapa-cotizado { background: #e6e6e6; color: #444; }
 .chip-etapa-negociando { background: #fde9c8; color: #7a4e06; }
@@ -337,6 +338,7 @@ input[type="file"] { padding: 6px 0; }
 @media (prefers-color-scheme: dark) {
   .chip-tipo-gobierno { background: #1c3a4d; color: #a9d4ea; }
   .chip-tipo-particular { background: #4a3a1c; color: #e8c98a; }
+  .chip-tipo-otro { background: #3a3a3a; color: #d8d8d8; }
 }
 
 /* ===================== Indice de secciones (navegacion) ===================== */

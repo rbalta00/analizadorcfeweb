@@ -3,7 +3,7 @@
 // secciones navegables -> exportar PDF / WhatsApp. Toda la logica de calculo vive en
 // resultado.js/motor.js; este archivo solo lee/escribe el DOM y el almacenamiento.
 import {
-  obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo, listarClientes,
+  obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo, tiposClienteUsados, listarClientes,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
   aplicarMachoteAProyecto, clonarProyectoCongelado, crearProyectoDesdeOrigen, detectarTextosConNumerosSospechosos,
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
@@ -98,6 +98,25 @@ function escapeHtml(s) {
 // =====================================================================
 // Pantalla: Clientes
 // =====================================================================
+// `tipo` ya no esta limitado a "gobierno"/"particular" (pedido explicito del usuario,
+// 2026-11-11) -- estas 2 funciones centralizan como se muestra CUALQUIER valor que se
+// haya escrito, en vez de repetir el ternario viejo en cada lugar que lo usaba.
+function etiquetaTipo(tipo) {
+  const t = (tipo || 'Particular').toString();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function claseTipo(tipo) {
+  const t = (tipo || '').toString().toLowerCase();
+  if (t === 'gobierno') return 'chip-tipo-gobierno';
+  if (t === 'particular') return 'chip-tipo-particular';
+  return 'chip-tipo-otro';
+}
+function poblarDatalistTipos() {
+  const dl = $('listaTiposCliente');
+  if (!dl) return;
+  dl.innerHTML = tiposClienteUsados().map(t => `<option value="${escapeHtml(t)}">`).join('');
+}
+
 function tarjetaCliente(c) {
   const div = document.createElement('div');
   div.className = 'tarjeta-cliente';
@@ -122,14 +141,26 @@ function tarjetaCliente(c) {
 }
 
 function renderListaClientes() {
-  const { gobierno, particular } = clientesAgrupadosPorTipo();
-  const contG = $('listaGobierno'), contP = $('listaParticular');
-  contG.innerHTML = '';
-  contP.innerHTML = '';
-  if (!gobierno.length) contG.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: 'Sin clientes de gobierno todavía.' }));
-  for (const c of gobierno) contG.append(tarjetaCliente(c));
-  if (!particular.length) contP.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: 'Sin clientes particulares todavía.' }));
-  for (const c of particular) contP.append(tarjetaCliente(c));
+  const cont = $('listaClientesAgrupados');
+  cont.innerHTML = '';
+  poblarDatalistTipos();
+  const grupos = clientesAgrupadosPorTipo();
+  if (!grupos.length) {
+    cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: 'Todavía no hay clientes guardados.' }));
+    return;
+  }
+  for (const { tipo, clientes } of grupos) {
+    const wrap = document.createElement('div');
+    wrap.className = 'grupo-clientes';
+    const h3 = document.createElement('h3');
+    h3.textContent = `${etiquetaTipo(tipo)} (${clientes.length})`;
+    wrap.append(h3);
+    const listaEl = document.createElement('div');
+    listaEl.className = 'lista-clientes';
+    for (const c of clientes) listaEl.append(tarjetaCliente(c));
+    wrap.append(listaEl);
+    cont.append(wrap);
+  }
 }
 
 $('btnCrearCliente').addEventListener('click', () => {
@@ -462,7 +493,7 @@ function renderDashboardTabla(filas) {
   for (const { cliente, proyecto } of filas) {
     const etapa = proyecto.etapa || 'cotizado';
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(cliente.nombre)}</td><td>${cliente.tipo === 'gobierno' ? 'Gobierno' : 'Particular'}</td>` +
+    tr.innerHTML = `<td>${escapeHtml(cliente.nombre)}</td><td>${escapeHtml(etiquetaTipo(cliente.tipo))}</td>` +
       `<td>${escapeHtml(proyecto.nombre)}</td><td>${proyecto.definitiva ? '✅' : ''}</td>` +
       `<td>${ETAPAS_PROYECTO[etapa]}</td><td>${escapeHtml(proyecto.formulario?.tarifa || '—')}</td>` +
       `<td class="num">${proyecto.ultimaInversionTotal != null ? M(proyecto.ultimaInversionTotal) : '—'}</td>` +
@@ -816,8 +847,8 @@ function mostrarPantallaProyectos(clienteId) {
   $('pantallaProyectos').hidden = false;
   $('pantallaCliente').hidden = true;
   $('clienteNombreBarraProyectos').textContent = clienteActual.nombre;
-  $('clienteTipoBarraProyectos').textContent = clienteActual.tipo === 'gobierno' ? 'Gobierno' : 'Particular';
-  $('clienteTipoBarraProyectos').className = `chip-tipo chip-tipo-${clienteActual.tipo}`;
+  $('clienteTipoBarraProyectos').textContent = etiquetaTipo(clienteActual.tipo);
+  $('clienteTipoBarraProyectos').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
   $('estadoReciboNuevoProyecto').textContent = '';
   renderListaProyectos();
 }
@@ -1085,8 +1116,8 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = false;
   $('clienteNombreBarra').textContent = clienteActual.nombre;
-  $('clienteTipoBarra').textContent = clienteActual.tipo === 'gobierno' ? 'Gobierno' : 'Particular';
-  $('clienteTipoBarra').className = `chip-tipo chip-tipo-${clienteActual.tipo}`;
+  $('clienteTipoBarra').textContent = etiquetaTipo(clienteActual.tipo);
+  $('clienteTipoBarra').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
   $('proyectoNombreBarra').textContent = proyectoActual.nombre;
   $('inputNombreProyecto').value = proyectoActual.nombre || '';
   renderAvisoPlantillaOrigen();
@@ -3263,8 +3294,8 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
     if (!destino) { alert('No se pudo mover la cotización a ese cliente.'); return false; }
     clienteActual = destino;
     $('clienteNombreBarra').textContent = clienteActual.nombre;
-    $('clienteTipoBarra').textContent = clienteActual.tipo === 'gobierno' ? 'Gobierno' : 'Particular';
-    $('clienteTipoBarra').className = `chip-tipo chip-tipo-${clienteActual.tipo}`;
+    $('clienteTipoBarra').textContent = etiquetaTipo(clienteActual.tipo);
+    $('clienteTipoBarra').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
     poblarSelectClienteGuardar();
   }
   let avisoSeparada = '';
