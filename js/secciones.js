@@ -807,7 +807,7 @@ function s01(r, _leido, onToggle) {
     // arriba) para que activar/desactivar la verificacion en sitio nunca vuelva a
     // desfasar ningun otro parrafo de esta seccion.
     art.append(campoEditableConId('p', null, `Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la verificación en ` +
-      `campo, en vez de los ${r.n} que calcula este sistema a partir del consumo real.`, 's1-verif-texto'));
+      `campo, en vez de los ${r.n} que calcula este estudio a partir del consumo real.`, 's1-verif-texto'));
     art.append(graficoToggle('g01-tarjetas-verificado-principales', 'Tarjetas: inversión, recuperación y ahorro año 1 (verificación en sitio)', tarjetas([
       [M(ev.investment), 'Lo que costaría el sistema, IVA incluido'],
       [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se pagaría solo'],
@@ -838,7 +838,7 @@ function s01(r, _leido, onToggle) {
     nodosComparativo.push(campoEditableConId('div', 'aviso-cream', dif === 0
       ? 'El número de paneles coincide con el de la verificación en campo -- ambos escenarios salen iguales.'
       : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que ` +
-        'calcula este sistema a partir del consumo real del recibo -- ambos criterios son válidos y conviene presentarle al cliente las dos ' +
+        'calcula este estudio a partir del consumo real del recibo -- ambos criterios son válidos y conviene presentarle al cliente las dos ' +
         'referencias antes de decidir el tamaño final. Ambos escenarios se calcularon con el mismo motor (mismo recibo, misma tarifa, ' +
         'mismos costos) -- no implica que ambos tamaños quepan físicamente en el espacio disponible.', 's1-verif-aviso'));
   }
@@ -1128,7 +1128,7 @@ function s24(r, _leido, onToggle) {
     p(`Mismo recibo, mismo motor, solo cambia el número de paneles: este escenario usa el MISMO recibo de ` +
       `${r.titular} (sección ${refSeccion(2, r)} -- ${r.periodoKwh.toLocaleString('en-US')} kWh en ${r.periodoDias} días, tarifa ${r.tarifa}) ` +
       `y las mismas fórmulas de las secciones ${refSeccion(6, r)}, ${refSeccion(11, r)} y ${refSeccion(13, r)} -- la única diferencia es que aquí "n" (número de paneles) es ` +
-      `el que propone la verificación en campo (${ev.n}), no el que calcula este sistema a partir del consumo (${r.n}, ver sección ${refSeccion(1, r)}).`),
+      `el que propone la verificación en campo (${ev.n}), no el que calcula este estudio a partir del consumo (${r.n}, ver sección ${refSeccion(1, r)}).`),
     graficoToggle('g19-calc-formula', 'Tabla de fórmula del escenario verificado', tabla(['Variable', `Fórmula (igual que sección ${refSeccion(6, r)}/${refSeccion(11, r)}/${refSeccion(13, r)})`, `Sustitución con los ${ev.n} paneles de la verificación`], [
       ['Potencia nominal', 'n × W por módulo ÷ 1000', `${ev.n} × ${r.moduloWp} W ÷ 1000 = ${ev.kwp.toFixed(2)} kWp`],
       ['Inversión total', `Mismo presupuesto de materiales (sección ${refSeccion(12, r)}) recalculado para este "n", con IVA`, M(ev.investment)],
@@ -1154,7 +1154,7 @@ function s25(r, _leido, onToggle) {
       `capturarlo.`));
     return art;
   }
-  art.append(p(`Lo que este sistema calculó a partir del consumo real del recibo (${r.n} paneles) comparado con lo ` +
+  art.append(p(`Lo que este estudio calculó a partir del consumo real del recibo (${r.n} paneles) comparado con lo ` +
     `que propone el documento de verificación en campo (${ev.n} paneles) -- ambos escenarios usan el mismo recibo, ` +
     'la misma tarifa y los mismos costos, solo cambia el número de paneles.'));
   art.append(textoEditable('h5', null, `Propuesta de la verificación en campo (sección ${refSeccion(19, r)})`));
@@ -1165,8 +1165,8 @@ function s25(r, _leido, onToggle) {
     [ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', 'Recuperación simple estimada'],
     [PCT(ev.pctAhorro), 'Ahorro anual de factura estimado'],
   ])));
-  art.append(textoEditable('h5', null, `Calculado por este sistema (sección ${refSeccion(1, r)})`));
-  art.append(graficoToggle('g20-tarjetas-calculado', 'Tarjetas: resumen calculado por este sistema', tarjetas([
+  art.append(textoEditable('h5', null, `Calculado por este estudio (sección ${refSeccion(1, r)})`));
+  art.append(graficoToggle('g20-tarjetas-calculado', 'Tarjetas: resumen calculado por este estudio', tarjetas([
     [M(r.investment), 'Inversión estimada, IVA incluido'],
     [`${r.n} paneles`, `${r.moduloWp} W por módulo / ${r.kwp.toFixed(2)} kWp`],
     [M(r.ahorroAnual), 'Ahorro estimado de factura, año 1'],
@@ -1193,7 +1193,7 @@ function s25(r, _leido, onToggle) {
     conclusion = 'Conclusión: el número de paneles calculado por el consumo real coincide con lo que sugirió la verificación en campo -- ambos escenarios salen iguales.';
   } else {
     conclusion = `Conclusión: con los ${ev.n} paneles de la verificación en campo (${ev.kwp.toFixed(2)} kWp) la inversión sería de ${M(ev.investment)}, ` +
-      `contra ${M(r.investment)} con los ${r.n} paneles calculados por este sistema (${r.kwp.toFixed(2)} kWp): ${M(Math.abs(difInv))} ${masMenos(difInv)}. ` +
+      `contra ${M(r.investment)} con los ${r.n} paneles calculados por este estudio (${r.kwp.toFixed(2)} kWp): ${M(Math.abs(difInv))} ${masMenos(difInv)}. ` +
       `El ahorro de factura del año 1 sería de ${M(ev.ahorroAnual)} (${PCT(ev.pctAhorro)} de la factura) contra ${M(r.ahorroAnual)} (${PCT(r.pctAhorro)}): ` +
       `${M(Math.abs(difAh))} ${masMenos(difAh)} al año. La recuperación simple pasaría de ${pb(r.payback)} a ${pb(ev.payback)}.`;
     if (dif > 0 && difInv > 0) {
@@ -1330,7 +1330,7 @@ function calculoReciboConDemanda(r) {
         '"Punta" de CFE normalmente cae en la tarde/noche cuando ya no hay generación solar, así que esa parte de ' +
         'la factura no se puede sustituir con energía propia -- por eso se agrupa con lo que no baja, no por ser fijo.', 's3-gdmth-aviso'),
     ] : []),
-    p('Así se arma, paso a paso, el total exacto de este período (los mismos números que ya calculó el sistema, no una reconstrucción aparte):'),
+    p('Así se arma, paso a paso, el total exacto de este período (los mismos números que ya calculó este estudio, no una reconstrucción aparte):'),
     graficoToggle('g03-calc-pasos', 'Tabla de pasos del cálculo del recibo', tabla(['Paso', 'Qué incluye', 'Operación', 'Resultado'], pasos, { small: true, textCols: [1, 2], id: 'g03-calc-pasos', idsFilas: clavesPasos })),
     avisoCream(`Fórmula base según el Acuerdo de la Comisión Nacional de Energía para tarifas finales de ` +
       `suministro básico (apartados 3.1.2, 5.1, 5.2 y 5.5): "cargo fijo por los días del período" + "tarifa por ` +

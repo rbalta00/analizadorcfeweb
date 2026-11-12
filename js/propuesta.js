@@ -403,7 +403,7 @@ export function paginaProyectoVerificado(doc, r, numero) {
   const ev = r.escenarioVerificado;
   let y = encabezado(doc, numero, 'Su proyecto según la verificación en sitio', r.titular);
   y = bodyX(doc, y, `Mismo recibo, mismo cálculo -- solo cambia el número de paneles: ${ev.n} según la ` +
-    `verificación en campo, en vez de los ${r.n} que calcula este sistema a partir del consumo real.`);
+    `verificación en campo, en vez de los ${r.n} que calcula este estudio a partir del consumo real.`);
   y = spacer(y, 4);
   y = cardsRow(doc, y, [
     [M(ev.investment), 'Lo que costaría el sistema, IVA incluido'],
@@ -433,11 +433,11 @@ export function paginaComparativoVerificacion(doc, r, numero) {
   const ev = r.escenarioVerificado;
   const dif = ev.diferenciaPaneles;
   let y = encabezado(doc, numero, 'Comparativo: calculado vs. verificación en sitio', r.titular);
-  y = bodyX(doc, y, `Lo que este sistema calculó a partir del consumo real del recibo (${r.n} paneles) comparado ` +
+  y = bodyX(doc, y, `Lo que este estudio calculó a partir del consumo real del recibo (${r.n} paneles) comparado ` +
     `con lo que propone el documento de verificación en campo (${ev.n} paneles) -- ambos escenarios usan el ` +
     'mismo recibo, la misma tarifa y los mismos costos, solo cambia el número de paneles.');
   y = spacer(y, 4);
-  y = tablaF(doc, y, 'g20-comparativo', r, ['Concepto comparable', 'Calculado por el sistema', 'Verificación en sitio', 'Diferencia'], [
+  y = tablaF(doc, y, 'g20-comparativo', r, ['Concepto comparable', 'Calculado por el estudio', 'Verificación en sitio', 'Diferencia'], [
     ['Paneles', `${r.n}`, `${ev.n}`, dif === 0 ? 'Igual' : `${dif > 0 ? '+' : ''}${dif}`],
     ['Potencia', `${r.kwp.toFixed(2)} kWp`, `${ev.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
     ['Inversión, IVA incluido', M(r.investment), M(ev.investment), M(ev.investment - r.investment)],
@@ -449,7 +449,7 @@ export function paginaComparativoVerificacion(doc, r, numero) {
   y = bodyX(doc, y, dif === 0
     ? 'El número de paneles calculado por el consumo real coincide con lo que sugirió la verificación en campo -- ambos escenarios salen iguales.'
     : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ` +
-      `${dif > 0 ? 'más' : 'menos'} que lo que calcula este sistema a partir del consumo real del recibo, lo que ` +
+      `${dif > 0 ? 'más' : 'menos'} que lo que calcula este estudio a partir del consumo real del recibo, lo que ` +
       `cambia la inversión en ${M(Math.abs(ev.investment - r.investment))} y el ahorro anual en ` +
       `${M(Math.abs(ev.diferenciaAhorro))}. Ambos criterios son válidos; conviene presentarle al cliente las dos ` +
       'referencias antes de decidir el tamaño final.');
