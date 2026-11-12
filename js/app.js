@@ -3365,7 +3365,7 @@ $('btnGenerarExcel').addEventListener('click', async () => {
   const textoOriginal = boton.textContent;
   boton.textContent = 'Generando…';
   try {
-    await descargarExcelCotizacion(ultimoResultado, nombreArchivoProyecto('Cotizacion', 'xlsx'));
+    await descargarExcelCotizacion(ultimoResultado, nombreArchivoProyecto('Estudio', 'xlsx'));
   } catch (err) {
     alert('No se pudo generar el Excel: ' + err.message);
     console.error(err);
