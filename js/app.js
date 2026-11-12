@@ -5,7 +5,7 @@
 import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo, listarClientes,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
-  aplicarMachoteAProyecto, clonarProyectoCongelado, crearProyectoDesdeOrigen,
+  aplicarMachoteAProyecto, clonarProyectoCongelado, crearProyectoDesdeOrigen, detectarTextosConNumerosSospechosos,
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
@@ -916,6 +916,21 @@ function renderAvisoPlantillaOrigen() {
   if (!o || proyectoActual.plantillaVerificada) { avisoEl.hidden = true; return; }
   avisoEl.hidden = false;
   $('txtPlantillaOrigen').textContent = `${o.clienteNombre} — ${o.proyectoNombre}${o.tarifa ? ' (' + o.tarifa + ')' : ''}`;
+  // Pedido explicito del usuario, 2026-11-11: los textos editados del machote se
+  // quedan igual "a excepcion si vienen del calculo del nuevo servicio" -- un texto
+  // que el usuario tecleo con un numero/monto/% pegado (no una celda calculada, esas
+  // ya estan protegidas) nunca se actualiza solo al cambiar de cliente. No se puede
+  // bloquear ni corregir solo -- se señala para que el usuario lo revise.
+  const sospechosos = detectarTextosConNumerosSospechosos(proyectoActual.textosEditados);
+  const cajaEl = $('listaTextosSospechososMachote');
+  if (sospechosos.length) {
+    cajaEl.hidden = false;
+    cajaEl.innerHTML = '<p class="nota aviso">⚠️ Estos textos editados tienen un número/monto/% pegado -- revisa si venían del cálculo del cliente anterior:</p><ul>' +
+      sospechosos.map(s => `<li><code>${escapeHtml(s.id)}</code>: "${escapeHtml(s.texto)}"</li>`).join('') + '</ul>';
+  } else {
+    cajaEl.hidden = true;
+    cajaEl.innerHTML = '';
+  }
 }
 $('btnMarcarPlantillaVerificada').addEventListener('click', () => {
   proyectoActual.plantillaVerificada = true;
@@ -3287,10 +3302,28 @@ $('btnEnviarWhatsapp').addEventListener('click', async () => {
 // que cerrar/reabrir la app. Se guarda primero el formulario en pantalla (si hay un
 // proyecto abierto) para no perder lo que se este escribiendo -- mismo cuidado que ya
 // tenia esta funcion desde el 2026-11-06.
+// Pedido explicito del usuario, 2026-11-11: "no necesariamente me mandes al inicio,
+// igual que se actualice donde este si estoy en la cotizacion" -- location.reload()
+// siempre volvia a la pantalla de Clientes (es el <main> visible por default en el
+// HTML), perdiendo en qué cliente/cotización se estaba trabajando. Se guarda un
+// marcador de una sola vez en sessionStorage (no localStorage -- es solo para
+// sobrevivir ESTE refresh, no para reabrir la app días después en otro lado) y se
+// restaura al arrancar, más abajo en este archivo.
+const CLAVE_REANUDAR = 'cfe_reanudar_tras_refrescar_v1';
+function guardarPantallaParaReanudar() {
+  if (!$('pantallaCliente').hidden && clienteActual && proyectoActual) {
+    sessionStorage.setItem(CLAVE_REANUDAR, JSON.stringify({ clienteId: clienteActual.id, proyectoId: proyectoActual.id }));
+  } else if (!$('pantallaProyectos').hidden && clienteActual) {
+    sessionStorage.setItem(CLAVE_REANUDAR, JSON.stringify({ clienteId: clienteActual.id }));
+  } else {
+    sessionStorage.removeItem(CLAVE_REANUDAR);
+  }
+}
 $('btnRefrescar').addEventListener('click', async () => {
   if (!$('pantallaCliente').hidden && clienteActual && proyectoActual) {
     try { proyectoActual.formulario = leerFormulario(); guardarProyecto(clienteActual, proyectoActual); } catch (e) { /* no bloquea la recarga si falla */ }
   }
+  guardarPantallaParaReanudar();
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) await reg.update();
@@ -3498,4 +3531,17 @@ $('btnVerificarPdf').addEventListener('click', async () => {
 // =====================================================================
 // Arranque
 // =====================================================================
-renderListaClientes();
+(function arrancar() {
+  let reanudar = null;
+  try { reanudar = JSON.parse(sessionStorage.getItem(CLAVE_REANUDAR) || 'null'); } catch (e) { /* ignorar marcador corrupto */ }
+  sessionStorage.removeItem(CLAVE_REANUDAR); // de una sola vez -- no reaparece en un refresh normal del navegador
+  if (reanudar && reanudar.proyectoId) {
+    const cliente = obtenerCliente(reanudar.clienteId);
+    const proyecto = cliente ? obtenerProyecto(cliente, reanudar.proyectoId) : null;
+    if (cliente && proyecto) { abrirProyecto(reanudar.clienteId, reanudar.proyectoId); return; }
+  } else if (reanudar && reanudar.clienteId) {
+    const cliente = obtenerCliente(reanudar.clienteId);
+    if (cliente) { mostrarPantallaProyectos(reanudar.clienteId); return; }
+  }
+  renderListaClientes();
+})();

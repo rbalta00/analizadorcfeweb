@@ -463,6 +463,28 @@ export function aplicarMachoteAProyecto(proyecto, origen) {
   return proyecto;
 }
 
+// Heurística de aviso, no un bloqueo: un texto editado a mano puede llevar pegado un
+// número/monto/porcentaje calculado del cliente ORIGEN del machote (ej. "el ahorro es
+// de $46,860 pesos" tecleado como texto libre) -- ese número nunca se actualiza solo
+// al aplicar el machote a un cliente nuevo, porque para el sistema es texto editorial
+// igual que cualquier otro (pedido explícito del usuario 2026-11-11: "todos los textos
+// editados... se quedan a excepcion si vienen del calculo del nuevo servicio, obvio").
+// Esto NO detecta todos los casos (es imposible saberlo con certeza desde el texto
+// solo) -- es un recordatorio dirigido para que el usuario revise esos textos en
+// particular en vez de los 25+ que puede tener una cotización completa.
+const PATRON_POSIBLE_NUMERO_CALCULADO = /\$\s?[\d,]+(\.\d+)?|\d+(\.\d+)?\s?%|\d+(\.\d+)?\s?(kwh|kwp|kw)\b|\d+(\.\d+)?\s*años|\d+\s*paneles/i;
+export function detectarTextosConNumerosSospechosos(textosEditados) {
+  if (!textosEditados) return [];
+  const hallazgos = [];
+  for (const [id, texto] of Object.entries(textosEditados)) {
+    if (typeof texto !== 'string') continue;
+    if (PATRON_POSIBLE_NUMERO_CALCULADO.test(texto)) {
+      hallazgos.push({ id, texto: texto.length > 90 ? texto.slice(0, 90) + '…' : texto });
+    }
+  }
+  return hallazgos;
+}
+
 export function crearProyectoDesdeOrigen(cliente, origen, { nombre } = {}) {
   const proyecto = crearProyecto(cliente, { nombre });
   aplicarMachoteAProyecto(proyecto, origen);
