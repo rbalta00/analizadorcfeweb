@@ -650,11 +650,12 @@ function tarjetaEnvio(envio) {
   optNuevo.value = '__nuevo__';
   optNuevo.textContent = '+ Crear cliente nuevo';
   selectCliente.append(optNuevo);
-  const { gobierno, particular } = clientesAgrupadosPorTipo();
-  for (const [etiqueta, lista] of [['Gobierno', gobierno], ['Particulares', particular]]) {
+  // Mismo bug/fix que poblarSelectClienteGuardar() -- clientesAgrupadosPorTipo() ya no
+  // regresa {gobierno, particular} fijos (ver commit 9668ac9).
+  for (const { tipo, clientes: lista } of clientesAgrupadosPorTipo()) {
     if (!lista.length) continue;
     const og = document.createElement('optgroup');
-    og.label = etiqueta;
+    og.label = etiquetaTipo(tipo);
     for (const c of lista) {
       const opt = document.createElement('option');
       opt.value = c.id;
@@ -1101,11 +1102,16 @@ $('archivoReciboNuevoProyecto').addEventListener('change', async (e) => {
 function poblarSelectClienteGuardar() {
   const sel = $('selectClienteGuardar');
   sel.innerHTML = '';
-  const { gobierno, particular } = clientesAgrupadosPorTipo();
-  const agregarGrupo = (etiqueta, lista) => {
-    if (!lista.length) return;
+  // clientesAgrupadosPorTipo() ya no regresa {gobierno, particular} fijos -- ver
+  // commit 9668ac9 (tipo de cliente libre) -- ahora es un arreglo de {tipo, clientes}
+  // dinamico. Bug real encontrado 2026-11-11: este call site se quedo usando la forma
+  // vieja, lo que rompia abrirProyecto() ENTERO con una excepcion no atrapada (tiraba
+  // ANTES de llegar al recalculo automatico al reabrir una cotizacion guardada) --
+  // exactamente el reporte del usuario, "ya no se despliegan, se quedan como si se
+  // tuviera que volver a calcular".
+  for (const { tipo, clientes: lista } of clientesAgrupadosPorTipo()) {
     const og = document.createElement('optgroup');
-    og.label = etiqueta;
+    og.label = etiquetaTipo(tipo);
     for (const c of lista) {
       const opt = document.createElement('option');
       opt.value = c.id;
@@ -1113,9 +1119,7 @@ function poblarSelectClienteGuardar() {
       og.append(opt);
     }
     sel.append(og);
-  };
-  agregarGrupo('Gobierno', gobierno);
-  agregarGrupo('Particulares', particular);
+  }
   // Opcion para crear un cliente nuevo sin tener que salir de la cotizacion abierta --
   // pedido explicito del usuario, 2026-11-05: "cuando guardes tambien permite crear
   // clientes". Elegirla abre el mini-formulario de abajo (filaNuevoClienteGuardar) en
