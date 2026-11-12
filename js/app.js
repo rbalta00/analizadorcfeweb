@@ -1111,20 +1111,47 @@ function renderAvisoPlantillaOrigen() {
   if (!o || proyectoActual.plantillaVerificada) { avisoEl.hidden = true; return; }
   avisoEl.hidden = false;
   $('txtPlantillaOrigen').textContent = `${o.clienteNombre} — ${o.proyectoNombre}${o.tarifa ? ' (' + o.tarifa + ')' : ''}`;
-  // Pedido explicito del usuario, 2026-11-11: los textos editados del machote se
-  // quedan igual "a excepcion si vienen del calculo del nuevo servicio" -- un texto
-  // que el usuario tecleo con un numero/monto/% pegado (no una celda calculada, esas
-  // ya estan protegidas) nunca se actualiza solo al cambiar de cliente. No se puede
-  // bloquear ni corregir solo -- se señala para que el usuario lo revise.
+  // Desde 2026-11-12, aplicarMachoteAProyecto() ya filtra estos textos al elegir el
+  // machote (ver clientes.js) -- esta caja normalmente solo aparece si el usuario
+  // edito a mano un parrafo DESPUES y le pego un numero el mismo. Pedido explicito del
+  // usuario: el texto y el boton de abajo (btnMarcarPlantillaVerificada) hablaban de
+  // "verificar contra el recibo real", pero estos numeros (paneles sugeridos, ahorro,
+  // etc.) NUNCA vienen impresos en ningun recibo de CFE -- son resultado del CALCULO Y
+  // ANALISIS del SFV para este inmueble, no un dato que se pueda cotejar contra el
+  // recibo. Se explica asi, y se da un boton para restaurarlos de un clic al texto
+  // generico (que ya muestra los numeros recalculados de este servicio) en vez de solo
+  // "marcar como revisado" sin corregir nada.
   const sospechosos = detectarTextosConNumerosSospechosos(proyectoActual.textosEditados);
   const cajaEl = $('listaTextosSospechososMachote');
+  cajaEl.innerHTML = '';
   if (sospechosos.length) {
     cajaEl.hidden = false;
-    cajaEl.innerHTML = '<p class="nota aviso">⚠️ Estos textos editados tienen un número/monto/% pegado -- revisa si venían del cálculo del cliente anterior:</p><ul>' +
-      sospechosos.map(s => `<li><code>${escapeHtml(s.id)}</code>: "${escapeHtml(s.texto)}"</li>`).join('') + '</ul>';
+    cajaEl.append(Object.assign(document.createElement('p'), {
+      className: 'nota aviso',
+      textContent: '⚠️ Estos textos tienen un número/monto/% pegado que NO viene del recibo de CFE -- es resultado ' +
+        'del cálculo y análisis del SFV para el servicio ANTERIOR (el que se usó de machote). Revísalos contra el ' +
+        'análisis de este inmueble, o restáuralos para que muestren el número ya recalculado:',
+    }));
+    const ul = document.createElement('ul');
+    for (const s of sospechosos) {
+      const li = document.createElement('li');
+      const code = document.createElement('code'); code.textContent = s.id;
+      li.append(code, document.createTextNode(`: "${s.texto}"`));
+      ul.append(li);
+    }
+    cajaEl.append(ul);
+    const btnRestaurar = document.createElement('button');
+    btnRestaurar.className = 'btn-secundario';
+    btnRestaurar.textContent = '🔄 Restaurar estos textos al cálculo de este inmueble';
+    btnRestaurar.addEventListener('click', () => {
+      for (const s of sospechosos) delete proyectoActual.textosEditados[s.id];
+      guardarProyecto(clienteActual, proyectoActual);
+      if (ultimoResultado) { ultimoResultado.textosEditados = proyectoActual.textosEditados; renderSecciones(ultimoResultado); }
+      renderAvisoPlantillaOrigen();
+    });
+    cajaEl.append(btnRestaurar);
   } else {
     cajaEl.hidden = true;
-    cajaEl.innerHTML = '';
   }
 }
 $('btnMarcarPlantillaVerificada').addEventListener('click', () => {
