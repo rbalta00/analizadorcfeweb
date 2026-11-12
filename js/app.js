@@ -758,14 +758,49 @@ function tarjetaProyecto(p) {
   return div;
 }
 
+// Pedido explicito del usuario, 2026-11-11: tenia 4 cotizaciones "Carreteras de
+// Cuota" con el mismo nombre sin saber por que (congelar una definitiva SIEMPRE crea
+// una copia nueva aparte, nunca reemplaza la anterior -- si se congela varias veces se
+// van acumulando). Pidio "un lugar donde ponga las que se estan trabajando, otro donde
+// se guardan las definitivas... y la cantidad, en otro las muestras que van por
+// tarifa... y las que se generen sin querer en otro lado". Se agrupan en 4 categorias
+// con su propio conteo, para ver de un vistazo cuantas hay de cada tipo y detectar
+// duplicados/borradores sueltos que conviene borrar (ya se confirmo que eliminar
+// cualquiera, incluida una congelada, funciona sin restriccion).
 function renderListaProyectos() {
   const cont = $('listaProyectos');
   cont.innerHTML = '';
   const proyectos = listarProyectos(clienteActual);
   if (!proyectos.length) {
     cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: 'Todavía no hay cotizaciones para este cliente. Sube un recibo o arranca una en blanco.' }));
+    return;
   }
-  for (const p of proyectos) cont.append(tarjetaProyecto(p));
+  const enTrabajo = proyectos.filter(p => !p.definitiva && p.formulario);
+  const borradoresVacios = proyectos.filter(p => !p.definitiva && !p.formulario);
+  const definitivasCliente = proyectos.filter(p => p.definitiva && p.propositoDefinitiva !== 'muestra');
+  const muestras = proyectos.filter(p => p.definitiva && p.propositoDefinitiva === 'muestra');
+
+  function grupo(titulo, lista, notaExtra) {
+    if (!lista.length) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'grupo-proyectos';
+    const h4 = document.createElement('h4');
+    h4.textContent = `${titulo} (${lista.length})`;
+    wrap.append(h4);
+    if (notaExtra) wrap.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: notaExtra }));
+    const listaEl = document.createElement('div');
+    listaEl.className = 'lista-clientes';
+    for (const p of lista) listaEl.append(tarjetaProyecto(p));
+    wrap.append(listaEl);
+    cont.append(wrap);
+  }
+
+  grupo('🛠️ En trabajo', enTrabajo);
+  grupo('🗒️ Borradores vacíos (sin datos capturados todavía)', borradoresVacios,
+    'Revisa si se crearon sin querer -- bórralos si no los necesitas.');
+  grupo('✅ Definitivas entregadas al cliente', definitivasCliente);
+  grupo('📋 Muestras (machote reusable por tarifa)', muestras,
+    'Estas también aparecen en "✅ Definitivas por tarifa" para usarlas con cualquier cliente de esa tarifa.');
 }
 
 function mostrarPantallaProyectos(clienteId) {

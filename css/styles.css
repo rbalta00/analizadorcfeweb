@@ -296,6 +296,14 @@ input[type="file"] { padding: 6px 0; }
 
 /* ===================== Pantalla: clientes ===================== */
 .lista-clientes { display: flex; flex-direction: column; gap: 8px; }
+/* Grupos dentro de "Cotizaciones de este cliente" -- ver renderListaProyectos() en
+   app.js, pedido explicito del usuario 2026-11-11 ("un lugar para las que se estan
+   trabajando, otro para las definitivas, otro para las muestras, otro para las
+   vacias/sin querer"). */
+.grupo-proyectos { margin-bottom: 18px; }
+.grupo-proyectos h4 { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
+  text-transform: uppercase; color: var(--grey); margin: 0 0 6px; }
+.grupo-proyectos .lista-clientes { margin-bottom: 4px; }
 .tarjeta-cliente {
   display: flex; justify-content: space-between; align-items: center;
   background: var(--bg); border-radius: 8px; padding: 10px 12px; cursor: pointer;
