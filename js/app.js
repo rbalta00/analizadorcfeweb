@@ -6,11 +6,11 @@ import {
   obtenerCliente, crearCliente, guardarCliente, eliminarCliente, clientesAgrupadosPorTipo, tiposClienteUsados, listarClientes,
   recuperarTextosEditadosOrfanados,
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
-  aplicarMachoteAProyecto, clonarProyectoCongelado, crearProyectoDesdeOrigen, detectarTextosConNumerosSospechosos,
+  aplicarMachoteAProyecto, clonarProyectoCongelado, clonarProyectoEditable, crearProyectoDesdeOrigen, detectarTextosConNumerosSospechosos,
   desbloquearProyecto, bloquearProyecto,
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
 } from './clientes.js';
-import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo } from './secciones.js';
+import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo, detectarCamposDinamicosConvertibles } from './secciones.js';
 import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf, generarPdfCompletaDesdeVista } from './propuesta.js';
@@ -62,6 +62,27 @@ function mostrarAvisoErrorGuardado() {
 function ocultarAvisoErrorGuardado() {
   const el = $('avisoErrorGuardado');
   if (el) el.hidden = true;
+}
+// Confirmacion visible de guardado exitoso -- se muestra brevemente y se oculta sola
+// (igual que un "toast"), para no quedarse pegada en pantalla para siempre. Un guardado
+// NUEVO mientras la anterior confirmacion todavia estaba visible reinicia el temporizador
+// (clearTimeout), para que la hora mostrada siempre sea la del ULTIMO guardado real.
+// A PROPOSITO solo se dispara desde las acciones de guardado EXPLICITAS (boton "Guardar
+// cotización"/"Definitiva...", ver guardarCotizacionConCliente mas abajo) y NO desde el
+// hook global alGuardar() -- ese hook se dispara en CADA escritura a localStorage, que
+// incluye el autoguardado silencioso de cada edicion de texto al perder el foco (ver
+// onEditarTexto); conectar el toast ahi lo haria aparecer en cada clic/tecla mientras se
+// edita texto, demasiado ruidoso. El hook global se queda igual que antes, solo para el
+// caso de ERROR (eso si debe avisar siempre, sin importar que accion lo disparo).
+let _timeoutAvisoGuardadoOk = null;
+function mostrarAvisoGuardadoOk() {
+  const el = $('avisoGuardadoOk');
+  if (!el) return;
+  const hora = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  $('avisoGuardadoOkHora').textContent = `(${hora})`;
+  el.hidden = false;
+  if (_timeoutAvisoGuardadoOk) clearTimeout(_timeoutAvisoGuardadoOk);
+  _timeoutAvisoGuardadoOk = setTimeout(() => { el.hidden = true; }, 2500);
 }
 alGuardar((ok) => (ok ? ocultarAvisoErrorGuardado() : mostrarAvisoErrorGuardado()));
 
@@ -813,8 +834,12 @@ function tarjetaProyecto(p) {
   // editando, que ya existia) -- renderListaProyectos() las ordena por tarifa dentro
   // de cada grupo para que las de la misma tarifa queden juntas.
   const chipTarifa = p.formulario?.tarifa ? `<span class="chip-etapa chip-tarifa-proyecto">${escapeHtml(p.formulario.tarifa)}</span>` : '';
+  // RPU (numero de servicio) visible en la tarjeta -- pedido explicito del usuario,
+  // 2026-11-12: "nombre del inmueble, el RPU, la tarifa y la fecha de última
+  // modificación" para poder encontrar cualquier estudio rapido.
+  const rpu = p.formulario?.noServicio ? `<span class="nota">RPU ${escapeHtml(p.formulario.noServicio)}</span>` : '';
   div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(p.nombre)}</strong>` +
-    chipTarifa +
+    chipTarifa + rpu +
     (p.definitiva ? `<span class="chip-definitiva">✅ Definitiva${p.bloqueada ? ' 🔒' : ''}${p.propositoDefinitiva === 'muestra' ? ' 📋 muestra' : ''}</span>` : '') +
     (p.plantillaOrigen && !p.plantillaVerificada ? `<span class="chip-etapa chip-etapa-cotizado">📋 desde plantilla, sin verificar</span>` : '') +
     `<span class="chip-etapa chip-etapa-${etapa}">${ETAPAS_PROYECTO[etapa]}</span>` +
@@ -844,19 +869,39 @@ function tarjetaProyecto(p) {
 // con su propio conteo, para ver de un vistazo cuantas hay de cada tipo y detectar
 // duplicados/borradores sueltos que conviene borrar (ya se confirmo que eliminar
 // cualquiera, incluida una congelada, funciona sin restriccion).
+// Buscador (nombre o RPU) + orden alternativo del historial -- pedido explicito del
+// usuario, 2026-11-12: "encontrar rápidamente cualquier estudio por inmueble o RPU" y
+// "ordenar por nombre, fecha de creación o última modificación". El agrupado por estado
+// (en trabajo/borradores/definitivas/muestras, ver comentario de abajo) y el orden "por
+// tarifa" DENTRO de cada grupo se quedan como default (ya validados antes, pedido
+// explicito del usuario 2026-11-11) -- el selector de orden solo cambia el criterio
+// DENTRO de cada grupo cuando se elige algo distinto de "tarifa", nunca quita el
+// agrupado por estado en si.
+function ordenadorProyectos(criterio) {
+  if (criterio === 'modificado') return (a, b) => (b.actualizadoEn || '').localeCompare(a.actualizadoEn || '');
+  if (criterio === 'creado') return (a, b) => (b.creadoEn || '').localeCompare(a.creadoEn || '');
+  if (criterio === 'nombre') return (a, b) => (a.nombre || '').localeCompare(b.nombre || '');
+  return (a, b) => (a.formulario?.tarifa || '￿').localeCompare(b.formulario?.tarifa || '￿'); // default: tarifa
+}
 function renderListaProyectos() {
   const cont = $('listaProyectos');
   cont.innerHTML = '';
-  const proyectos = listarProyectos(clienteActual);
+  let proyectos = listarProyectos(clienteActual);
   if (!proyectos.length) {
     cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: 'Todavía no hay cotizaciones para este cliente. Sube un recibo o arranca una en blanco.' }));
     return;
   }
-  // Ordenadas por tarifa DENTRO de cada grupo (pedido explicito del usuario: "cotizaciones
-  // por tarifa para verlas... ordena todo con coherencia y logica") -- asi, si un cliente
-  // tiene cotizaciones de varias tarifas, las de la misma tarifa quedan juntas en vez de
-  // mezcladas por fecha. Sin tarifa capturada todavia van al final.
-  const porTarifa = (a, b) => (a.formulario?.tarifa || '￿').localeCompare(b.formulario?.tarifa || '￿');
+  const textoBusqueda = ($('inputBuscarProyecto')?.value || '').trim().toLowerCase();
+  if (textoBusqueda) {
+    proyectos = proyectos.filter((p) =>
+      (p.nombre || '').toLowerCase().includes(textoBusqueda) ||
+      (p.formulario?.noServicio || '').toLowerCase().includes(textoBusqueda));
+    if (!proyectos.length) {
+      cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: `Ninguna cotización de este cliente coincide con "${textoBusqueda}" (nombre o RPU).` }));
+      return;
+    }
+  }
+  const porTarifa = ordenadorProyectos($('selectOrdenProyectos')?.value);
   const enTrabajo = proyectos.filter(p => !p.definitiva && p.formulario).sort(porTarifa);
   const borradoresVacios = proyectos.filter(p => !p.definitiva && !p.formulario);
   const definitivasCliente = proyectos.filter(p => p.definitiva && p.propositoDefinitiva !== 'muestra').sort(porTarifa);
@@ -884,6 +929,8 @@ function renderListaProyectos() {
   grupo('📋 Muestras (machote reusable por tarifa)', muestras,
     'Estas también aparecen en "✅ Definitivas por tarifa" para usarlas con cualquier cliente de esa tarifa.');
 }
+$('inputBuscarProyecto').addEventListener('input', renderListaProyectos);
+$('selectOrdenProyectos').addEventListener('change', renderListaProyectos);
 
 function mostrarPantallaProyectos(clienteId) {
   clienteActual = obtenerCliente(clienteId);
@@ -891,6 +938,7 @@ function mostrarPantallaProyectos(clienteId) {
   proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
   ocultarAvisoCambiosSinCalcular();
   archivosReciboAcumulados = []; // empieza limpio -- no arrastrar fotos de otro cliente/proyecto
+  if ($('inputBuscarProyecto')) $('inputBuscarProyecto').value = ''; // no arrastrar busqueda de otro cliente
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
@@ -2767,10 +2815,30 @@ function onToggleCalculo(bloque, activo) {
 
 function onEditarTexto(id, valor, textoDefecto) {
   proyectoActual.textosEditados = proyectoActual.textosEditados || {};
-  if (valor == null || !valor.trim() || valor.trim() === textoDefecto.trim()) {
+  let valorFinal = valor;
+  // Campos dinamicos (pedido explicito del usuario, 2026-11-12: "conserva la frase...
+  // y rellena ambos campos con los resultados del nuevo RPU"): si lo que se acaba de
+  // escribir/pegar trae pegado el VALOR YA CALCULADO de este proyecto tal cual (ej.
+  // "$341,829.54", el monto real de r.investment), se ofrece convertirlo al token
+  // {{inversion}} -- asi, si este parrafo se vuelve a usar como machote para OTRO
+  // servicio despues, el numero se recalcula solo en vez de quedarse pegado el de este
+  // cliente. Solo se ofrece (nunca se reemplaza sin confirmar), y solo si hay una
+  // coincidencia EXACTA de texto -- ver detectarCamposDinamicosConvertibles (secciones.js).
+  if (valor && valor.trim() && ultimoResultado) {
+    const hallazgos = detectarCamposDinamicosConvertibles(valor, ultimoResultado);
+    if (hallazgos.length) {
+      const lista = hallazgos.map((h) => `"${h.valorFormateado}" → {{${h.campo}}}`).join('\n');
+      if (confirm(`Este texto trae pegado un valor que ya calculó esta cotización:\n\n${lista}\n\n¿Convertirlo a campo dinámico? Así, si vuelves a usar este párrafo como machote para otro servicio, el número se actualiza solo en vez de quedarse pegado el de este cliente.`)) {
+        let reemplazado = valor;
+        for (const h of hallazgos) reemplazado = reemplazado.split(h.valorFormateado).join(`{{${h.campo}}}`);
+        valorFinal = reemplazado;
+      }
+    }
+  }
+  if (valorFinal == null || !valorFinal.trim() || valorFinal.trim() === textoDefecto.trim()) {
     delete proyectoActual.textosEditados[id];
   } else {
-    proyectoActual.textosEditados[id] = valor;
+    proyectoActual.textosEditados[id] = valorFinal;
   }
   guardarProyecto(clienteActual, proyectoActual);
   if (ultimoResultado) {
@@ -3552,6 +3620,7 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
   $('estadoGuardadoCotizacion').className = 'nota ok';
   $('estadoGuardadoCotizacion').textContent =
     `✓ ${etiqueta} con "${clienteActual.nombre}", cotización "${proyectoActual.nombre}". Subiendo respaldo a la nube...` + avisoSeparada + avisoDefinitiva;
+  mostrarAvisoGuardadoOk();
   // Pedido explicito del usuario, 2026-11-08 ("tambien se tiene que guardar en la
   // nube"): antes SOLO "Marcar como definitiva" subia a la nube automaticamente --
   // "Guardar cotización" (borrador) se quedaba solo local a proposito, para no subir
@@ -3576,6 +3645,22 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
 $('btnGuardarCotizacion').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: false }));
 $('btnMarcarDefinitivaMuestra').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: true, proposito: 'muestra' }));
 $('btnMarcarDefinitivaCliente').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: true, proposito: 'cliente' }));
+// "Guardar como copia" -- pedido explicito del usuario, 2026-11-12. A diferencia de
+// "Guardar cotización" (actualiza ESTE registro) y "Definitiva..." (congela un clon
+// aparte), esto crea un estudio nuevo e INDEPENDIENTE y EDITABLE con el estado actual,
+// y te deja viendo la copia nueva (el original se queda intacto, abierto donde estaba).
+$('btnGuardarComoCopia').addEventListener('click', () => {
+  if (!clienteActual || !proyectoActual) return;
+  const nombreSugerido = `${proyectoActual.nombre} (copia)`;
+  const nombre = prompt('Nombre para la copia nueva:', nombreSugerido);
+  if (nombre == null) return; // cancelado
+  guardarProyecto(clienteActual, proyectoActual); // el original se guarda tal como esta antes de clonarlo
+  const clon = clonarProyectoEditable(clienteActual, proyectoActual, nombre.trim() || nombreSugerido);
+  $('estadoGuardadoCotizacion').className = 'nota ok';
+  $('estadoGuardadoCotizacion').textContent = `✓ Se creó "${clon.nombre}" como copia independiente -- edítala aparte sin afectar "${proyectoActual.nombre}".`;
+  mostrarAvisoGuardadoOk();
+  abrirProyecto(clienteActual.id, clon.id);
+});
 
 // Crear un cliente nuevo sin salir de la cotizacion abierta -- elegir "+ Nuevo
 // cliente..." en el selector abre este mini-formulario en vez de guardar directo.

@@ -180,6 +180,58 @@ let _onToggleFilaActual = () => {};
 // solo lectura cuando el proyecto esta bloqueado, para que sea imposible escribir algo
 // que de todas formas nunca se iba a guardar.
 let _bloqueadaActual = false;
+let _rActual = null;
+
+// ---------------------------------------------------------------------------
+// Campos dinamicos: tokens {{campo}} dentro de un texto editado, que se resuelven con
+// los datos del proyecto ACTUAL cada vez que se renderiza -- pedido explicito del
+// usuario, 2026-11-12: "esos numeros son del machote que se ocupo" + "conserva la frase
+// ... y rellena ambos campos con los resultados del nuevo RPU". Antes de esto,
+// aplicarMachoteAProyecto() (clientes.js) solo podia EXCLUIR un parrafo con un numero
+// pegado (PATRON_POSIBLE_NUMERO_CALCULADO) -- ahora, si el usuario escribe un token en
+// vez del numero crudo, el parrafo SI se conserva y el numero se recalcula solo para
+// cada cliente/machote nuevo (un texto con tokens nunca matchea ese patron de numero
+// crudo, asi que aplicarMachoteAProyecto ya lo copia tal cual sin ningun cambio ahi).
+const CAMPOS_DINAMICOS = {
+  facturacionAnualSinSolar: (r) => M(r.annualbefore),
+  facturacionAnualConSolar: (r) => M(r.annualafter),
+  inversion: (r) => M(r.investment),
+  ahorroAnual: (r) => M(r.ahorroAnual),
+  pctAhorro: (r) => PCT(r.pctAhorro),
+  payback: (r) => (r.payback != null ? `${r.payback.toFixed(1)} años` : 'no calculable'),
+  paneles: (r) => String(r.n),
+  kwp: (r) => r.kwp.toFixed(2),
+  domicilio: (r) => r.domicilio || '',
+  titular: (r) => r.titular || '',
+  noServicio: (r) => r.noServicio || '',
+  tarifa: (r) => r.tarifa || '',
+};
+export function sustituirCamposDinamicos(texto, r) {
+  if (!texto || typeof texto !== 'string' || !r || texto.indexOf('{{') === -1) return texto;
+  return texto.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, campo) => {
+    const fn = CAMPOS_DINAMICOS[campo];
+    if (!fn) return match; // token desconocido -- se deja tal cual en vez de borrarlo en silencio
+    try { return fn(r); } catch { return match; }
+  });
+}
+
+// Busca, dentro de un texto recien editado, el valor YA FORMATEADO (ej. "$341,829.54")
+// de cualquiera de los campos dinamicos de arriba para el proyecto ACTUAL -- sirve para
+// ofrecerle al usuario "¿quieres convertir esto a un campo dinamico?" en vez de que lo
+// tenga que escribir a mano siempre. Solo detecta una coincidencia EXACTA de texto
+// (misma logica de riesgo que PATRON_POSIBLE_NUMERO_CALCULADO en clientes.js: puede
+// haber falsos negativos si el numero no coincide carácter a carácter, nunca un falso
+// positivo que reemplace algo que no es ese valor).
+export function detectarCamposDinamicosConvertibles(texto, r) {
+  if (!texto || typeof texto !== 'string' || !r) return [];
+  const hallazgos = [];
+  for (const [campo, fn] of Object.entries(CAMPOS_DINAMICOS)) {
+    let valorFormateado;
+    try { valorFormateado = fn(r); } catch { continue; }
+    if (valorFormateado && texto.includes(valorFormateado)) hallazgos.push({ campo, valorFormateado });
+  }
+  return hallazgos;
+}
 
 function siguienteTextoId() {
   return `s${_seccionActual}-t${_contadorTexto++}`;
@@ -234,7 +286,14 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id);
   const tieneGlobal = Object.prototype.hasOwnProperty.call(_globalesActuales, id);
   const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : (tieneGlobal ? _globalesActuales[id] : textoDefecto);
-  e.textContent = tieneProyecto ? _overridesActuales[id] : base;
+  const textoCrudo = tieneProyecto ? _overridesActuales[id] : base;
+  // Mientras NO se esta editando, se muestra con los tokens {{...}} ya resueltos
+  // (si trae alguno); al dar clic para editar, se muestra el texto crudo (con los
+  // tokens sin resolver) para poder editarlos como texto normal -- si se mostrara ya
+  // resuelto tambien al editar, guardar el resultado habria "horneado" el numero de
+  // ese momento como texto fijo, perdiendo el token para siempre en el primer blur.
+  e.textContent = sustituirCamposDinamicos(textoCrudo, _rActual);
+  e.addEventListener('focus', () => { e.textContent = textoCrudo; });
   e.addEventListener('paste', (ev) => {
     ev.preventDefault();
     const texto = (ev.clipboardData || window.clipboardData).getData('text/plain');
@@ -2219,6 +2278,7 @@ export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggl
   // guardarProyecto() si rechazaba el guardado. Ahora SI se lee de r.bloqueada (ver
   // calcularYRenderizar en app.js, que lo copia de proyectoActual.bloqueada).
   _bloqueadaActual = !!r.bloqueada;
+  _rActual = r;
   _overridesActuales = r.textosEditados || {};
   _onEditarTextoActual = onEditarTexto || (() => {});
   _calculosActivosActual = r.calculosActivos || [];

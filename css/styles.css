@@ -304,6 +304,11 @@ a.btn-secundario { display: inline-flex; align-items: center; text-decoration: n
    desactualizado) y debe ganarle si ambos estuvieran visibles a la vez. */
 .aviso-flotante-error { z-index: 510; background: #fde0e0; border-color: #e09a9a; }
 @media (prefers-color-scheme: dark) { .aviso-flotante-error { background: #4a1414; border-color: #7a2b2b; } }
+/* Confirmacion de guardado exitoso -- indicador de estado de guardado (pedido
+   explicito del usuario, 2026-11-12: "Guardando/Guardado/Error al guardar" visible).
+   Se muestra unos segundos y se oculta sola (ver mostrarAvisoGuardadoOk en app.js). */
+.aviso-flotante-ok { z-index: 505; background: #e3f3e6; color: #1c5e2d; border-color: #a9d9b4; }
+@media (prefers-color-scheme: dark) { .aviso-flotante-ok { background: #123a1c; color: #a9e3b6; border-color: #275c38; } }
 .btn-link-flotante {
   background: none; border: none; color: inherit; font-weight: 700; text-decoration: underline;
   cursor: pointer; font-size: inherit; padding: 0; margin-left: 4px;

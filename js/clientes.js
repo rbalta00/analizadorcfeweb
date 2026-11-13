@@ -440,6 +440,28 @@ export function clonarProyectoCongelado(cliente, proyecto, proposito = 'cliente'
   return clon;
 }
 
+// "Guardar como copia" -- pedido explicito del usuario, 2026-11-12: crea un estudio
+// INDEPENDIENTE y EDITABLE con los datos/ediciones actuales, a diferencia de
+// clonarProyectoCongelado() (que siempre marca el clon definitiva+bloqueada, pensado
+// para "esto ya se le entregó al cliente, no se vuelve a tocar"). Mismo patron de
+// deep-clone con id nuevo, pero SIN congelar nada -- el clon queda tan editable como
+// el original, los dos siguen su vida por separado desde este momento.
+export function clonarProyectoEditable(cliente, proyecto, nombreNuevo) {
+  const ahora = new Date().toISOString();
+  const clon = JSON.parse(JSON.stringify(proyecto));
+  clon.id = uuid();
+  clon.nombre = nombreNuevo || `${proyecto.nombre} (copia)`;
+  clon.creadoEn = ahora;
+  clon.actualizadoEn = ahora;
+  clon.definitiva = false;
+  clon.bloqueada = false;
+  clon.entregadaEn = null;
+  clon.propositoDefinitiva = null;
+  (cliente.proyectos = cliente.proyectos || []).push(clon);
+  guardarCliente(cliente);
+  return clon;
+}
+
 // Aplica un machote (otra cotizacion ya validada) SOBRE un proyecto que ya existe --
 // pedido explicito del usuario, 2026-11-09: "ya hay un boton de nuevo cliente al final
 // de la cotizacion donde se trabaja... permite elegir que cliente, el nombre de la

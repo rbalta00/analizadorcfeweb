@@ -59,13 +59,28 @@ function aplicarGridHistorial(prefijo, n, valores) {
   }
 }
 
+// Si el usuario eligio la tarifa A MANO (clic real en el <select>, no un cambio
+// programatico via dispatchEvent) y DESPUES carga un recibo que el OCR detecta como
+// una tarifa DISTINTA, antes esto se pisaba en silencio (ver llenarFormularioDesdeReciboCampos
+// mas abajo) -- bug real reportado en el encargo del usuario, 2026-11-12: "si la tarifa
+// detectada difiere de la seleccionada, muestra ambas y permite confirmar". Se usa
+// `event.isTrusted` para distinguir un clic real del usuario (true) de los
+// `dispatchEvent(new Event('change'))` que este mismo modulo y aplicarFormularioRecibo()
+// disparan para propagar un cambio de estado (false) -- asi NO se pregunta en el caso
+// normal (proyecto nuevo, que arranca con 'GDMTO' como valor de fabrica sin que el
+// usuario lo haya tocado). aplicarFormularioRecibo() resetea esta bandera cada vez que
+// se carga el estado completo de un proyecto (abrir, crear nuevo, aplicar machote).
+let tarifaTocadaPorUsuario = false;
+export function resetearTarifaTocadaPorUsuario() { tarifaTocadaPorUsuario = false; }
+
 // Conecta los listeners de tarifa (muestra/oculta el bloque domestico vs. no domestico)
 // y de los checkboxes de cargos extra (2% BT / bonificacion FP). onCambioTarifa(dom) es
 // opcional, para que quien use este modulo reaccione al cambio (ej. mostrar/ocultar
 // otras secciones de su propio formulario).
 export function conectarEventosFormularioRecibo(onCambioTarifa) {
   inicializarGridsHistorial();
-  $('tarifa').addEventListener('change', () => {
+  $('tarifa').addEventListener('change', (e) => {
+    if (e && e.isTrusted) tarifaTocadaPorUsuario = true;
     const dom = esDomestica($('tarifa').value);
     $('bloqueNoDomestica').hidden = dom;
     $('bloqueDomestica').hidden = !dom;
@@ -111,6 +126,7 @@ export function leerFormularioRecibo() {
 }
 
 export function aplicarFormularioRecibo(f) {
+  resetearTarifaTocadaPorUsuario();
   $('tarifa').value = f?.tarifa || 'GDMTO';
   $('tarifa').dispatchEvent(new Event('change'));
   $('periodoDias').value = f?.periodoDias ?? 30;
@@ -147,8 +163,17 @@ export function aplicarFormularioRecibo(f) {
 // este modulo (la app interna los tiene, la pagina publica no).
 export function llenarFormularioDesdeReciboCampos(c) {
   if (c.tarifa && TARIFAS_SOPORTADAS.has(c.tarifa)) {
-    $('tarifa').value = c.tarifa;
-    $('tarifa').dispatchEvent(new Event('change'));
+    const tarifaActual = $('tarifa').value;
+    const hayConflicto = tarifaTocadaPorUsuario && tarifaActual && tarifaActual !== c.tarifa;
+    const usarDetectada = !hayConflicto || confirm(
+      `Tarifa seleccionada: ${tarifaActual} -- Tarifa detectada en el recibo: ${c.tarifa}.\n\n` +
+      `Aceptar = usar ${c.tarifa} (la del recibo, recalcula con sus reglas).\n` +
+      `Cancelar = quedarte con ${tarifaActual} (la que ya tenías elegida) y no tocarla.`
+    );
+    if (usarDetectada) {
+      $('tarifa').value = c.tarifa;
+      $('tarifa').dispatchEvent(new Event('change'));
+    }
   }
   const dom = esDomestica($('tarifa').value);
   if (!dom) {

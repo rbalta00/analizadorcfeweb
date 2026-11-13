@@ -246,6 +246,19 @@
 
     <section class="tarjeta">
       <h3>Historial de cotizaciones</h3>
+      <div class="fila">
+        <label>Buscar por nombre o RPU
+          <input type="text" id="inputBuscarProyecto" placeholder="Ej. Carreteras de Cuota, o 267021200588">
+        </label>
+        <label>Ordenar por
+          <select id="selectOrdenProyectos">
+            <option value="tarifa">Tarifa (como siempre)</option>
+            <option value="modificado">Última modificación (más reciente primero)</option>
+            <option value="creado">Fecha de creación (más reciente primero)</option>
+            <option value="nombre">Nombre (A-Z)</option>
+          </select>
+        </label>
+      </div>
       <div id="listaProyectos" class="lista-clientes"></div>
     </section>
   </main>
@@ -360,10 +373,13 @@
         informativos para la cotización.</p>
 
       <h3>📋 ¿Partir de una cotización ya validada? (opcional, antes de capturar)</h3>
-      <p class="nota">Copia sobre ESTA cotización la tarifa, cargos, escalones, pasos de entrega y configuración
-        de la que elijas abajo -- el titular, domicilio, número de servicio, período/kWh e historial de este
-        cliente SIEMPRE quedan en blanco, hay que capturarlos de su recibo real. (El nombre y el cliente de esta
-        cotización se ajustan más abajo, en la pestaña de exportar PDF -- "1. Guarda tus cambios".)</p>
+      <p class="nota">Copia sobre ESTA cotización SOLO lo editorial de la que elijas abajo -- títulos, textos
+        redactados, qué secciones/gráficas/tablas están prendidas o apagadas, y el orden/pasos de entrega.
+        <strong>NUNCA toca tarifa, cargos, escalones, ni ningún dato del cálculo</strong> -- la tarifa, los
+        cargos, el titular, el domicilio, el número de servicio, el período/kWh y el historial de ESTE cliente
+        siempre salen de su propio recibo real, se capturen antes o después de elegir aquí. (El nombre y el
+        cliente de esta cotización se ajustan más abajo, en la pestaña de exportar PDF -- "1. Guarda tus
+        cambios".)</p>
       <div class="fila">
         <label><input type="checkbox" id="chkSoloDefinitivasMachote" checked> Mostrar solo las marcadas como ✅ Definitiva</label>
         <select id="filtroTarifaMachote"></select>
@@ -636,6 +652,16 @@
       <button type="button" id="btnCerrarAvisoErrorGuardado" class="btn-link-flotante">Entendido ✕</button>
     </div>
 
+    <!-- Indicador de estado de guardado -- pedido explicito del usuario, 2026-11-12:
+         "Guardando/Guardado/Error al guardar, según corresponda... confirma el guardado
+         cuando se complete la escritura". Reusa el mismo hook alGuardar() que ya usa
+         avisoErrorGuardado de arriba (un solo mecanismo real de guardado, localStorage
+         sincrono -- no hay un estado "Guardando..." real que mostrar porque la escritura
+         no es asincrona, así que solo se confirma Guardado/Error, nunca un spinner falso). -->
+    <div id="avisoGuardadoOk" class="aviso-flotante-cambios aviso-flotante-ok" hidden role="status">
+      ✓ Guardado <span id="avisoGuardadoOkHora"></span>
+    </div>
+
     <!-- Las 21 secciones se insertan aquí dinámicamente tras calcular -->
     <p class="nota nota-ayuda-edicion" id="ayudaEdicion" hidden>✎ Todo el texto, cada celda de tabla y cada
       etiqueta de tarjeta/gráfica es editable: haz clic directo, escribe, y clic afuera para guardar (se marca
@@ -720,7 +746,8 @@
         <label>Guardar esta cotización con el cliente
           <select id="selectClienteGuardar"></select>
         </label>
-        <button id="btnGuardarCotizacion" class="btn-secundario">💾 Guardar cotización</button>
+        <button id="btnGuardarCotizacion" class="btn-primario">💾 Guardar cambios</button>
+        <button id="btnGuardarComoCopia" class="btn-secundario" title="Crea un estudio nuevo e independiente con los datos/ediciones de ahorita -- este que ves se queda igual, el nuevo se puede editar aparte sin afectarlo.">📋 Guardar como copia</button>
         <button id="btnMarcarDefinitivaCliente" class="btn-primario" title="Congela una copia aparte como lo entregado a ESTE cliente; esta cotización se queda igual, sigue editable.">✅ Definitiva para EL CLIENTE (congela una copia)</button>
         <button id="btnMarcarDefinitivaMuestra" class="btn-secundario" title="Congela una copia aparte marcada como ejemplo reusable para esta tarifa; esta cotización se queda igual, sigue editable.">📋 Definitiva para MUESTRA (ejemplo por tarifa)</button>
       </div>
