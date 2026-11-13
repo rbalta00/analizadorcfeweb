@@ -74,15 +74,21 @@ cerca('ahorro_max', ahorroMax, 4108.34);
 cerca('pct_max', pct, 0.49058203433790043, 0.0001);
 
 const rows = flujoMensualAnual(invoice, dailyKwh, monthlyE, kwp, 1);
-cerca('enero pago_sin_solar', rows[0].pagoSinSolarMxn, 8118.87);
-cerca('enero pago_con_solar', rows[0].pagoConSolarEstimadoMxn, 4180.72);
-cerca('febrero pago_sin_solar', rows[1].pagoSinSolarMxn, 7352.24);
+// Valores ajustados 2026-11-12: construirInvoice() ahora prorratea el DAP por dias del
+// mes proyectado (mismo patron que ya usaba construirInvoiceDomestica()) -- antes usaba
+// el DAP del recibo tal cual para cualquier mes, sobre-contandolo en meses mas largos
+// que el periodo facturado real (hallazgo de la auditoria por tarifa, caso Corona/PDBT
+// con recibo de 62 dias). ahorro_anual no cambia (el DAP es igual en ambos escenarios,
+// se cancela en la resta).
+cerca('enero pago_sin_solar', rows[0].pagoSinSolarMxn, 8112.71);
+cerca('enero pago_con_solar', rows[0].pagoConSolarEstimadoMxn, 4174.56);
+cerca('febrero pago_sin_solar', rows[1].pagoSinSolarMxn, 7327.62);
 
 const annualbefore = Math.round(rows.reduce((s, x) => s + x.pagoSinSolarMxn, 0) * 100) / 100;
 const annualafter = Math.round(rows.reduce((s, x) => s + x.pagoConSolarEstimadoMxn, 0) * 100) / 100;
 const ahorroAnual = Math.round((annualbefore - annualafter) * 100) / 100;
-cerca('annualbefore', annualbefore, 95637.69);
-cerca('annualafter', annualafter, 49069.53);
+cerca('annualbefore', annualbefore, 95520.71);
+cerca('annualafter', annualafter, 48952.55);
 cerca('ahorro_anual', ahorroAnual, 46568.16);
 
 const costoInv = costoInversor(pres.materiales);

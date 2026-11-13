@@ -116,7 +116,15 @@ export function construirInvoice(tariff, periodoDias, periodoKwh, cargos, rateKw
     const recargo = solar ? 0 : R((base + bt) * recargoFpPct);
     const pre = R(base + bt - bonus + recargo);
     const vat = R(pre * ivaPct);
-    return { base: R(base), bt, bonus, recargo, subtotal: pre, iva: vat, dap: dapMensual, total: R(pre + vat + dapMensual) };
+    // DAP prorrateado por dias del mes proyectado -- mismo patron ya usado en
+    // construirInvoiceDomestica() (dap = dapBimestral * dias / periodoDias). Antes esta
+    // version (tarifas con demanda) usaba dapMensual TAL CUAL para cualquier mes
+    // proyectado, sin ajustar por su duracion real -- correcto para un periodo
+    // facturado de ~30 dias (la mayoria de los casos), pero sobre-contaba el DAP en la
+    // proyeccion anual cuando el periodo facturado real era mas largo (ej. un recibo
+    // bimestral de 62 dias en PDBT, auditoria 2026-11-12).
+    const dap = R(dapMensual * dias / periodoDias);
+    return { base: R(base), bt, bonus, recargo, subtotal: pre, iva: vat, dap, total: R(pre + vat + dap) };
   }
 
   const meta = { tieneDemandaContratada: tieneDemanda, reducibles, noReducibles, reducible, noReducible, energyRate, monthlyFixed };
