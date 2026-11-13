@@ -2145,7 +2145,21 @@ $('btnCalcular').addEventListener('click', () => {
     $('contenedorSecciones').scrollIntoView({ behavior: 'smooth' });
   } catch (e) {
     $('estadoCalculo').className = 'nota aviso';
-    $('estadoCalculo').textContent = (e instanceof ErrorDeClasificacion ? 'No se puede calcular con estos datos: ' : 'Error al calcular: ') + e.message;
+    // Bug real: motor.js truena con el nombre de la VARIABLE interna ("periodoKwh debe
+    // ser > 0"), no con la etiqueta que el usuario ve en el formulario -- pasaba sobre
+    // todo capturando 100% a mano (sin subir recibo), donde faltantesVisiblesParaCalcular()
+    // de arriba no detecta nada porque esa funcion solo mira los campos marcados en
+    // naranja por el OCR, nunca si un campo quedo vacio a mano. El mensaje crudo no decia
+    // cual campo del formulario corregir ni lo desplazaba a la vista, a diferencia del
+    // camino de "faltan datos" de arriba. Se traduce con el mismo mapa ETIQUETA_CAMPO ya
+    // usado para esos avisos, y se reusa el mismo desplazamiento a la vista.
+    const faltante = !(e instanceof ErrorDeClasificacion) && e.message.match(/^(\w+) debe ser/);
+    const campoId = faltante && ETIQUETA_CAMPO[faltante[1]] ? faltante[1] : null;
+    $('estadoCalculo').textContent = campoId
+      ? `Falta un dato para calcular: "${ETIQUETA_CAMPO[campoId]}" debe ser mayor que 0. Complétalo antes de calcular.`
+      : (e instanceof ErrorDeClasificacion ? 'No se puede calcular con estos datos: ' : 'Error al calcular: ') + e.message;
+    const campoEl = campoId && document.getElementById(campoId);
+    if (campoEl) campoEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     console.error(e);
   }
 });
