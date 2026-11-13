@@ -508,7 +508,11 @@ export function clonarProyectoEditable(cliente, proyecto, nombreNuevo) {
 // mas abajo) -- un texto editado SIN ningun numero/%/kWh/años/paneles pegado (redaccion
 // pura) si se copia tal cual; uno que si trae un numero de ese tipo se omite, para que
 // el cliente nuevo muestre el texto GENERICO con el numero ya recalculado en su lugar.
-const CAMPOS_EDITORIAL_MACHOTE = [
+// Exportado (2026-11-13, feature "Nuevo desde mi formato fijo") para que
+// formatoFijo.js pueda construir un "proyecto origen" sintetico con exactamente los
+// mismos campos que un machote real -- una sola lista de campos editoriales, no dos
+// copias que se puedan desincronizar.
+export const CAMPOS_EDITORIAL_MACHOTE = [
   'textosEditados', 'textosOcultos', 'seccionesExcluidas', 'graficosExcluidos',
   'calculosActivos', 'tablaColumnasOcultas', 'tablaFilasOcultas', 'ordenSecciones',
 ];
@@ -542,18 +546,52 @@ export function textoContieneIdentidadDe(texto, proyecto) {
   return valoresIdentidadDe(proyecto).some((v) => textoMin.includes(v));
 }
 
+// Refuerzo pedido explícitamente por el usuario, 2026-11-13 ("si no puedes determinar
+// qué quiso decir quien editó el texto, conserva su redacción... y señala el fragmento
+// para revisión... así se evita publicar una afirmación que contradiga el cálculo"):
+// antes, un texto con una cifra cruda (sin convertir a {{token}}, ver
+// sustituirCamposDinamicos en secciones.js) se DESCARTABA EN SILENCIO al aplicar un
+// machote, perdiendo la redacción del usuario sin aviso. Ahora se CONSERVA tal cual y
+// se marca en `proyecto.textosRevisionMachote` para que el panel de "plantilla sin
+// verificar" (app.js) lo muestre explícitamente -- nunca se pierde una edición sin que
+// el usuario lo sepa, y nunca se publica sin que quede marcada para revisar primero.
+// La identidad (titular/domicilio/no. de servicio del ORIGEN) es el único caso donde SI
+// se sabe con certeza que el texto quedaría mal para el nuevo servicio -- ahi se sigue
+// cayendo al texto genérico (que YA muestra los datos correctos del nuevo servicio vía
+// los campos dinamicos de la propia plantilla), pero igual se anota en el mismo panel
+// para que quede visible que se corrigió solo, no silencioso.
 export function aplicarMachoteAProyecto(proyecto, origen) {
   const origenProyecto = origen.proyecto;
   const identidadOrigen = valoresIdentidadDe(origenProyecto);
+  const revision = [];
   for (const campo of CAMPOS_EDITORIAL_MACHOTE) {
     if (origenProyecto[campo] === undefined) continue;
     if (campo === 'textosEditados') {
       const limpio = {};
       for (const [id, texto] of Object.entries(origenProyecto.textosEditados || {})) {
         if (typeof texto !== 'string') { limpio[id] = texto; continue; }
-        if (PATRON_POSIBLE_NUMERO_CALCULADO.test(texto)) continue;
         const textoMin = texto.toLowerCase();
-        if (identidadOrigen.some((v) => textoMin.includes(v))) continue;
+        if (identidadOrigen.some((v) => textoMin.includes(v))) {
+          revision.push({ id, texto, motivo: 'identidad', resuelto: true,
+            detalle: 'Mencionaba la dirección/titular/no. de servicio del inmueble anterior -- se usó el texto genérico (ya con los datos del nuevo servicio) en su lugar.' });
+          continue; // se cae al texto generico, que ya es correcto para el nuevo servicio
+        }
+        // Las dos deteccciones son independientes y pueden coincidir en el mismo texto
+        // (ej. "convendría agregar 10 paneles más" trae CIFRA y CONCLUSION a la vez) --
+        // se combinan en un solo aviso en vez de que la primera que matchee tape a la
+        // otra, para no perder ninguna de las dos razones de revisión.
+        const tieneCifra = texto.indexOf('{{') === -1 && PATRON_POSIBLE_NUMERO_CALCULADO.test(texto);
+        const tieneConclusion = PATRON_CONCLUSION_COMPARATIVA.test(texto);
+        if (tieneCifra || tieneConclusion) {
+          const motivos = [tieneCifra && 'cifra', tieneConclusion && 'conclusion'].filter(Boolean);
+          const detalles = [
+            tieneCifra && 'Trae una cifra/monto/% escrito a mano (sin convertir a campo dinámico) que pudo venir del cálculo del servicio anterior.',
+            tieneConclusion && 'Es una conclusión comparativa (ej. "conviene agregar/reducir paneles") que pudo depender del resultado o la tarifa del servicio anterior.',
+          ].filter(Boolean).join(' ') + ' Revisar contra el resultado de este servicio antes de publicar.';
+          revision.push({ id, texto, motivo: motivos.join('+'), resuelto: false, detalle: detalles });
+          limpio[id] = texto; // se CONSERVA -- antes se descartaba en silencio
+          continue;
+        }
         limpio[id] = texto;
       }
       proyecto.textosEditados = limpio;
@@ -573,6 +611,7 @@ export function aplicarMachoteAProyecto(proyecto, origen) {
     fecha: new Date().toISOString(),
   };
   proyecto.plantillaVerificada = false;
+  proyecto.textosRevisionMachote = revision;
   return proyecto;
 }
 
@@ -585,7 +624,15 @@ export function aplicarMachoteAProyecto(proyecto, origen) {
 // es el actual (ej. copio y pego de otro documento). Esto NO detecta todos los casos
 // (es imposible saberlo con certeza desde el texto solo) -- es un recordatorio
 // dirigido para revisar esos textos en particular en vez de los 25+ de la cotización.
-const PATRON_POSIBLE_NUMERO_CALCULADO = /\$\s?[\d,]+(\.\d+)?|\d+(\.\d+)?\s?%|\d+(\.\d+)?\s?(kwh|kwp|kw)\b|\d+(\.\d+)?\s*años|\d+\s*paneles/i;
+const PATRON_POSIBLE_NUMERO_CALCULADO = /\$\s?[\d,]+(\.\d+)?|\d+(\.\d+)?\s?%|\d+(\.\d+)?\s?(kwh|kwp|kw)\b|\d+(\.\d+)?\s*años|\d+\s*(paneles|m[oó]dulos|equipos|placas)|\bpesos\b/i;
+
+// Refuerzo 2026-11-13 (prompt de machotes): conclusiones comparativas/direccionales
+// ("conviene agregar más paneles", "ya no es necesario ampliar") pueden dejar de ser
+// ciertas con el resultado del NUEVO servicio aunque no lleven ninguna cifra pegada
+// (ej. "convendría agregar paneles adicionales" sin numero) -- PATRON_POSIBLE_NUMERO_
+// CALCULADO no las detecta porque no siempre matchea un numero. Deteccion aparte,
+// independiente, para marcarlas para revision igual.
+const PATRON_CONCLUSION_COMPARATIVA = /convien(e|en)|se recomienda|recomendamos|sugiere (agregar|aumentar|reducir|quitar|menos|más)|vale la pena (agregar|aumentar|reducir|quitar)|no vale la pena|ya no (es necesario|conviene)|mejor (opci[oó]n|optar)|preferible|convendr[ií]a/i;
 export function detectarTextosConNumerosSospechosos(textosEditados) {
   if (!textosEditados) return [];
   const hallazgos = [];

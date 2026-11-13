@@ -14,8 +14,13 @@
 // ocultas de cada tabla, sin necesitar una segunda fuente de datos que se pueda
 // desincronizar del PDF.
 import { seccionesActivasEnOrden } from './secciones.js';
+import { resumenInmueble } from './propuesta.js';
 
-const CLASES_TABLA_EXCLUIR_NODO = ['grafico-apagado', 'seccion-apagada'];
+// 'calculo-detalle-apagado' agregado (auditoría 2026-11-13): un bloque "Cómo se
+// calculó" apagado individualmente (ver secciones.js, bloqueCalculo) se filtraba del
+// PDF (propuestaDom.js usa la misma clase) pero no del Excel -- su tabla seguía
+// apareciendo en el archivo exportado aunque el admin ya la hubiera apagado.
+const CLASES_TABLA_EXCLUIR_NODO = ['grafico-apagado', 'seccion-apagada', 'calculo-detalle-apagado'];
 // badge-num-editable: la etiqueta fija "S4.2"/"g03-cargos·H1" (ver numerarContenidoEditable
 // en app.js) vive como <span> DENTRO de la celda, justo antes del texto real -- sin
 // excluirla, su texto se concatena con el de la celda ("g03-cargos·H1Componente del
@@ -139,19 +144,55 @@ export function generarExcelCotizacion(r) {
   infoTitular.height = 30;
   infoTitular.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
 
-  const infoInmueble = ws.addRow(['INMUEBLE', r.inmueble || '—']);
+  // BUG REAL corregido (auditoría 2026-11-13): r.inmueble es un objeto (ver
+  // leerInmueble() en app.js: {actividad, horarios, equipos, areaFuente, sombras,
+  // sistemasExistentes, fechaVisita, notas, panelesVerificacion, nombreVerificacion}),
+  // nunca un texto -- escribirlo directo en una celda producía "[object Object]" (o un
+  // error de ExcelJS, según la versión). Se usa el mismo resumenInmueble() que ya
+  // arma el PDF (propuesta.js), para que Excel y PDF digan lo mismo.
+  const infoInmueble = ws.addRow(['INMUEBLE', resumenInmueble(r.inmueble) || '—']);
   infoInmueble.font = { bold: true, color: { argb: COLOR_NAVY } };
   infoInmueble.height = 30;
   infoInmueble.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
 
-  if (r.formulario?.tarifa) { const row = ws.addRow(['TARIFA', r.formulario.tarifa]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
-  if (r.formulario?.consumoAnualKWh) { const row = ws.addRow(['CONSUMO ANUAL (kWh)', `${r.formulario.consumoAnualKWh}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
-  if (r.formulario?.precioKWh) { const row = ws.addRow(['PRECIO UNITARIO ($/kWh)', `$${r.formulario.precioKWh.toFixed(4)}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
-  if (r.formulario?.gastoAnual) { const row = ws.addRow(['GASTO ANUAL ACTUAL', `$${r.formulario.gastoAnual.toLocaleString('es-MX', { maximumFractionDigits: 2 })}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
-  if (r.formulario?.año) { const row = ws.addRow(['AÑO DE RECIBO', `${r.formulario.año}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
-  if (r.formulario?.mes) { const row = ws.addRow(['MES DE RECIBO', `${r.formulario.mes}`]); row.height = 26; row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; }); }
+  // BUG REAL corregido (auditoría 2026-11-13): estas 6 filas leían `r.formulario`, una
+  // propiedad que construirResultado() (resultado.js) nunca produce -- código muerto,
+  // nunca aparecían. Reemplazadas por campos reales que SÍ existen en `r`. Días/kWh
+  // del período como celdas numéricas (no texto concatenado), por el mismo criterio de
+  // "celdas numéricas utilizables" aplicado al bloque de resultados más abajo.
+  filaTexto('TARIFA', r.tarifa || '—');
+  filaTexto('NO. DE SERVICIO', r.noServicio || '—');
+  filaNumerica('PERÍODO FACTURADO (días)', r.periodoDias, '0');
+  filaNumerica('CONSUMO DEL PERÍODO (kWh)', r.periodoKwh, '#,##0');
+  filaTexto('FECHA DEL ESTUDIO', r.fechaEstudio || '—');
 
   ws.addRow([]);
+
+  // Hallazgo real corregido (auditoría 2026-11-13, "celdas numéricas utilizables"):
+  // todo este bloque escribía el VALOR YA FORMATEADO como texto (ej. "$304,411.97") en
+  // vez del número real -- Excel lo trataba como texto plano, no usable en SUM/
+  // promedios/gráficas ni alineado a la derecha como cualquier número. Ahora se
+  // escribe el numero real en la celda y el formato visual (moneda/%/decimales) se
+  // aplica con `numFmt`, que es lo que Excel espera para una celda numérica de verdad.
+  const FMT_MONEDA = '$#,##0.00;($#,##0.00)';
+  const FMT_PCT = '0.0%';
+  function filaNumerica(etiqueta, valor, numFmt, { negrita = false } = {}) {
+    if (valor == null || Number.isNaN(valor)) return;
+    const row = ws.addRow([etiqueta, valor]);
+    if (negrita) row.font = { bold: true, color: { argb: COLOR_NAVY } };
+    row.height = negrita ? 28 : 26;
+    row.getCell(1).alignment = { horizontal: 'left', vertical: 'center', wrapText: true };
+    const celdaValor = row.getCell(2);
+    celdaValor.numFmt = numFmt;
+    celdaValor.alignment = { horizontal: 'right', vertical: 'center', wrapText: true };
+  }
+  function filaTexto(etiqueta, valor, { negrita = false } = {}) {
+    if (valor == null) return;
+    const row = ws.addRow([etiqueta, valor]);
+    if (negrita) row.font = { bold: true, color: { argb: COLOR_NAVY } };
+    row.height = negrita ? 28 : 26;
+    row.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+  }
 
   // DATOS DE CÁLCULO (si están disponibles)
   if (r.investment != null) {
@@ -162,88 +203,20 @@ export function generarExcelCotizacion(r) {
     seccionResultados.eachCell((cell) => { cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; });
     ws.mergeCells(seccionResultados.number, 1, seccionResultados.number, maxCols);
 
-    // DATOS PRINCIPALES DE LA PROPUESTA
-    const invRow = ws.addRow(['INVERSIÓN TOTAL', `$${r.investment.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
-    invRow.font = { bold: true, color: { argb: COLOR_NAVY } };
-    invRow.height = 28;
-    invRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-
-    if (r.ahorroAnual) {
-      const ahorroRow = ws.addRow(['AHORRO ANUAL ESTIMADO', `$${r.ahorroAnual.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
-      ahorroRow.font = { bold: true, color: { argb: COLOR_NAVY } };
-      ahorroRow.height = 28;
-      ahorroRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-    }
-
-    // INDICADORES FINANCIEROS
-    if (r.pctAhorro != null) {
-      const pctRow = ws.addRow(['PORCENTAJE DE AHORRO', `${(r.pctAhorro * 100).toFixed(1)}%`]);
-      pctRow.height = 26;
-      pctRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-    }
-
-    if (r.payback != null) {
-      const paybackRow = ws.addRow(['PAYBACK (AÑOS RECUPERACIÓN)', `${r.payback.toFixed(2)} años`]);
-      paybackRow.height = 26;
-      paybackRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-    }
-
-    if (r.van != null) {
-      const vanRow = ws.addRow(['VAN (VALOR ACTUAL NETO)', `$${r.van.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
-      vanRow.height = 26;
-      vanRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-    }
-
-    if (r.tir != null) {
-      const tirRow = ws.addRow(['TIR (TASA INTERNA RETORNO)', `${(r.tir * 100).toFixed(2)}%`]);
-      tirRow.font = { bold: true, color: { argb: COLOR_NAVY } };
-      tirRow.height = 28;
-      tirRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-    }
-
-    // INFORMACIÓN DE CONSUMO
-    if (r.annualbefore != null) {
-      const consumoRow = ws.addRow(['GASTO ANUAL SIN SISTEMA', `$${r.annualbefore.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
-      consumoRow.height = 26;
-      consumoRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-    }
-
-    if (r.annualafter != null) {
-      const consumoAftRow = ws.addRow(['GASTO ANUAL CON SISTEMA', `$${r.annualafter.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
-      consumoAftRow.height = 26;
-      consumoAftRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-    }
-
-    // INFORMACIÓN DEL SISTEMA FOTOVOLTAICO
-    if (r.kwp != null) {
-      const kwhRow = ws.addRow(['POTENCIA INSTALADA', `${r.kwp.toFixed(2)} kWp`]);
-      kwhRow.height = 26;
-      kwhRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-    }
-
-    if (r.n != null) {
-      const panRow = ws.addRow(['CANTIDAD DE PANELES', `${r.n}`]);
-      panRow.height = 26;
-      panRow.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-    }
-
-    // ISR (si aplica)
-    if (r.aplicaIsr && r.paybackNetoIsr != null) {
-      const isr_payback = ws.addRow(['PAYBACK NETO (CON ISR)', `${r.paybackNetoIsr.toFixed(2)} años`]);
-      isr_payback.height = 26;
-      isr_payback.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-    }
-
-    if (r.aplicaIsr && r.tirNetoIsr != null) {
-      const isr_tir = ws.addRow(['TIR NETO (CON ISR)', `${(r.tirNetoIsr * 100).toFixed(2)}%`]);
-      isr_tir.height = 26;
-      isr_tir.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
-    }
-
-    if (r.aplicaIsr && r.vanNetoIsr != null) {
-      const isr_van = ws.addRow(['VAN NETO (CON ISR)', `$${r.vanNetoIsr.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`]);
-      isr_van.height = 26;
-      isr_van.eachCell((cell) => { cell.alignment = { horizontal: 'left', vertical: 'center', wrapText: true }; });
+    filaNumerica('INVERSIÓN TOTAL ($)', r.investment, FMT_MONEDA, { negrita: true });
+    filaNumerica('AHORRO ANUAL ESTIMADO ($)', r.ahorroAnual, FMT_MONEDA, { negrita: true });
+    filaNumerica('PORCENTAJE DE AHORRO', r.pctAhorro, FMT_PCT);
+    filaNumerica('PAYBACK (AÑOS RECUPERACIÓN)', r.payback, '0.00');
+    filaNumerica('VAN (VALOR ACTUAL NETO) ($)', r.van, FMT_MONEDA);
+    filaNumerica('TIR (TASA INTERNA DE RETORNO)', r.tir, FMT_PCT, { negrita: true });
+    filaNumerica('GASTO ANUAL SIN SISTEMA ($)', r.annualbefore, FMT_MONEDA);
+    filaNumerica('GASTO ANUAL CON SISTEMA ($)', r.annualafter, FMT_MONEDA);
+    filaNumerica('POTENCIA INSTALADA (kWp)', r.kwp, '0.00');
+    filaNumerica('CANTIDAD DE PANELES', r.n, '0');
+    if (r.aplicaIsr) {
+      filaNumerica('PAYBACK NETO (CON ISR, AÑOS)', r.paybackNetoIsr, '0.00');
+      filaNumerica('TIR NETO (CON ISR)', r.tirNetoIsr, FMT_PCT);
+      filaNumerica('VAN NETO (CON ISR) ($)', r.vanNetoIsr, FMT_MONEDA);
     }
 
     ws.addRow([]);

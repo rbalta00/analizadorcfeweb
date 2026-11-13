@@ -17,6 +17,7 @@ import { construirResultado } from './resultado.js';
 import { generarPdf, generarPdfCompletaDesdeVista } from './propuesta.js';
 import { descargarExcelCotizacion } from './excel.js';
 import { generarGuiaPresentacion } from './resumen.js';
+import { leerFormatoFijo, hayFormatoFijo, fijarFormatoDesde, aplicarFormatoFijoAProyecto, textoVistaPrevia } from './formatoFijo.js';
 import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida } from './imagenes.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, escalaCostosParaTarifa, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
@@ -955,6 +956,7 @@ function mostrarPantallaProyectos(clienteId) {
   $('estadoNuevoProyectoDesdeDefinitiva').className = 'nota';
   revisarDuplicadoCliente();
   renderListaProyectos();
+  $('btnNuevoDesdeFormatoFijo').hidden = !hayFormatoFijo();
 }
 
 $('btnVolverClientesDesdeProyectos').addEventListener('click', mostrarPantallaClientes);
@@ -987,6 +989,28 @@ $('btnNuevoProyectoBlanco').addEventListener('click', () => {
   if (!nombre) { alert('Escribe primero un nombre para esta cotización.'); return; }
   if (revisarDuplicadoProyecto(nombre, null) && !confirm(`"${clienteActual.nombre}" ya tiene otra cotización llamada "${nombre}" -- ¿crear otra con el mismo nombre de todos modos?`)) return;
   const proyecto = crearProyecto(clienteActual, { nombre });
+  $('inputNombreNuevoProyecto').value = '';
+  abrirProyecto(clienteActual.id, proyecto.id);
+});
+
+// "Nuevo desde mi formato fijo" -- mismo patron que "+ Cotización en blanco" de
+// arriba (pide nombre primero, crea el proyecto vacío), pero además aplica de
+// inmediato el formato fijo guardado (mismo motor de aplicarMachoteAProyecto, ver
+// formatoFijo.js) -- los campos propios del servicio (RPU, dirección, consumo,
+// paneles, imágenes, importes) arrancan vacíos porque crearProyecto() nunca los toca,
+// exactamente lo que pide el punto 2 del encargo ("Inicia vacíos los campos propios
+// del servicio anterior").
+$('btnNuevoDesdeFormatoFijo').addEventListener('click', () => {
+  const nombre = $('inputNombreNuevoProyecto').value.trim();
+  if (!nombre) { alert('Escribe primero un nombre para esta cotización.'); return; }
+  if (revisarDuplicadoProyecto(nombre, null) && !confirm(`"${clienteActual.nombre}" ya tiene otra cotización llamada "${nombre}" -- ¿crear otra con el mismo nombre de todos modos?`)) return;
+  const proyecto = crearProyecto(clienteActual, { nombre });
+  try {
+    aplicarFormatoFijoAProyecto(proyecto);
+    guardarProyecto(clienteActual, proyecto);
+  } catch (err) {
+    alert('No se pudo aplicar el formato fijo: ' + err.message);
+  }
   $('inputNombreNuevoProyecto').value = '';
   abrirProyecto(clienteActual.id, proyecto.id);
 });
@@ -1163,6 +1187,32 @@ function renderListaMachotes() {
   }
 }
 
+// "Mi formato predeterminado (fijo)" -- ver formatoFijo.js. Muestra de dónde y cuándo
+// se fijó, y cambia el texto del botón entre "Fijar" (primera vez) y "Actualizar"
+// (ya hay uno guardado) -- misma acción, mismo botón, solo cambia la etiqueta.
+function renderEstadoFormatoFijo() {
+  const formato = leerFormatoFijo();
+  const estadoEl = $('estadoFormatoFijo');
+  const btn = $('btnFijarFormatoFijo');
+  if (!formato) {
+    estadoEl.textContent = 'Todavía no has fijado ningún formato predeterminado.';
+    btn.textContent = '📌 Fijar ESTA cotización como mi formato predeterminado';
+  } else {
+    estadoEl.textContent = `Formato fijado desde "${formato.origenProyectoNombre}" (${formato.origenClienteNombre}) el ` +
+      `${new Date(formato.fechaFijado).toLocaleDateString('es-MX')}.`;
+    btn.textContent = '🔄 Actualizar mi formato predeterminado con ESTA cotización';
+  }
+}
+
+$('btnFijarFormatoFijo').addEventListener('click', () => {
+  if (!clienteActual || !proyectoActual) return;
+  const preview = textoVistaPrevia(proyectoActual);
+  if (!confirm(`${preview}\n\n¿Fijar/actualizar tu formato predeterminado con esta cotización? Reemplaza por completo lo que hubiera guardado antes.`)) return;
+  fijarFormatoDesde(clienteActual, proyectoActual);
+  renderEstadoFormatoFijo();
+  alert('Formato predeterminado guardado. Ya puedes usar "🧩 Nuevo desde mi formato fijo" al crear una cotización para cualquier cliente.');
+});
+
 function renderAvisoPlantillaOrigen() {
   const o = proyectoActual.plantillaOrigen;
   const avisoEl = $('avisoPlantillaOrigen');
@@ -1179,35 +1229,56 @@ function renderAvisoPlantillaOrigen() {
   // recibo. Se explica asi, y se da un boton para restaurarlos de un clic al texto
   // generico (que ya muestra los numeros recalculados de este servicio) en vez de solo
   // "marcar como revisado" sin corregir nada.
-  const sospechosos = detectarTextosConNumerosSospechosos(proyectoActual.textosEditados);
+  // Refuerzo 2026-11-13 (prompt de machotes): proyectoActual.textosRevisionMachote ya
+  // viene poblado desde aplicarMachoteAProyecto() (clientes.js) con TODO lo detectado
+  // al aplicar el machote (identidad ya auto-corregida, cifras sin convertir a token, y
+  // conclusiones comparativas) -- antes esta caja solo corria detectarTextosConNumeros
+  // Sospechosos() sobre el estado actual, que nunca encontraba nada relacionado al
+  // machote porque esos textos ya se habian descartado en silencio antes de llegar
+  // aqui. Se combina con la deteccion en vivo (edicion posterior de ESTE cliente que
+  // pego un numero sin querer) para no perder esa red de seguridad.
+  const pendientes = (proyectoActual.textosRevisionMachote || []).filter((h) => !h.resuelto);
+  const autoCorregidos = (proyectoActual.textosRevisionMachote || []).filter((h) => h.resuelto);
+  const sospechosos = detectarTextosConNumerosSospechosos(proyectoActual.textosEditados)
+    .filter((s) => !pendientes.some((h) => h.id === s.id)); // evitar duplicar el mismo id
   const cajaEl = $('listaTextosSospechososMachote');
   cajaEl.innerHTML = '';
-  if (sospechosos.length) {
+  if (pendientes.length || autoCorregidos.length || sospechosos.length) {
     cajaEl.hidden = false;
-    cajaEl.append(Object.assign(document.createElement('p'), {
-      className: 'nota aviso',
-      textContent: '⚠️ Estos textos tienen un número/monto/% pegado que NO viene del recibo de CFE -- es resultado ' +
-        'del cálculo y análisis del SFV para el servicio ANTERIOR (el que se usó de machote). Revísalos contra el ' +
-        'análisis de este inmueble, o restáuralos para que muestren el número ya recalculado:',
-    }));
-    const ul = document.createElement('ul');
-    for (const s of sospechosos) {
-      const li = document.createElement('li');
-      const code = document.createElement('code'); code.textContent = s.id;
-      li.append(code, document.createTextNode(`: "${s.texto}"`));
-      ul.append(li);
+    if (pendientes.length || sospechosos.length) {
+      cajaEl.append(Object.assign(document.createElement('p'), {
+        className: 'nota aviso',
+        textContent: '⚠️ Estos textos se conservaron tal como estaban en el machote, pero NO se pudieron verificar contra ' +
+          'el cálculo de este servicio -- revísalos antes de entregar el estudio, o restáuralos para que muestren el ' +
+          'texto genérico (ya recalculado):',
+      }));
+      const ul = document.createElement('ul');
+      for (const s of [...pendientes, ...sospechosos]) {
+        const li = document.createElement('li');
+        const code = document.createElement('code'); code.textContent = s.id;
+        li.append(code, document.createTextNode(`: "${s.texto}"`));
+        if (s.detalle) { const small = document.createElement('div'); small.className = 'nota'; small.textContent = s.detalle; li.append(small); }
+        ul.append(li);
+      }
+      cajaEl.append(ul);
+      const btnRestaurar = document.createElement('button');
+      btnRestaurar.className = 'btn-secundario';
+      btnRestaurar.textContent = '🔄 Restaurar estos textos al cálculo de este inmueble';
+      btnRestaurar.addEventListener('click', () => {
+        for (const s of [...pendientes, ...sospechosos]) delete proyectoActual.textosEditados[s.id];
+        proyectoActual.textosRevisionMachote = (proyectoActual.textosRevisionMachote || []).filter((h) => h.resuelto);
+        guardarProyecto(clienteActual, proyectoActual);
+        if (ultimoResultado) { ultimoResultado.textosEditados = proyectoActual.textosEditados; renderSecciones(ultimoResultado); }
+        renderAvisoPlantillaOrigen();
+      });
+      cajaEl.append(btnRestaurar);
     }
-    cajaEl.append(ul);
-    const btnRestaurar = document.createElement('button');
-    btnRestaurar.className = 'btn-secundario';
-    btnRestaurar.textContent = '🔄 Restaurar estos textos al cálculo de este inmueble';
-    btnRestaurar.addEventListener('click', () => {
-      for (const s of sospechosos) delete proyectoActual.textosEditados[s.id];
-      guardarProyecto(clienteActual, proyectoActual);
-      if (ultimoResultado) { ultimoResultado.textosEditados = proyectoActual.textosEditados; renderSecciones(ultimoResultado); }
-      renderAvisoPlantillaOrigen();
-    });
-    cajaEl.append(btnRestaurar);
+    if (autoCorregidos.length) {
+      const p = document.createElement('p');
+      p.className = 'nota';
+      p.textContent = `ℹ️ ${autoCorregidos.length} texto(s) mencionaban el inmueble anterior -- se usó el texto genérico (con los datos de este servicio) en su lugar automáticamente: ${autoCorregidos.map((h) => h.id).join(', ')}.`;
+      cajaEl.append(p);
+    }
   } else {
     cajaEl.hidden = true;
   }
@@ -1331,6 +1402,17 @@ function poblarSelectClienteGuardar() {
 }
 
 function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
+  // Refuerzo 2026-11-13 (prompt de exportación PDF/Excel): "abre otro estudio durante
+  // la generación" -- bug real encontrado leyendo el código: prepararDocumentosAdjuntos
+  // ParaPdf() es async (descarga imagenes remotas) y generarPdfCompletaDesdeVista() lee
+  // el DOM YA RENDERIZADO en vivo (#contenedorSecciones) -- si el usuario abria otro
+  // proyecto MIENTRAS esa descarga seguia en curso, el PDF/Excel que terminaba de
+  // generarse podia mezclar los datos financieros del estudio ORIGINAL (capturados en
+  // `ultimoResultado` al iniciar) con el texto/tablas del estudio NUEVO ya renderizado
+  // en pantalla para ese momento -- una combinacion invalida, nunca igual a ninguno de
+  // los dos estudios reales. Se bloquea cambiar de estudio mientras haya una
+  // exportacion en curso, en vez de arriesgar esa mezcla.
+  if (exportandoDocumento) { alert('Espera a que termine la descarga en curso antes de abrir otro estudio.'); return; }
   clienteActual = obtenerCliente(clienteId);
   proyectoActual = clienteActual ? obtenerProyecto(clienteActual, proyectoId) : null;
   if (!clienteActual || !proyectoActual) { mostrarPantallaProyectos(clienteId); return; }
@@ -1344,6 +1426,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   if (proyectoActual.compartirToken) mostrarCajaLinkCompartido(proyectoActual.compartirToken);
   else { $('cajaLinkCompartido').hidden = true; $('btnDejarDeCompartir').hidden = true; }
   renderListaMachotes();
+  renderEstadoFormatoFijo();
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
@@ -3405,23 +3488,58 @@ $('btnWhatsappLinkCompartido').addEventListener('click', () => {
   window.open(`https://wa.me/?text=${texto}`, '_blank');
 });
 
+// Refuerzo 2026-11-13 (prompt de exportación PDF/Excel): "al pulsar Descargar,
+// incorpora el último cambio del editor, incluso si el cursor sigue dentro del campo".
+// Un parrafo/celda editable solo guarda su cambio (onEditarTexto, via el evento
+// 'blur') cuando pierde el foco -- en el caso normal, dar clic en un boton de
+// descargar YA dispara ese blur antes de que corra el handler del clic (el navegador
+// mueve el foco en el mousedown, antes del evento click). Pero mientras un campo esta
+// enfocado, su texto en pantalla es el CRUDO sin resolver (con los {{tokens}} tal
+// cual, ver campoEditableConId en secciones.js) -- si por cualquier motivo el foco no
+// se soltara antes de leer el DOM (atajo de teclado, dispositivo tactil, doble clic
+// rapido), el PDF/Excel (que leen el DOM ya renderizado, no el texto guardado)
+// capturarian ese texto crudo en vez del numero resuelto. Se fuerza el blur
+// explicito, de forma defensiva, antes de cualquier exportacion -- no depende del
+// orden exacto de eventos del navegador.
+// Ver comentario en abrirProyecto() -- bandera unica para bloquear cambiar de estudio
+// mientras una descarga (PDF/Excel/WhatsApp) sigue en curso.
+let exportandoDocumento = false;
+
+function confirmarEdicionEnCursoAntesDeExportar() {
+  const activo = document.activeElement;
+  const cont = document.getElementById('contenedorSecciones');
+  if (activo && activo !== document.body && cont && cont.contains(activo) && typeof activo.blur === 'function') {
+    activo.blur();
+  }
+}
+
 $('btnGenerarPdf').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  confirmarEdicionEnCursoAntesDeExportar();
   if (!confirmarAntesDeGenerarDocumento(true)) return;
   const boton = $('btnGenerarPdf');
   boton.disabled = true;
+  exportandoDocumento = true;
   const textoOriginal = boton.textContent;
   boton.textContent = 'Generando…';
+  // `r` capturado UNA vez: prepararDocumentosAdjuntosParaPdf() es async (descarga
+  // imagenes remotas) -- si se leyera `ultimoResultado` otra vez despues del await, y
+  // ese await tardara lo suficiente para que algo mas reasignara la variable, las dos
+  // llamadas podrian terminar operando sobre estudios distintos (ver nota en
+  // abrirProyecto(), ahora bloqueado mientras exportandoDocumento es true, pero esta
+  // captura es la misma salvaguarda a nivel de datos, no solo de UI).
+  const r = ultimoResultado;
   try {
-    await prepararDocumentosAdjuntosParaPdf(ultimoResultado);
+    await prepararDocumentosAdjuntosParaPdf(r);
     // generarPdfCompletaDesdeVista (no generarPdf) -- lee el contenido YA renderizado
     // en #contenedorSecciones, con las ediciones de texto/tablas aplicadas. Pedido
     // explicito del usuario, 2026-11-07. generarPdf() (el generador de texto fijo de
     // siempre) se deja sin usar pero intacta en propuesta.js, por si hace falta volver.
-    const doc = generarPdfCompletaDesdeVista(ultimoResultado);
+    const doc = generarPdfCompletaDesdeVista(r);
     mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
   } finally {
     boton.disabled = false;
+    exportandoDocumento = false;
     boton.textContent = textoOriginal;
   }
 });
@@ -3432,8 +3550,10 @@ $('btnGenerarPdf').addEventListener('click', async () => {
 // js/excel.js.
 $('btnGenerarExcel').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  confirmarEdicionEnCursoAntesDeExportar();
   const boton = $('btnGenerarExcel');
   boton.disabled = true;
+  exportandoDocumento = true;
   const textoOriginal = boton.textContent;
   boton.textContent = 'Generando…';
   try {
@@ -3443,6 +3563,7 @@ $('btnGenerarExcel').addEventListener('click', async () => {
     console.error(err);
   } finally {
     boton.disabled = false;
+    exportandoDocumento = false;
     boton.textContent = textoOriginal;
   }
 });
@@ -3696,6 +3817,7 @@ $('btnCrearClienteGuardar').addEventListener('click', () => {
 // (abre el chat de un numero fijo con el texto, el PDF se adjunta a mano).
 $('btnEnviarWhatsapp').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  confirmarEdicionEnCursoAntesDeExportar();
   if (!confirmarSiHayCambiosSinCalcular()) return;
   const r = ultimoResultado;
   const mensaje = `Cotización ${r.titular}\n` +
@@ -3705,6 +3827,7 @@ $('btnEnviarWhatsapp').addEventListener('click', async () => {
     `Recuperación: ${r.payback ? r.payback.toFixed(1) + ' años' : 'N/D'}\n` +
     `VAN 25 años: ${M(r.van)}\n\n` +
     'Adjunto el PDF de la cotización.';
+  exportandoDocumento = true;
   try {
     // generarPdfCompletaDesdeVista (no generarPdf) -- bug real reportado por el
     // usuario, 2026-11-12: "el S20.6 no se apaga, esta apagado y se imprime en el pdf
@@ -3714,8 +3837,10 @@ $('btnEnviarWhatsapp').addEventListener('click', async () => {
     // se cambiaron a generarPdfCompletaDesdeVista() desde el 2026-11-07 precisamente
     // por este mismo problema. Mismo fix aplicado aqui: lee el DOM ya renderizado
     // (con ediciones/apagados aplicados) en vez de reconstruir el texto desde cero.
-    await prepararDocumentosAdjuntosParaPdf(ultimoResultado);
-    const doc = generarPdfCompletaDesdeVista(ultimoResultado);
+    // `r` (capturado arriba, no `ultimoResultado` otra vez) en las dos llamadas -- misma
+    // salvaguarda contra el estudio cambiando a medio vuelo que en btnGenerarPdf.
+    await prepararDocumentosAdjuntosParaPdf(r);
+    const doc = generarPdfCompletaDesdeVista(r);
     const blob = doc.output('blob');
     const archivo = new File([blob], nombreArchivoProyecto('Cotizacion'), { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
@@ -3725,6 +3850,8 @@ $('btnEnviarWhatsapp').addEventListener('click', async () => {
   } catch (err) {
     if (err && err.name === 'AbortError') return; // el usuario cancelo el menu de compartir a proposito
     console.error('No se pudo compartir el PDF directo, cae al link de WhatsApp con solo texto:', err);
+  } finally {
+    exportandoDocumento = false;
   }
   const url = `https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent(mensaje)}`;
   window.open(url, '_blank');
@@ -3855,6 +3982,7 @@ window.addEventListener('appinstalled', () => { $('btnInstalar').hidden = true; 
 // consola del navegador: verificarEdicionesEnPdf()  (requiere haber calculado antes).
 async function verificarEdicionesEnPdf() {
   if (!ultimoResultado) { console.error('Calcula primero.'); return; }
+  confirmarEdicionEnCursoAntesDeExportar();
   const problemas = [];
   const ok = [];
 

@@ -16,7 +16,7 @@ import {
   notice, table, curve, groupedBarChart, horizontalBarChart, gauge, buildPdf, GREY,
   crearDoc, dibujarHeaderFooter,
 } from './pdfComponents.js';
-import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA } from './util.js';
+import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, recuperacionDiferencia } from './util.js';
 import { BLOQUES_COTIZACION } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { dibujarSeccionGenerica, textoVisibleDe } from './propuestaDom.js';
@@ -63,7 +63,7 @@ function encabezado(doc, numero, titulo, titular) {
   return y;
 }
 
-function resumenInmueble(inm) {
+export function resumenInmueble(inm) {
   if (!inm) return null;
   const partes = [];
   if (inm.actividad) partes.push(`actividad: ${inm.actividad}`);
@@ -442,7 +442,7 @@ export function paginaComparativoVerificacion(doc, r, numero) {
     ['Potencia', `${r.kwp.toFixed(2)} kWp`, `${ev.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
     ['Inversión, IVA incluido', M(r.investment), M(ev.investment), M(ev.investment - r.investment)],
     ['Ahorro anual', M(r.ahorroAnual), M(ev.ahorroAnual), M(ev.diferenciaAhorro)],
-    ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', '—'],
+    ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', recuperacionDiferencia(ev.investment - r.investment, ev.diferenciaAhorro)],
     ['% de ahorro de factura', PCT(r.pctAhorro), PCT(ev.pctAhorro), '—'],
   ], { widths: [CONTENT_W * 0.3, CONTENT_W * 0.25, CONTENT_W * 0.25, CONTENT_W * 0.2], small: true });
   y = spacer(y, 8);
@@ -538,7 +538,7 @@ function pagina10(doc, r, numero) {
       ['Promedio mensual del año', M(r.annualbefore / 12), M(r.annualafter / 12)],
       ['Ahorro anual de factura', '—', M(r.ahorroAnual)],
       ['Ahorro promedio mensual', '—', M(r.ahorroAnual / 12)],
-      ['Ahorro total anual', '—', PCT(r.pctAhorro)],
+      ['% de ahorro anual', '—', PCT(r.pctAhorro)],
       ['Mantenimiento del primer año', '—', M(r.om1)],
       ['Ahorro neto del primer año', '—', M(r.ahorroAnual - r.om1)],
     ], { widths: [CONTENT_W * 0.4, CONTENT_W * 0.3, CONTENT_W * 0.3] });

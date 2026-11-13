@@ -217,6 +217,7 @@
       </label>
       <div class="acciones">
         <button id="btnNuevoProyectoBlanco" class="btn-secundario">+ Cotización en blanco</button>
+        <button id="btnNuevoDesdeFormatoFijo" class="btn-secundario" hidden>🧩 Nuevo desde mi formato fijo</button>
       </div>
       <div class="fila">
         <label>Partir de la definitiva de muestra de una tarifa
@@ -385,6 +386,17 @@
         <select id="filtroTarifaMachote"></select>
       </div>
       <div id="listaMachotes" class="lista-clientes"></div>
+
+      <!-- "Nuevo desde mi formato fijo" -- pedido explicito del usuario, 2026-11-13:
+           un ÚNICO formato reutilizable, persistente (sobrevive cerrar/abrir el
+           programa), independiente de que la cotización de origen se borre o cambie
+           después -- a diferencia del machote de arriba, que siempre lee en vivo otra
+           cotización ya guardada. -->
+      <h3>📌 Mi formato predeterminado (fijo)</h3>
+      <p class="nota" id="estadoFormatoFijo">Todavía no has fijado ningún formato predeterminado.</p>
+      <div class="acciones">
+        <button id="btnFijarFormatoFijo" class="btn-secundario">📌 Fijar ESTA cotización como mi formato predeterminado</button>
+      </div>
 
       <h3>1. Recibo CFE</h3>
       <p class="nota">Sube el PDF o una foto del recibo: se detecta la tarifa sola y, si hay suficientes datos, se

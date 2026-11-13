@@ -3,7 +3,7 @@
 // aqui en HTML navegable en vez de PDF estatico. Cada seccion pertenece a un bloque de
 // bloques.js (para el boton de apagado) y recibe el mismo objeto `r` que arma
 // construirResultado() en app.js.
-import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA } from './util.js';
+import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, recuperacionDiferencia } from './util.js';
 import { barraHorizontal, barraAgrupada, gauge, curvaFlujo } from './charts.js';
 import { bloqueDeSeccion, seccionesDelBloque } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
@@ -904,7 +904,7 @@ function s01(r, _leido, onToggle) {
       ['Potencia', `${ev.kwp.toFixed(2)} kWp`, `${r.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
       ['Inversión, IVA incluido', M(ev.investment), M(r.investment), M(ev.investment - r.investment)],
       ['Ahorro anual', M(ev.ahorroAnual), M(r.ahorroAnual), M(ev.diferenciaAhorro)],
-      ['Recuperación simple', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', '—'],
+      ['Recuperación simple', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', recuperacionDiferencia(ev.investment - r.investment, ev.diferenciaAhorro)],
       ['% de ahorro de factura', PCT(ev.pctAhorro), PCT(r.pctAhorro), '—'],
     ], { small: true, id: 'g01-comparativo-verificacion' })));
     // Mismo fix de id FIJO que el parrafo de arriba -- ver ese comentario.
@@ -1910,7 +1910,7 @@ function s10(r, _leido, onToggle) {
     ['Promedio mensual del año', M(r.annualbefore / 12), M(r.annualafter / 12)],
     ['Ahorro anual de factura', '—', M(r.ahorroAnual)],
     ['Ahorro promedio mensual', '—', M(r.ahorroAnual / 12)],
-    ['Ahorro total anual', '—', PCT(r.pctAhorro)],
+    ['% de ahorro anual', '—', PCT(r.pctAhorro)],
     ['Mantenimiento del primer año', '—', M(r.om1)],
     ['Ahorro neto del primer año', '—', M(r.ahorroAnual - r.om1)],
   ], { id: 'g10-tabla-comparativa' })));
