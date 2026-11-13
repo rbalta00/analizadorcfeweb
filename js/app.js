@@ -9,6 +9,7 @@ import {
   aplicarMachoteAProyecto, clonarProyectoCongelado, clonarProyectoEditable, crearProyectoDesdeOrigen, detectarTextosConNumerosSospechosos,
   desbloquearProyecto, bloquearProyecto,
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
+  textoContieneIdentidadDe,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo, detectarCamposDinamicosConvertibles } from './secciones.js';
 import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
@@ -2865,7 +2866,19 @@ function onGuardarTextoGlobal(id, texto, textoDefecto) {
   }
   guardarProyecto(clienteActual, proyectoActual);
   const limpio = (texto || '').trim();
-  if (!limpio) { quitarTextoGlobal(id); } else { guardarTextoGlobal(id, texto); }
+  // Bug real encontrado en vivo, 2026-11-13: se guardo la direccion de UN inmueble como
+  // predeterminado global -- cualquier cotizacion nueva sin override propio heredaba esa
+  // direccion ajena (el texto generico "de fabrica" ya no se mostraba para NADIE). Un
+  // texto que menciona el titular/domicilio/No. de servicio de ESTE proyecto nunca tiene
+  // sentido como predeterminado para OTRAS cotizaciones -- se guarda igual para este
+  // proyecto (arriba), pero se bloquea solo la promocion a global.
+  if (!limpio) {
+    quitarTextoGlobal(id);
+  } else if (textoContieneIdentidadDe(limpio, proyectoActual)) {
+    alert('Este texto menciona el titular, domicilio o número de servicio de esta cotización -- no se puede usar como predeterminado para TODAS las cotizaciones nuevas (se quedaría mal en cualquier otro inmueble). Se guardó solo para esta cotización.');
+  } else {
+    guardarTextoGlobal(id, texto);
+  }
   if (ultimoResultado) {
     ultimoResultado.textosEditados = proyectoActual.textosEditados;
     renderSecciones(ultimoResultado);
@@ -3041,7 +3054,21 @@ function renderPlantillasTarifa(r) {
 }
 
 function onGuardarPlantillaTarifa(tarifa) {
-  guardarPlantillaTarifa(tarifa, proyectoActual.textosEditados || {});
+  // Mismo bug de fondo que onGuardarTextoGlobal (ver su comentario, 2026-11-13): esto
+  // guardaba TODO proyectoActual.textosEditados tal cual, sin filtrar -- un parrafo con
+  // el titular/domicilio/No. de servicio de ESTE proyecto quedaba guardado como punto de
+  // partida para CUALQUIER cotizacion nueva de esa tarifa, de cualquier otro inmueble.
+  const origen = proyectoActual.textosEditados || {};
+  const filtrado = {};
+  let omitidos = 0;
+  for (const [id, texto] of Object.entries(origen)) {
+    if (typeof texto === 'string' && textoContieneIdentidadDe(texto, proyectoActual)) { omitidos++; continue; }
+    filtrado[id] = texto;
+  }
+  guardarPlantillaTarifa(tarifa, filtrado);
+  if (omitidos > 0) {
+    alert(`Se guardó la plantilla de ${tarifa}, pero se omitieron ${omitidos} texto(s) que mencionaban el titular/domicilio/número de servicio de esta cotización -- no tiene sentido que otra cotización de la misma tarifa arranque con los datos de este inmueble.`);
+  }
   if (ultimoResultado) renderSecciones(ultimoResultado);
 }
 

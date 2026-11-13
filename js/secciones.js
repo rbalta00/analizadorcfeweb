@@ -215,6 +215,27 @@ export function sustituirCamposDinamicos(texto, r) {
   });
 }
 
+// Bug real encontrado en vivo, 2026-11-13 (caso ITS de Acatlán, machote de Casa del Abue
+// II): `texto.includes(valorFormateado)` hacia match de SUBCADENA sin respetar limites de
+// numero/palabra -- en una direccion con el numero de calle "1559", si el proyecto tenia
+// 155 paneles calculados, "155" (String(r.n)) aparecia DENTRO de "1559" y se consideraba
+// una coincidencia. Al convertir, el resultado fue literalmente "...{{paneles}}9..." --
+// corrompio la direccion, no solo la dejo desactualizada. Fix: apareceComoValorCompleto()
+// exige que el caracter inmediatamente antes/despues del match (si existe) NO sea otra
+// letra/digito -- "155" ya no hace match dentro de "1559", pero "$341,829.54" (con sus
+// propios simbolos/puntuacion) sigue matcheando igual que antes.
+function apareceComoValorCompleto(texto, valor) {
+  const escapado = valor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  try {
+    const regex = new RegExp(`(?<![\\p{L}\\p{N}])${escapado}(?![\\p{L}\\p{N}])`, 'u');
+    return regex.test(texto);
+  } catch {
+    // Navegador sin soporte de lookbehind/\p{} (muy viejo) -- cae al comportamiento
+    // anterior (menos preciso) en vez de tronar la deteccion por completo.
+    return texto.includes(valor);
+  }
+}
+
 // Busca, dentro de un texto recien editado, el valor YA FORMATEADO (ej. "$341,829.54")
 // de cualquiera de los campos dinamicos de arriba para el proyecto ACTUAL -- sirve para
 // ofrecerle al usuario "¿quieres convertir esto a un campo dinamico?" en vez de que lo
@@ -228,7 +249,7 @@ export function detectarCamposDinamicosConvertibles(texto, r) {
   for (const [campo, fn] of Object.entries(CAMPOS_DINAMICOS)) {
     let valorFormateado;
     try { valorFormateado = fn(r); } catch { continue; }
-    if (valorFormateado && texto.includes(valorFormateado)) hallazgos.push({ campo, valorFormateado });
+    if (valorFormateado && apareceComoValorCompleto(texto, valorFormateado)) hallazgos.push({ campo, valorFormateado });
   }
   return hallazgos;
 }

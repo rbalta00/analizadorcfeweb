@@ -524,11 +524,22 @@ const CAMPOS_EDITORIAL_MACHOTE = [
 // contenga literal el titular/domicilio/no-de-servicio DEL PROYECTO ORIGEN -- no hace
 // falta saber de antemano cuales ids son "de identidad" (s1-t0 hoy, pero cualquier otro
 // parrafo que alguna vez mencione estos datos queda cubierto igual).
-function valoresIdentidadDe(proyecto) {
+export function valoresIdentidadDe(proyecto) {
   const f = proyecto.formulario || {};
   return [f.titular, f.domicilio, f.noServicio]
     .filter((v) => typeof v === 'string' && v.trim().length >= 4)
     .map((v) => v.trim().toLowerCase());
+}
+
+// Reusado tambien por app.js (2026-11-13) para bloquear "guardar como predeterminado
+// global"/"guardar plantilla por tarifa" sobre un texto que trae la identidad de ESE
+// proyecto -- bug real encontrado en vivo: la direccion de un inmueble quedo guardada
+// como predeterminado global, asi que CUALQUIER cotizacion nueva sin override propio
+// heredaba la direccion de un tercero. Mismo criterio de identidad, un solo lugar.
+export function textoContieneIdentidadDe(texto, proyecto) {
+  if (typeof texto !== 'string') return false;
+  const textoMin = texto.toLowerCase();
+  return valoresIdentidadDe(proyecto).some((v) => textoMin.includes(v));
 }
 
 export function aplicarMachoteAProyecto(proyecto, origen) {
