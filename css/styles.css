@@ -429,6 +429,15 @@ input[type="file"] { padding: 6px 0; }
    con borde punteado para que sea obvio sin tener que prenderla para recordar que
    contenia. El PDF/cliente nunca la ven -- eso lo filtra generarPdf() aparte. */
 .seccion-apagada { opacity: 0.6; border-style: dashed; }
+/* Resaltar lo que SI va a salir en el PDF -- pedido explicito del usuario, 2026-11-13:
+   "resalta la informacion que va a salir en el PDF para que no me pierda tanto". Antes
+   solo lo APAGADO se distinguia (atenuado/borde punteado); lo activo se veia identico a
+   cualquier tarjeta normal, sin ninguna marca positiva. Franja teal a la izquierda --
+   mismo color de marca que ya usan las gráficas/leyendas (--cfe-teal), distinto del
+   dorado que ya significa "editado" (celda-editada/campo-editado), para no confundir
+   ambos significados. Nunca se aplica a lo apagado (:not(.seccion-apagada)). */
+.seccion:not(.seccion-apagada) { border-left: 5px solid var(--cfe-teal); }
+.grafico-togglable:not(.grafico-apagado) { border-left: 5px solid var(--cfe-teal); }
 .seccion-header { margin-bottom: 10px; }
 .seccion-numero { display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
   color: var(--cfe-gold); text-transform: uppercase; margin-bottom: 4px; }
@@ -539,6 +548,7 @@ input[type="file"] { padding: 6px 0; }
   background: rgba(33, 121, 139, 0.05);
 }
 .calculo-detalle-apagado { opacity: 0.6; border-style: solid; }
+.calculo-detalle:not(.calculo-detalle-apagado) { border-left: 5px solid var(--cfe-teal); }
 .calculo-detalle-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .calculo-detalle-header h3 { margin: 0; font-size: 0.95rem; color: var(--teal); }
 .toggle-calculo { font-size: 0.78rem; color: var(--grey); }
