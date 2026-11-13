@@ -8,7 +8,7 @@ import { barraHorizontal, barraAgrupada, gauge, curvaFlujo } from './charts.js';
 import { bloqueDeSeccion, seccionesDelBloque } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
-import { leerTextosGlobales, leerPlantillaTarifa } from './textosGlobales.js';
+import { leerPlantillaTarifa } from './textosGlobales.js';
 import { beneficioCosto, R } from './motor.js';
 
 // Razon real por la que un concepto NO reducible no baja con paneles solares -- NO es la
@@ -158,9 +158,6 @@ let _overridesActuales = {};
 let _onEditarTextoActual = () => {};
 let _calculosActivosActual = [];
 let _onToggleCalculoActual = () => {};
-let _globalesActuales = {};
-let _onGuardarGlobalActual = () => {};
-let _onQuitarGlobalActual = () => {};
 let _plantillaTarifaActual = {};
 let _ocultosActuales = {};
 let _onOcultarTextoActual = () => {};
@@ -301,12 +298,19 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   const tieneProyecto = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
   // Prioridad de que texto se usa como "base" cuando ESTE proyecto no tiene su propio
   // override: plantilla revisada de la TARIFA de este proyecto (textosGlobales.js,
-  // guardarPlantillaTarifa) > predeterminado global para cualquier tarifa > texto fijo
-  // en el codigo. Pedido explicito del usuario, 2026-11-05 (fase de plantillas por
-  // tarifa): "cotizaciones nuevas de esa misma tarifa arranquen con esa plantilla".
+  // guardarPlantillaTarifa) > texto fijo en el codigo. Pedido explicito del usuario,
+  // 2026-11-05 (fase de plantillas por tarifa): "cotizaciones nuevas de esa misma
+  // tarifa arranquen con esa plantilla". El predeterminado GLOBAL (una sola capa para
+  // cualquier tarifa) se quito a peticion del usuario, 2026-11-13: "ya no usamos lo de
+  // guardar predeterminado global... cuando elijamos un machote ahi va a traer los
+  // datos que requerimos" -- el machote (aplicarMachoteAProyecto) y la plantilla por
+  // tarifa ya cubren el mismo caso de uso de reutilizar redaccion entre cotizaciones,
+  // de forma mas especifica (por tarifa, o por cotizacion elegida a mano) que un unico
+  // default ciego para TODAS las tarifas -- que ademas fue la causa de un bug real
+  // encontrado el mismo dia (una direccion de un inmueble quedo guardada como
+  // predeterminado global y se colaba en cotizaciones de otros inmuebles).
   const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id);
-  const tieneGlobal = Object.prototype.hasOwnProperty.call(_globalesActuales, id);
-  const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : (tieneGlobal ? _globalesActuales[id] : textoDefecto);
+  const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : textoDefecto;
   const textoCrudo = tieneProyecto ? _overridesActuales[id] : base;
   // Mientras NO se esta editando, se muestra con los tokens {{...}} ya resueltos
   // (si trae alguno); al dar clic para editar, se muestra el texto crudo (con los
@@ -324,20 +328,14 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   wrap.append(e);
   if (tienePlantillaTarifa && !tieneProyecto) {
     wrap.append(el('span', 'nota-texto-global', '🏷️ Usa la plantilla revisada de esta tarifa'));
-  } else if (tieneGlobal && !tieneProyecto) {
-    wrap.append(el('span', 'nota-texto-global', '🌐 Usa tu predeterminado global'));
   }
   if (tieneProyecto) wrap.classList.add('campo-editado');
-  // Exactamente 2 botones por elemento editable -- pedido explicito del usuario,
-  // 2026-11-09: "la edicion de cualquier cosa solo tenga dos botones uno de apagar y
-  // otro de guardar, el de apagar pues se apaga todo ya no se ve, el de guardar pues
-  // se guardan los cambios los textos nuevos y esa version se pueda usar como machote
-  // para nuevas cotizaciones". Reemplaza los 3 controles que había antes (↺ restaurar,
-  // ✓/✕ aplicar/quitar de todas) -- "Guardar" ahora hace las 2 cosas en un clic
-  // (ver onGuardarTextoGlobal en app.js): queda guardado para esta cotización Y se
-  // vuelve el predeterminado/machote para las futuras. Para volver al texto de
-  // fábrica, se borra el texto y se guarda -- eso YA revierte ambos lados (ver
-  // onGuardarTextoGlobal), no hace falta un botón aparte para eso.
+  // El guardado YA es automatico al perder el foco (listener 'focusout' arriba) -- el
+  // boton "💾 Guardar" es un disparador explicito del MISMO guardado (pedido explicito
+  // del usuario, 2026-11-13: "el boton guardar si se debe quedar... es para guardar
+  // ediciones por si hago cambios a algun machote"), para no depender de que el clic
+  // siguiente quite el foco del campo. YA NO promueve nada a predeterminado global (esa
+  // parte se quito el mismo dia -- ver nota arriba en `base`).
   if (_bloqueadaActual) {
     wrap.append(el('span', 'nota-texto-oculto', '🔒 Cotización congelada -- no editable'));
     if (oculto) wrap.append(el('span', 'nota-texto-oculto', 'Apagado -- no aparece en la cotización final'));
@@ -347,8 +345,8 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   btnGuardar.type = 'button';
   btnGuardar.className = 'btn-guardar-texto';
   btnGuardar.textContent = '💾 Guardar';
-  btnGuardar.title = 'Guarda este texto para esta cotización y lo deja como machote para las cotizaciones futuras.';
-  btnGuardar.addEventListener('click', () => _onGuardarGlobalActual(id, e.textContent, textoDefecto));
+  btnGuardar.title = 'Guarda este texto para esta cotización.';
+  btnGuardar.addEventListener('click', () => _onEditarTextoActual(id, e.textContent, base));
   wrap.append(btnGuardar);
   const btnOcultar = document.createElement('button');
   btnOcultar.type = 'button';
@@ -389,8 +387,7 @@ function textoChico(textoDefecto, idOverride) {
   const id = idOverride || siguienteTarjetaId();
   const tieneProyecto = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
   const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id);
-  const tieneGlobal = Object.prototype.hasOwnProperty.call(_globalesActuales, id);
-  const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : (tieneGlobal ? _globalesActuales[id] : textoDefecto);
+  const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : textoDefecto;
   const wrap = el('span', 'texto-chico-editable');
   const span = document.createElement('span');
   span.className = 'texto-editable-chico' + (tieneProyecto ? ' texto-editable-chico-editado' : '');
@@ -407,18 +404,18 @@ function textoChico(textoDefecto, idOverride) {
   span.addEventListener('focusout', () => _onEditarTextoActual(id, span.textContent, base));
   wrap.append(span);
   if (_bloqueadaActual) return wrap;
-  // Un solo botón "💾 Guardar" (ver nota en campoEditableConId) -- el apagado de este
-  // texto chico vive a nivel de grupo completo (tarjeta/gráfica, checkbox "Mostrar:
-  // ..." de graficoToggle), no aquí individualmente, por espacio.
+  // Boton explicito "💾" -- mismo guardado que el focusout, pedido explicito del
+  // usuario 2026-11-13 para no depender de que el siguiente clic quite el foco (ver
+  // nota en campoEditableConId). Ya NO promueve a predeterminado global.
   const btnGuardar = document.createElement('button');
   btnGuardar.type = 'button';
-  btnGuardar.className = 'btn-guardar-texto btn-guardar-texto-chico' + (tieneGlobal ? ' activo' : '');
+  btnGuardar.className = 'btn-guardar-texto btn-guardar-texto-chico';
   btnGuardar.textContent = '💾';
-  btnGuardar.title = 'Guarda este texto para esta cotización y lo deja como machote para las cotizaciones futuras.';
+  btnGuardar.title = 'Guarda este texto para esta cotización.';
   btnGuardar.setAttribute('aria-label', btnGuardar.title);
   btnGuardar.addEventListener('click', (ev) => {
     ev.preventDefault();
-    _onGuardarGlobalActual(id, span.textContent, textoDefecto);
+    _onEditarTextoActual(id, span.textContent, base);
   });
   wrap.append(btnGuardar);
   return wrap;
@@ -445,7 +442,7 @@ function tarjetas(items) {
 // Celda de tabla editable -- version LIGERA de campoEditableConId() (sin los botones
 // de restaurar/global/ocultar que campoEditableConId agrega como hermanos, que no caben
 // dentro de una celda de tabla sin romper el layout cuando hay muchas filas). Reutiliza
-// el MISMO almacen de overrides (_overridesActuales/_globalesActuales) y el mismo
+// el MISMO almacen de overrides (_overridesActuales/_plantillaTarifaActual) y el mismo
 // callback de guardado (_onEditarTextoActual) que los parrafos sueltos -- escribir de
 // vuelta el texto original en una celda ya la "des-edita" sola al perder el foco (mismo
 // comportamiento que onEditarTexto en app.js ya hace para parrafos), asi que no hace
@@ -457,10 +454,9 @@ function tarjetas(items) {
 function celdaEditable(id, textoDefecto) {
   const tieneProyecto = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
   const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id);
-  const tieneGlobal = Object.prototype.hasOwnProperty.call(_globalesActuales, id);
-  const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : (tieneGlobal ? _globalesActuales[id] : textoDefecto);
+  const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : textoDefecto;
   const span = document.createElement('span');
-  span.className = 'celda-editable' + (tieneProyecto ? ' celda-editada' : (tienePlantillaTarifa || tieneGlobal) ? ' celda-con-global' : '');
+  span.className = 'celda-editable' + (tieneProyecto ? ' celda-editada' : tienePlantillaTarifa ? ' celda-con-global' : '');
   span.contentEditable = _bloqueadaActual ? 'false' : 'true';
   span.spellcheck = false;
   span.dataset.textoId = id;
@@ -479,22 +475,19 @@ function celdaEditable(id, textoDefecto) {
   const frag = document.createDocumentFragment();
   frag.append(span);
   if (_bloqueadaActual) return frag;
-  // Un solo botón "💾 Guardar" (ver nota en campoEditableConId, 2026-11-09) -- guarda
-  // para esta cotización Y lo deja como machote para las futuras, en un clic. El
-  // apagado de la celda vive en botonOcultarColFila (columna/fila completa, más abajo
-  // en tabla()), no aquí -- "✕" suelto aquí chocaría con el "✕" de ese otro botón que
-  // vive junto a esta misma celda, por eso se usa el icono "💾" en vez de "✓/✕".
-  const btnGlobal = document.createElement('button');
-  btnGlobal.type = 'button';
-  btnGlobal.className = 'btn-guardar-texto btn-guardar-texto-celda' + (tieneGlobal ? ' activo' : '');
-  btnGlobal.textContent = '💾';
-  btnGlobal.title = 'Guarda este texto para esta cotización y lo deja como machote para las cotizaciones futuras.';
-  btnGlobal.setAttribute('aria-label', btnGlobal.title);
-  btnGlobal.addEventListener('click', (ev) => {
+  // Boton explicito "💾" -- mismo guardado que el focusout (ver nota en
+  // campoEditableConId, 2026-11-13). Ya NO promueve a predeterminado global.
+  const btnGuardar = document.createElement('button');
+  btnGuardar.type = 'button';
+  btnGuardar.className = 'btn-guardar-texto btn-guardar-texto-celda';
+  btnGuardar.textContent = '💾';
+  btnGuardar.title = 'Guarda este texto para esta cotización.';
+  btnGuardar.setAttribute('aria-label', btnGuardar.title);
+  btnGuardar.addEventListener('click', (ev) => {
     ev.preventDefault();
-    _onGuardarGlobalActual(id, span.textContent, textoDefecto);
+    _onEditarTextoActual(id, span.textContent, base);
   });
-  frag.append(btnGlobal);
+  frag.append(btnGuardar);
   return frag;
 }
 
@@ -2280,19 +2273,21 @@ export const TITULOS_SECCIONES = [
 ];
 
 // renderSeccion(numero 1..21, r, leido, onToggle, onEditarTexto, onToggleCalculo,
-// onGuardarGlobal, onQuitarGlobal) -> HTMLElement
+// onOcultarTexto, onToggleGrafico, onToggleColumna, onToggleFila) -> HTMLElement
 // onEditarTexto(id, valorONull, textoDefecto): se llama al salir de un parrafo editado
 // (valor = texto nuevo) o al pulsar "Restaurar" (valor = null) -- override de ESTE
 // proyecto/cliente nada mas.
 // onToggleCalculo(bloque, activo): se llama al marcar/desmarcar el bloque "Cómo se
 // calculó" de una seccion -- independiente de onToggle (que apaga la seccion entera).
-// onGuardarGlobal(id, texto)/onQuitarGlobal(id): predeterminado GLOBAL para todas las
-// cotizaciones (actuales y futuras) -- ver textosGlobales.js.
+// El predeterminado GLOBAL para todas las cotizaciones (onGuardarGlobal/onQuitarGlobal,
+// textosGlobales.js) se quito a peticion del usuario, 2026-11-13 -- la reutilizacion de
+// redaccion entre cotizaciones ahora pasa por el machote (aplicarMachoteAProyecto) y la
+// plantilla por tarifa, nunca por un default ciego para cualquier tarifa.
 // onOcultarTexto(id, oculto): apaga/prende UN parrafo suelto sin borrar su texto --
 // mismo patron que onToggleCalculo pero a nivel de parrafo (ver textosOcultos en
 // clientes.js). El parrafo SIEMPRE se ve aqui en pantalla (atenuado si esta oculto),
 // el estado es lo que decide si queda incluido.
-export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggleCalculo, onGuardarGlobal, onQuitarGlobal, onOcultarTexto, onToggleGrafico, onToggleColumna, onToggleFila) {
+export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggleCalculo, onOcultarTexto, onToggleGrafico, onToggleColumna, onToggleFila) {
   // Bug real encontrado 2026-11-11: esta asignacion faltaba -- _bloqueadaActual se
   // quedaba SIEMPRE false (su valor inicial), asi que el candado de una definitiva
   // nunca llegaba a desactivar de verdad la edicion de texto, pese a que
@@ -2304,10 +2299,7 @@ export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggl
   _onEditarTextoActual = onEditarTexto || (() => {});
   _calculosActivosActual = r.calculosActivos || [];
   _onToggleCalculoActual = onToggleCalculo || (() => {});
-  _globalesActuales = leerTextosGlobales();
   _plantillaTarifaActual = leerPlantillaTarifa(r.tarifa);
-  _onGuardarGlobalActual = onGuardarGlobal || (() => {});
-  _onQuitarGlobalActual = onQuitarGlobal || (() => {});
   _ocultosActuales = r.textosOcultos || {};
   _onOcultarTextoActual = onOcultarTexto || (() => {});
   _graficosExcluidosActual = r.graficosExcluidos || [];

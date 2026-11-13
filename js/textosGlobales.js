@@ -1,47 +1,20 @@
-// Textos predeterminados GLOBALES de la cotizacion -- pedido explicito del usuario:
-// "editar titulos y textos de toda la cotizacion y guardarlo para las futuras
-// cotizaciones... para que no tenga que estarte diciendo a ti por codigo". Distinto
-// de `proyecto.textosEditados` (secciones.js/app.js), que es un override SOLO para
-// ese cliente/cotizacion -- esto vive aparte, en todo el navegador, y aplica como
-// nuevo texto por defecto a CUALQUIER cotizacion (la actual y las que se creen
-// despues) que no tenga ya su propio override de proyecto para ese mismo parrafo.
-// Capa de prioridad: override de proyecto > default global > texto en el codigo.
-const CLAVE_STORAGE = 'cfe_textos_globales_v1';
-
-export function leerTextosGlobales() {
-  try {
-    return JSON.parse(localStorage.getItem(CLAVE_STORAGE)) || {};
-  } catch {
-    return {};
-  }
-}
-
-function guardarTodos(obj) {
-  localStorage.setItem(CLAVE_STORAGE, JSON.stringify(obj));
-}
-
-export function guardarTextoGlobal(id, texto) {
-  const todos = leerTextosGlobales();
-  todos[id] = texto;
-  guardarTodos(todos);
-}
-
-export function quitarTextoGlobal(id) {
-  const todos = leerTextosGlobales();
-  delete todos[id];
-  guardarTodos(todos);
-}
+// El predeterminado GLOBAL de texto (un solo default para CUALQUIER tarifa, aplicado a
+// cotizaciones actuales y futuras) se quito a peticion explicita del usuario,
+// 2026-11-13: "ya no usamos lo de guardar predeterminado global... cuando elijamos un
+// machote ahi va a traer los datos que requerimos y la cotizacion original ya tiene sus
+// datos predeterminados" -- el machote (aplicarMachoteAProyecto, clientes.js) y la
+// plantilla por tarifa de aqui abajo cubren el mismo caso de uso de forma mas
+// especifica. La clave vieja en localStorage ('cfe_textos_globales_v1') ya no se lee ni
+// se escribe desde ningun lado de la app -- queda huerfana en el navegador de quien la
+// haya usado, sin efecto.
 
 // ---------------------------------------------------------------------------
 // Plantilla final revisada POR TARIFA -- pedido explicito del usuario, 2026-11-05:
 // "en sí que todo texto [y] tabla se pueda editar y al final poder guardar como
 // formato final revisado para ya así hacer todas las cotizaciones, aunque puede
 // variar por tarifa se va a ir guardando y corrigiendo y eliminando por tarifa".
-// Capa ADICIONAL a la global de arriba, no la reemplaza -- la global sigue
-// aplicando a cualquier tarifa si no hay plantilla especifica para la tarifa de
-// este proyecto. Prioridad completa (ver _resolverBase en secciones.js):
-// override de proyecto > plantilla de ESTA tarifa > global para todas las tarifas
-// > texto fijo en el codigo.
+// Prioridad (ver campoEditableConId/textoChico/celdaEditable en secciones.js):
+// override de proyecto > plantilla de ESTA tarifa > texto fijo en el codigo.
 // Guardado como SNAPSHOT completo por tarifa (no acumulativo campo a campo): el
 // boton "Guardar/actualizar plantilla" en app.js manda TODO proyecto.textosEditados
 // de la cotizacion que se esta revisando, reemplazando entero lo que hubiera antes

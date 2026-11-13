@@ -12,7 +12,7 @@ import {
   textoContieneIdentidadDe,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo, detectarCamposDinamicosConvertibles } from './secciones.js';
-import { guardarTextoGlobal, quitarTextoGlobal, TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
+import { TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf, generarPdfCompletaDesdeVista } from './propuesta.js';
 import { descargarExcelCotizacion } from './excel.js';
@@ -2848,47 +2848,17 @@ function onEditarTexto(id, valor, textoDefecto) {
   }
 }
 
-// "💾 Guardar" unificado -- pedido explicito del usuario, 2026-11-09: "la edicion de
-// cualquier cosa solo tenga dos botones uno de apagar y otro de guardar... el de
-// guardar pues se guardan los cambios los textos nuevos y esa version se pueda usar
-// como machote para nuevas cotizaciones". Reemplaza los 2 controles que existian
-// (✓/✕ "aplicar a todas" + ↺ "restaurar a predeterminado") -- un solo clic hace las
-// 2 cosas: (1) deja el texto guardado para ESTA cotizacion (mismo efecto que ya hacia
-// perder el foco, por si no se habia disparado todavia) y (2) lo promueve como
-// predeterminado global para las cotizaciones futuras (el machote). Vaciar el texto y
-// guardar quita ambos (local y global), vuelve al texto de fábrica en todos lados.
-function onGuardarTextoGlobal(id, texto, textoDefecto) {
-  proyectoActual.textosEditados = proyectoActual.textosEditados || {};
-  if (texto == null || !texto.trim() || texto.trim() === textoDefecto.trim()) {
-    delete proyectoActual.textosEditados[id];
-  } else {
-    proyectoActual.textosEditados[id] = texto;
-  }
-  guardarProyecto(clienteActual, proyectoActual);
-  const limpio = (texto || '').trim();
-  // Bug real encontrado en vivo, 2026-11-13: se guardo la direccion de UN inmueble como
-  // predeterminado global -- cualquier cotizacion nueva sin override propio heredaba esa
-  // direccion ajena (el texto generico "de fabrica" ya no se mostraba para NADIE). Un
-  // texto que menciona el titular/domicilio/No. de servicio de ESTE proyecto nunca tiene
-  // sentido como predeterminado para OTRAS cotizaciones -- se guarda igual para este
-  // proyecto (arriba), pero se bloquea solo la promocion a global.
-  if (!limpio) {
-    quitarTextoGlobal(id);
-  } else if (textoContieneIdentidadDe(limpio, proyectoActual)) {
-    alert('Este texto menciona el titular, domicilio o número de servicio de esta cotización -- no se puede usar como predeterminado para TODAS las cotizaciones nuevas (se quedaría mal en cualquier otro inmueble). Se guardó solo para esta cotización.');
-  } else {
-    guardarTextoGlobal(id, texto);
-  }
-  if (ultimoResultado) {
-    ultimoResultado.textosEditados = proyectoActual.textosEditados;
-    renderSecciones(ultimoResultado);
-  }
-}
-
-function onQuitarTextoGlobal(id) {
-  quitarTextoGlobal(id);
-  if (ultimoResultado) renderSecciones(ultimoResultado);
-}
+// El predeterminado GLOBAL (antes onGuardarTextoGlobal/onQuitarTextoGlobal, "🌐 Usar este
+// texto en todas las cotizaciones nuevas") se quito a peticion explicita del usuario,
+// 2026-11-13: "ya no usamos lo de guardar predeterminado global... cuando elijamos un
+// machote ahi va a traer los datos que requerimos y la cotizacion original ya tiene sus
+// datos predeterminados". La reutilizacion de redaccion entre cotizaciones ahora pasa
+// por el machote (aplicarMachoteAProyecto, clientes.js) o por la plantilla por tarifa
+// (onGuardarPlantillaTarifa, mas abajo) -- ambos mas especificos que un unico default
+// ciego para TODAS las tarifas, que ademas fue la causa de un bug real encontrado el
+// mismo dia (una direccion de un inmueble se colo como predeterminado global y aparecia
+// en cotizaciones de otros inmuebles). El guardado por parrafo sigue igual que siempre,
+// automatico al perder el foco (onEditarTexto, arriba).
 
 // Apagar/prender UN parrafo suelto sin borrar su texto -- mismo patron que
 // onToggleCalculo pero a nivel de parrafo (pedido explicito del usuario, 2026-11-02).
@@ -2932,7 +2902,7 @@ function renderSecciones(r) {
   $('ayudaEdicion').hidden = false;
   const numeros = ordenSeccionesEfectivo(r).filter(n => seccionTieneDatos(n, r));
   numeros.forEach((n, i) => {
-    const art = renderSeccion(n, r, ultimoLeido, onToggleSeccion, onEditarTexto, onToggleCalculo, onGuardarTextoGlobal, onQuitarTextoGlobal, onOcultarTexto, onToggleGrafico, onToggleColumna, onToggleFila);
+    const art = renderSeccion(n, r, ultimoLeido, onToggleSeccion, onEditarTexto, onToggleCalculo, onOcultarTexto, onToggleGrafico, onToggleColumna, onToggleFila);
     agregarNavegacionSeccion(art, numeros[i - 1] ?? null, numeros[i + 1] ?? null);
     cont.append(art);
   });
@@ -3054,10 +3024,11 @@ function renderPlantillasTarifa(r) {
 }
 
 function onGuardarPlantillaTarifa(tarifa) {
-  // Mismo bug de fondo que onGuardarTextoGlobal (ver su comentario, 2026-11-13): esto
-  // guardaba TODO proyectoActual.textosEditados tal cual, sin filtrar -- un parrafo con
-  // el titular/domicilio/No. de servicio de ESTE proyecto quedaba guardado como punto de
-  // partida para CUALQUIER cotizacion nueva de esa tarifa, de cualquier otro inmueble.
+  // Bug real encontrado en vivo, 2026-11-13 (mismo dia que se quito el predeterminado
+  // global por el mismo motivo): esto guardaba TODO proyectoActual.textosEditados tal
+  // cual, sin filtrar -- un parrafo con el titular/domicilio/No. de servicio de ESTE
+  // proyecto quedaba guardado como punto de partida para CUALQUIER cotizacion nueva de
+  // esa tarifa, de cualquier otro inmueble.
   const origen = proyectoActual.textosEditados || {};
   const filtrado = {};
   let omitidos = 0;
