@@ -512,14 +512,37 @@ const CAMPOS_EDITORIAL_MACHOTE = [
   'textosEditados', 'textosOcultos', 'seccionesExcluidas', 'graficosExcluidos',
   'calculosActivos', 'tablaColumnasOcultas', 'tablaFilasOcultas', 'ordenSecciones',
 ];
+// Bug real reportado por el usuario, 2026-11-12 (caso ITS de Acatlán): tras aplicar un
+// machote y cargar el recibo del servicio nuevo, el parrafo "S1.1" (titular · domicilio,
+// primer parrafo de la seccion 1) seguia mostrando la direccion del MACHOTE, no la del
+// recibo recien cargado. Causa: PATRON_POSIBLE_NUMERO_CALCULADO solo detecta cifras/%/
+// kWh/años/paneles pegados -- una direccion o un nombre de titular no hace match con ese
+// patron (no es un "numero calculado"), asi que el override guardado del origen pasaba
+// el filtro intacto y se copiaba tal cual, aunque el propio encargo original del usuario
+// ya pedia explicito "excluye el RPU, el domicilio, el titular... del servicio de
+// origen". Fix: ademas del patron de cifras, se excluye cualquier texto editado que
+// contenga literal el titular/domicilio/no-de-servicio DEL PROYECTO ORIGEN -- no hace
+// falta saber de antemano cuales ids son "de identidad" (s1-t0 hoy, pero cualquier otro
+// parrafo que alguna vez mencione estos datos queda cubierto igual).
+function valoresIdentidadDe(proyecto) {
+  const f = proyecto.formulario || {};
+  return [f.titular, f.domicilio, f.noServicio]
+    .filter((v) => typeof v === 'string' && v.trim().length >= 4)
+    .map((v) => v.trim().toLowerCase());
+}
+
 export function aplicarMachoteAProyecto(proyecto, origen) {
   const origenProyecto = origen.proyecto;
+  const identidadOrigen = valoresIdentidadDe(origenProyecto);
   for (const campo of CAMPOS_EDITORIAL_MACHOTE) {
     if (origenProyecto[campo] === undefined) continue;
     if (campo === 'textosEditados') {
       const limpio = {};
       for (const [id, texto] of Object.entries(origenProyecto.textosEditados || {})) {
-        if (typeof texto === 'string' && PATRON_POSIBLE_NUMERO_CALCULADO.test(texto)) continue;
+        if (typeof texto !== 'string') { limpio[id] = texto; continue; }
+        if (PATRON_POSIBLE_NUMERO_CALCULADO.test(texto)) continue;
+        const textoMin = texto.toLowerCase();
+        if (identidadOrigen.some((v) => textoMin.includes(v))) continue;
         limpio[id] = texto;
       }
       proyecto.textosEditados = limpio;
