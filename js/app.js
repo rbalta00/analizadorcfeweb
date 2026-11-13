@@ -3779,6 +3779,37 @@ $('btnRefrescar').addEventListener('click', actualizarApp);
 $('btnRefrescarAbajo').addEventListener('click', actualizarApp);
 
 // =====================================================================
+// Botones flotantes: subir al inicio / bajar al final de la página --
+// pedido explicito del usuario, 2026-11-12.
+// =====================================================================
+(function initBotonesScroll() {
+  const cont = $('botonesScroll');
+  const btnSubir = $('btnSubirInicio');
+  const btnBajar = $('btnBajarFinal');
+  function actualizarBotonesScroll() {
+    const alMargen = 24;
+    const sePuedeScrollear = document.documentElement.scrollHeight - window.innerHeight > alMargen * 2;
+    cont.hidden = !sePuedeScrollear;
+    if (!sePuedeScrollear) return;
+    btnSubir.disabled = window.scrollY <= alMargen;
+    const cercaDelFinal = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - alMargen;
+    btnBajar.disabled = cercaDelFinal;
+  }
+  let pendienteRaf = false;
+  function actualizarBotonesScrollDiferido() {
+    if (pendienteRaf) return;
+    pendienteRaf = true;
+    requestAnimationFrame(() => { pendienteRaf = false; actualizarBotonesScroll(); });
+  }
+  btnSubir.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  btnBajar.addEventListener('click', () => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }));
+  window.addEventListener('scroll', actualizarBotonesScrollDiferido, { passive: true });
+  window.addEventListener('resize', actualizarBotonesScrollDiferido);
+  new MutationObserver(actualizarBotonesScrollDiferido).observe(document.body, { childList: true, subtree: true });
+  actualizarBotonesScroll();
+})();
+
+// =====================================================================
 // PWA: service worker + boton de instalar + deteccion de ya-instalada
 // =====================================================================
 if ('serviceWorker' in navigator) {
