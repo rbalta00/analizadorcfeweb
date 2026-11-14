@@ -38,15 +38,22 @@ function datosLote40() {
   });
 }
 
-// La tarifa de un inmueble NO esta en la lista fija de los 40 (el control de
-// documentos nunca la capturo) -- se agrupa por `proyecto.formulario.tarifa` cuando
-// ya existe cotizacion con eso capturado; los que todavia no tienen cotizacion (o la
-// tienen pero sin tarifa leida) caen en un grupo aparte al final. Mismo orden/
-// etiquetas que el resto de la app (ORDEN_TARIFAS/ETIQUETAS_TARIFA, tarifas.js).
+// Tarifa EFECTIVA de un inmueble, para agrupar -- pedido explicito del usuario,
+// 2026-11-14 ("si le puedes poner la tarifa ya que esta en su recibo"): prioriza la
+// tarifa REAL capturada en una cotizacion ya existente de esta app
+// (`proyecto.formulario.tarifa`, la que de verdad se usa para calcular), y solo si
+// todavia no hay eso, cae a `def.tarifaDelRecibo` (leida directo del recibo real del
+// inmueble -- ver lote40.js). Las dos fuentes casi siempre deberian coincidir; si
+// algun dia no coinciden, gana la capturada en la cotizacion (mas reciente/verificada
+// para ESE calculo en particular).
+function tarifaEfectiva(f) {
+  return f.proyecto?.formulario?.tarifa || f.def.tarifaDelRecibo || null;
+}
+
 function agruparLote40PorTarifa(filas) {
   const grupos = new Map();
   for (const f of filas) {
-    const tarifa = f.proyecto?.formulario?.tarifa || null;
+    const tarifa = tarifaEfectiva(f);
     if (!grupos.has(tarifa)) grupos.set(tarifa, []);
     grupos.get(tarifa).push(f);
   }
@@ -105,6 +112,13 @@ function tarjetaLote40(fila) {
   const cifras = proyecto?.ultimaInversionTotal != null
     ? `Inversión ${M(proyecto.ultimaInversionTotal)}${proyecto.ultimoAhorroAnual != null ? ' · Ahorro anual ' + M(proyecto.ultimoAhorroAnual) : ''} · `
     : '';
+  // Si la tarifa del grupo vino del recibo (lote40.js) y NO de una cotizacion real ya
+  // capturada en esta app, se avisa -- es la mejor estimacion disponible, no un dato
+  // verificado por esta app todavia (ver tarifaEfectiva()).
+  const tarifaConfirmadaEnApp = !!proyecto?.formulario?.tarifa;
+  const avisoTarifa = !tarifaConfirmadaEnApp && def.tarifaDelRecibo
+    ? `<span class="nota">📄 Tarifa ${escapeHtml(def.tarifaDelRecibo)} según su recibo -- todavía sin cotización en esta app que la confirme.</span>`
+    : '';
   const info = document.createElement('div');
   info.className = 'tarjeta-cliente-info';
   info.innerHTML = `<strong>${def.id}. ${escapeHtml(def.inmueble)}</strong>` +
@@ -112,6 +126,7 @@ function tarjetaLote40(fila) {
     `<span class="nota">RPU ${escapeHtml(def.rpu)}${def.rpuAlt ? ` (alt. ${escapeHtml(def.rpuAlt)})` : ''}` +
     (proyecto ? ` · ${escapeHtml(cliente.nombre)} · ${escapeHtml(proyecto.nombre)}` : '') + `</span>` +
     (proyecto ? `<span class="nota">${cifras}actualizado ${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</span>` : '') +
+    avisoTarifa +
     `<span class="nota${docsOk ? '' : ' aviso'}">${docsTexto}</span>` +
     (def.pendientes ? `<span class="nota">⚠️ ${escapeHtml(def.pendientes)}</span>` : '');
   div.append(info);
