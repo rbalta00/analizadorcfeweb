@@ -350,9 +350,15 @@ input[type="file"] { padding: 6px 0; }
    trabajando, otro para las definitivas, otro para las muestras, otro para las
    vacias/sin querer"). */
 .grupo-proyectos, .grupo-clientes { margin-bottom: 18px; }
-.grupo-proyectos h4, .grupo-clientes h3 { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
+.grupo-proyectos h4, .grupo-clientes h3, .grupo-proyectos summary { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
   text-transform: uppercase; color: var(--grey); margin: 0 0 6px; }
 .grupo-proyectos .lista-clientes, .grupo-clientes .lista-clientes { margin-bottom: 4px; }
+/* Grupo "Sin tarifa capturada todavía" del visor del lote de 40 -- colapsable y
+   cerrado por defecto para que los grupos de tarifa real (chicos) no queden
+   enterrados visualmente debajo de un catch-all que normalmente es el mas grande. */
+details.grupo-proyectos summary { cursor: pointer; }
+details.grupo-proyectos[open] summary { margin-bottom: 10px; }
+details.grupo-proyectos .lista-clientes { margin-top: 6px; }
 .tarjeta-cliente {
   display: flex; justify-content: space-between; align-items: center;
   background: var(--bg); border-radius: 8px; padding: 10px 12px; cursor: pointer;

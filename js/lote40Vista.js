@@ -133,17 +133,35 @@ function tarjetaLote40(fila) {
 function renderTabla(filas) {
   const cont = document.getElementById('lote40Tabla');
   cont.innerHTML = '';
+  // Pedido explicito del usuario, 2026-11-14: "en el visor no me lo agrupaste por
+  // tarifa esta todo en uno" -- el agrupado SI estaba funcionando, pero en la
+  // practica casi todos los 40 (los que aun no tienen tarifa leida de un recibo real)
+  // caen en el grupo "Sin tarifa capturada todavia", que al ser el mas grande por
+  // mucho (ej. 37 de 40) dominaba la pantalla y hacia que los 2-3 grupos de tarifa
+  // real, chicos, se sintieran invisibles -- "todo se veia junto" aunque tecnicamente
+  // no lo estuviera. Se vuelve colapsable (cerrado por defecto) SOLO ese grupo
+  // catch-all, para que los grupos de tarifa real salten a la vista de inmediato.
   for (const { tarifa, etiqueta, filas: filasGrupo } of agruparLote40PorTarifa(filas)) {
-    const wrap = document.createElement('div');
-    wrap.className = 'grupo-proyectos';
-    const h4 = document.createElement('h4');
-    h4.textContent = `${tarifa ? `Tarifa ${tarifa} — ${etiqueta}` : etiqueta} (${filasGrupo.length})`;
-    wrap.append(h4);
+    const titulo = `${tarifa ? `Tarifa ${tarifa} — ${etiqueta}` : etiqueta} (${filasGrupo.length})`;
     const lista = document.createElement('div');
     lista.className = 'lista-clientes';
     for (const f of filasGrupo) lista.append(tarjetaLote40(f));
-    wrap.append(lista);
-    cont.append(wrap);
+
+    if (tarifa === null) {
+      const details = document.createElement('details');
+      details.className = 'grupo-proyectos grupo-lote40-sin-tarifa';
+      const summary = document.createElement('summary');
+      summary.textContent = titulo;
+      details.append(summary, lista);
+      cont.append(details);
+    } else {
+      const wrap = document.createElement('div');
+      wrap.className = 'grupo-proyectos';
+      const h4 = document.createElement('h4');
+      h4.textContent = titulo;
+      wrap.append(h4, lista);
+      cont.append(wrap);
+    }
   }
 }
 
