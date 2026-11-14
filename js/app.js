@@ -33,6 +33,7 @@ import {
   supabaseEliminarArchivo, supabaseListarArchivos, supabaseUpsertar, supabaseEliminarPorFiltro,
 } from './supabase.js';
 import { subirANube, bajarDeNube, eliminarClienteDeNube, listarClientesEnNube } from './nube.js';
+import { LOTE_40_INMUEBLES, normalizarRpu } from './lote40.js';
 import { panelesEnTecho, esquinasDelTecho, crearEditorPaneles, hornearImagenSembrado, PANEL_ANCHO_M, PANEL_ALTO_M } from './sembrador.js';
 
 window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
@@ -267,6 +268,7 @@ function mostrarPantallaClientes() {
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
+  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
@@ -481,6 +483,7 @@ function mostrarPantallaEnvios() {
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
+  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaEnvios').hidden = false;
@@ -592,6 +595,158 @@ function renderDashboard() {
 }
 $('chkSoloDefinitivasDashboard').addEventListener('change', renderDashboard);
 
+// =====================================================================
+// Pantalla: Estado del lote de 40 inmuebles -- pedido explicito del usuario,
+// 2026-11-14: "un boton... donde se muestre el status de cada cotizacion del
+// proyecto 40 inmuebles para saber cuantos se han generado y cuantos faltan".
+// LOTE_40_INMUEBLES (lote40.js) es la lista fija de los 40 inmuebles del lote de
+// gobierno (RPU + estado de recopilacion de documentos, copiado del control del
+// motor Python) -- esta pantalla la cruza contra los clientes/proyectos REALES
+// guardados aqui (por RPU) para saber cuales de los 40 ya tienen cotizacion en
+// esta app, en que etapa va cada una, y cuales siguen sin empezar. La info de
+// "recibo/verificacion localizados" complementa (no sustituye) lo que la app ya
+// sabe: un inmueble puede tener sus documentos listos y aun asi no tener ninguna
+// cotizacion creada aqui todavia, o traer un problema de identidad/RPU conocido
+// de antes (ver `pendientes`) que conviene resolver antes de confiar en el match.
+function datosLote40() {
+  const todosProyectos = [];
+  for (const c of listarClientes()) {
+    for (const p of (c.proyectos || [])) todosProyectos.push({ cliente: c, proyecto: p });
+  }
+  return LOTE_40_INMUEBLES.map((def) => {
+    const rpusDef = [def.rpu, def.rpuAlt].filter(Boolean).map(normalizarRpu);
+    // Match principal por el RPU capturado en el formulario; si el proyecto nunca
+    // llego a capturar RPU (ej. se creo pero no se le subio el recibo todavia), se
+    // intenta tambien contra el nombre del proyecto -- la convencion de esta misma
+    // app para este lote es nombrar cada cotizacion "<RPU> <institucion>" (ver
+    // nombreArchivoProyecto()/los nombres ya usados en el cliente "40 inmuebles").
+    const match = todosProyectos.find(({ proyecto: p }) => {
+      const rpuCapturado = normalizarRpu(p.formulario?.noServicio);
+      if (rpuCapturado && rpusDef.includes(rpuCapturado)) return true;
+      return rpusDef.some((r) => r && (p.nombre || '').replace(/\D+/g, '').includes(r));
+    });
+    return { def, cliente: match?.cliente || null, proyecto: match?.proyecto || null };
+  });
+}
+
+function estadoCotizacionLote40(proyecto) {
+  if (!proyecto) return { clave: 'sin-crear', etiqueta: '— Sin crear' };
+  if (proyecto.definitiva) return { clave: 'definitiva', etiqueta: '✅ Definitiva' };
+  if (proyecto.ultimaInversionTotal != null) return { clave: 'calculada', etiqueta: '🧮 Calculada' };
+  if (proyecto.formulario) return { clave: 'sin-calcular', etiqueta: '⚠️ Sin calcular' };
+  return { clave: 'sin-datos', etiqueta: '⚠️ Sin datos' };
+}
+
+function renderLote40Totales(filas) {
+  const cont = $('lote40Totales');
+  cont.innerHTML = '';
+  const conProyecto = filas.filter((f) => f.proyecto);
+  const calculadas = filas.filter((f) => f.proyecto?.ultimaInversionTotal != null);
+  const definitivas = filas.filter((f) => f.proyecto?.definitiva);
+  const bloqueadas = filas.filter((f) => f.def.estadoDocs !== 'Recibo y verificación localizados');
+  const metricas = [
+    [`${conProyecto.length} de ${filas.length}`, 'Ya tienen cotización creada en esta app'],
+    [String(filas.length - conProyecto.length), 'Sin ninguna cotización todavía'],
+    [String(calculadas.length), 'Ya calculadas (con inversión/ahorro)'],
+    [String(definitivas.length), '✅ Marcadas como definitivas'],
+    [String(bloqueadas.length), '⚠️ Con pendiente de documentación/identidad conocido'],
+  ];
+  for (const [valor, etiqueta] of metricas) {
+    const m = document.createElement('div');
+    m.className = 'metrica';
+    m.innerHTML = `<div class="valor">${valor}</div><div class="etiqueta">${etiqueta}</div>`;
+    cont.append(m);
+  }
+}
+
+function renderLote40Tabla(filas) {
+  const cont = $('lote40Tabla');
+  cont.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'tabla-wrap';
+  const t = document.createElement('table');
+  t.className = 'tabla-seccion tabla-chica';
+  const thead = document.createElement('thead');
+  thead.innerHTML = '<tr><th>#</th><th>Inmueble</th><th>RPU</th><th>Documentos (recopilación)</th>' +
+    '<th>Cotización en esta app</th><th class="num">Inversión</th><th class="num">Ahorro anual</th>' +
+    '<th>Actualizado</th><th>Pendiente conocido</th><th></th></tr>';
+  t.append(thead);
+  const tbody = document.createElement('tbody');
+  for (const { def, cliente, proyecto } of filas) {
+    const estado = estadoCotizacionLote40(proyecto);
+    const docsOk = def.reciboLocalizado && def.verificacionLocalizada;
+    const docsTexto = `${def.reciboLocalizado ? '📄 recibo' : '❌ sin recibo'} · ${def.verificacionLocalizada ? '🔍 verificación' : '❌ sin verificación'}`;
+    const tr = document.createElement('tr');
+    if (!proyecto) tr.classList.add('fila-pendiente-lote40'); // atenuado SIN tachado -- aqui "no existe todavia", no "se excluyo a proposito"
+    tr.innerHTML = `<td>${def.id}</td><td>${escapeHtml(def.inmueble)}</td>` +
+      `<td>${escapeHtml(def.rpu)}${def.rpuAlt ? ` <span class="nota">(alt. ${escapeHtml(def.rpuAlt)})</span>` : ''}</td>` +
+      `<td class="${docsOk ? '' : 'nota aviso'}">${docsTexto}</td>` +
+      `<td><span class="chip-etapa ${estado.clave === 'sin-crear' || estado.clave === 'sin-datos' || estado.clave === 'sin-calcular' ? 'chip-etapa-negociando' : 'chip-etapa-ganado'}">${estado.etiqueta}</span>` +
+      (proyecto ? `<br><span class="nota">${escapeHtml(cliente.nombre)} · ${escapeHtml(proyecto.nombre)}</span>` : '') + `</td>` +
+      `<td class="num">${proyecto?.ultimaInversionTotal != null ? M(proyecto.ultimaInversionTotal) : '—'}</td>` +
+      `<td class="num">${proyecto?.ultimoAhorroAnual != null ? M(proyecto.ultimoAhorroAnual) : '—'}</td>` +
+      `<td>${proyecto ? new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX') : '—'}</td>` +
+      `<td class="nota">${escapeHtml(def.pendientes || '')}</td><td></td>`;
+    if (proyecto) {
+      const btnAbrir = document.createElement('button');
+      btnAbrir.className = 'btn-link';
+      btnAbrir.textContent = 'Abrir';
+      btnAbrir.addEventListener('click', () => abrirProyecto(cliente.id, proyecto.id));
+      tr.lastElementChild.append(btnAbrir);
+    }
+    tbody.append(tr);
+  }
+  t.append(tbody);
+  wrap.append(t);
+  cont.append(wrap);
+}
+
+function renderLote40() {
+  const filas = datosLote40();
+  renderLote40Totales(filas);
+  renderLote40Tabla(filas);
+}
+
+function exportarLote40Csv() {
+  const filas = datosLote40();
+  const lineas = [['#', 'Inmueble', 'RPU', 'RPU alterno', 'Recibo localizado', 'Verificación localizada', 'Pendiente de documentación',
+    'Cliente en esta app', 'Cotización en esta app', 'Estado de la cotización', 'Inversión', 'Ahorro anual', 'Actualizado', 'Definitiva'].join(',')];
+  for (const { def, cliente, proyecto } of filas) {
+    const estado = estadoCotizacionLote40(proyecto);
+    lineas.push([
+      def.id, csvEscape(def.inmueble), def.rpu, csvEscape(def.rpuAlt || ''),
+      def.reciboLocalizado ? 'Sí' : 'No', def.verificacionLocalizada ? 'Sí' : 'No', csvEscape(def.pendientes || ''),
+      csvEscape(cliente?.nombre || ''), csvEscape(proyecto?.nombre || ''), csvEscape(estado.etiqueta),
+      proyecto?.ultimaInversionTotal ?? '', proyecto?.ultimoAhorroAnual ?? '',
+      proyecto ? csvEscape(new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')) : '',
+      proyecto?.definitiva ? 'Sí' : 'No',
+    ].join(','));
+  }
+  const blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `estado_lote_40_inmuebles_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function mostrarPantallaLote40() {
+  $('pantallaClientes').hidden = true;
+  $('pantallaEnvios').hidden = true;
+  $('pantallaDashboard').hidden = true;
+  $('pantallaDefinitivasPorTarifa').hidden = true;
+  $('pantallaCotizadorMachote').hidden = true;
+  $('pantallaProyectos').hidden = true;
+  $('pantallaCliente').hidden = true;
+  $('pantallaLote40').hidden = false;
+  renderLote40();
+}
+$('btnAbrirLote40').addEventListener('click', mostrarPantallaLote40);
+$('btnVolverClientesDesdeLote40').addEventListener('click', mostrarPantallaClientes);
+$('btnRefrescarLote40').addEventListener('click', renderLote40);
+$('btnExportarLote40Csv').addEventListener('click', exportarLote40Csv);
+
 function csvEscape(v) {
   const s = String(v ?? '');
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
@@ -627,6 +782,7 @@ function mostrarPantallaDashboard() {
   $('pantallaEnvios').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
+  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaDashboard').hidden = false;
@@ -683,6 +839,7 @@ function mostrarPantallaDefinitivasPorTarifa() {
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
+  $('pantallaLote40').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = false;
   renderDefinitivasPorTarifa();
 }
@@ -998,6 +1155,7 @@ function mostrarPantallaProyectos(clienteId) {
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
+  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = false;
   $('pantallaCliente').hidden = true;
   $('clienteNombreBarraProyectos').value = clienteActual.nombre;
@@ -1526,6 +1684,7 @@ function mostrarPantallaCotizadorMachote() {
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
+  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaCotizadorMachote').hidden = false;
@@ -1875,6 +2034,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
+  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = false;
   $('clienteNombreBarra').value = clienteActual.nombre;

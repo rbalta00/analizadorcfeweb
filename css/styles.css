@@ -639,6 +639,10 @@ input[type="file"] { padding: 6px 0; }
 .col-oculta-tabla { opacity: 0.45; }
 .fila-oculta-tabla { opacity: 0.45; }
 .fila-oculta-tabla td { text-decoration: line-through; text-decoration-color: var(--grey); }
+/* Estado del lote de 40 inmuebles: atenuado SIN tachado -- a diferencia de
+   .fila-oculta-tabla (algo que se apago A PROPOSITO), aqui significa "todavia no se
+   ha creado ninguna cotizacion para este inmueble", no que se haya excluido nada. */
+.fila-pendiente-lote40 { opacity: 0.55; }
 
 /* ===================== Documentos adjuntos (recibo + verificacion en sitio) ===================== */
 .documentos-verificacion { margin-top: 16px; }
