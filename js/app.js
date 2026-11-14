@@ -629,6 +629,30 @@ function datosLote40() {
   });
 }
 
+// Pedido explicito del usuario, 2026-11-14 (seguimiento): "agrupamelos por tarifas".
+// La tarifa de un inmueble NO esta en la lista fija de los 40 (el control de
+// documentos nunca la capturo -- solo se sabe hasta que alguien lee su recibo real
+// en esta app) -- se agrupa por `proyecto.formulario.tarifa` cuando ya existe
+// cotizacion con eso capturado, y los que todavia no tienen cotizacion (o la tienen
+// pero sin tarifa leida) caen en un grupo aparte al final. Mismo orden/etiquetas que
+// el resto de la app (ORDEN_TARIFAS/ETIQUETAS_TARIFA, ya usados en "Cotizador por
+// machote" y "Definitivas por tarifa") para no inventar un criterio nuevo.
+function agruparLote40PorTarifa(filas) {
+  const grupos = new Map();
+  for (const f of filas) {
+    const tarifa = f.proyecto?.formulario?.tarifa || null;
+    if (!grupos.has(tarifa)) grupos.set(tarifa, []);
+    grupos.get(tarifa).push(f);
+  }
+  const ordenTarifas = [...ORDEN_TARIFAS, ...[...grupos.keys()].filter((t) => t && !ORDEN_TARIFAS.includes(t))];
+  const resultado = [];
+  for (const tarifa of ordenTarifas) {
+    if (grupos.has(tarifa)) resultado.push({ tarifa, etiqueta: ETIQUETAS_TARIFA[tarifa] || tarifa, filas: grupos.get(tarifa) });
+  }
+  if (grupos.has(null)) resultado.push({ tarifa: null, etiqueta: 'Sin tarifa capturada todavía (sin cotización, o cotización sin recibo leído)', filas: grupos.get(null) });
+  return resultado;
+}
+
 function estadoCotizacionLote40(proyecto) {
   if (!proyecto) return { clave: 'sin-crear', etiqueta: '— Sin crear' };
   if (proyecto.definitiva) return { clave: 'definitiva', etiqueta: '✅ Definitiva' };
@@ -659,46 +683,60 @@ function renderLote40Totales(filas) {
   }
 }
 
+// Pedido explicito del usuario, 2026-11-14: "ajusta la info a la pantalla" -- la
+// primera version era una tabla de 10 columnas (RPU, documentos, estado, inversion,
+// ahorro, actualizado, pendiente...) que en una pantalla normal apretaba tanto cada
+// columna que el texto largo (el "pendiente conocido") se partia letra por letra y
+// era ilegible. Se cambia a tarjetas apiladas (mismo componente `tarjeta-cliente` que
+// ya usa el resto de la app para listas de clientes/proyectos, que SI es responsivo)
+// agrupadas por tarifa en vez de una tabla ancha de una sola pieza.
+function tarjetaLote40(fila) {
+  const { def, cliente, proyecto } = fila;
+  const estado = estadoCotizacionLote40(proyecto);
+  const docsOk = def.reciboLocalizado && def.verificacionLocalizada;
+  const docsTexto = `${def.reciboLocalizado ? '📄 recibo' : '❌ sin recibo'} · ${def.verificacionLocalizada ? '🔍 verificación' : '❌ sin verificación'}`;
+  const div = document.createElement('div');
+  div.className = 'tarjeta-cliente';
+  if (!proyecto) div.classList.add('fila-pendiente-lote40'); // atenuado SIN tachado -- aqui "no existe todavia", no "se excluyo a proposito"
+  const chipClase = estado.clave === 'sin-crear' || estado.clave === 'sin-datos' || estado.clave === 'sin-calcular' ? 'chip-etapa-negociando' : 'chip-etapa-ganado';
+  const cifras = proyecto?.ultimaInversionTotal != null
+    ? `Inversión ${M(proyecto.ultimaInversionTotal)}${proyecto.ultimoAhorroAnual != null ? ' · Ahorro anual ' + M(proyecto.ultimoAhorroAnual) : ''} · `
+    : '';
+  const info = document.createElement('div');
+  info.className = 'tarjeta-cliente-info';
+  info.innerHTML = `<strong>${def.id}. ${escapeHtml(def.inmueble)}</strong>` +
+    `<span class="chip-etapa ${chipClase}">${estado.etiqueta}</span>` +
+    `<span class="nota">RPU ${escapeHtml(def.rpu)}${def.rpuAlt ? ` (alt. ${escapeHtml(def.rpuAlt)})` : ''}` +
+    (proyecto ? ` · ${escapeHtml(cliente.nombre)} · ${escapeHtml(proyecto.nombre)}` : '') + `</span>` +
+    (proyecto ? `<span class="nota">${cifras}actualizado ${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</span>` : '') +
+    `<span class="nota${docsOk ? '' : ' aviso'}">${docsTexto}</span>` +
+    (def.pendientes ? `<span class="nota">⚠️ ${escapeHtml(def.pendientes)}</span>` : '');
+  div.append(info);
+  if (proyecto) {
+    const btnAbrir = document.createElement('button');
+    btnAbrir.className = 'btn-link';
+    btnAbrir.textContent = 'Abrir';
+    btnAbrir.addEventListener('click', () => abrirProyecto(cliente.id, proyecto.id));
+    div.append(btnAbrir);
+  }
+  return div;
+}
+
 function renderLote40Tabla(filas) {
   const cont = $('lote40Tabla');
   cont.innerHTML = '';
-  const wrap = document.createElement('div');
-  wrap.className = 'tabla-wrap';
-  const t = document.createElement('table');
-  t.className = 'tabla-seccion tabla-chica';
-  const thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>#</th><th>Inmueble</th><th>RPU</th><th>Documentos (recopilación)</th>' +
-    '<th>Cotización en esta app</th><th class="num">Inversión</th><th class="num">Ahorro anual</th>' +
-    '<th>Actualizado</th><th>Pendiente conocido</th><th></th></tr>';
-  t.append(thead);
-  const tbody = document.createElement('tbody');
-  for (const { def, cliente, proyecto } of filas) {
-    const estado = estadoCotizacionLote40(proyecto);
-    const docsOk = def.reciboLocalizado && def.verificacionLocalizada;
-    const docsTexto = `${def.reciboLocalizado ? '📄 recibo' : '❌ sin recibo'} · ${def.verificacionLocalizada ? '🔍 verificación' : '❌ sin verificación'}`;
-    const tr = document.createElement('tr');
-    if (!proyecto) tr.classList.add('fila-pendiente-lote40'); // atenuado SIN tachado -- aqui "no existe todavia", no "se excluyo a proposito"
-    tr.innerHTML = `<td>${def.id}</td><td>${escapeHtml(def.inmueble)}</td>` +
-      `<td>${escapeHtml(def.rpu)}${def.rpuAlt ? ` <span class="nota">(alt. ${escapeHtml(def.rpuAlt)})</span>` : ''}</td>` +
-      `<td class="${docsOk ? '' : 'nota aviso'}">${docsTexto}</td>` +
-      `<td><span class="chip-etapa ${estado.clave === 'sin-crear' || estado.clave === 'sin-datos' || estado.clave === 'sin-calcular' ? 'chip-etapa-negociando' : 'chip-etapa-ganado'}">${estado.etiqueta}</span>` +
-      (proyecto ? `<br><span class="nota">${escapeHtml(cliente.nombre)} · ${escapeHtml(proyecto.nombre)}</span>` : '') + `</td>` +
-      `<td class="num">${proyecto?.ultimaInversionTotal != null ? M(proyecto.ultimaInversionTotal) : '—'}</td>` +
-      `<td class="num">${proyecto?.ultimoAhorroAnual != null ? M(proyecto.ultimoAhorroAnual) : '—'}</td>` +
-      `<td>${proyecto ? new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX') : '—'}</td>` +
-      `<td class="nota">${escapeHtml(def.pendientes || '')}</td><td></td>`;
-    if (proyecto) {
-      const btnAbrir = document.createElement('button');
-      btnAbrir.className = 'btn-link';
-      btnAbrir.textContent = 'Abrir';
-      btnAbrir.addEventListener('click', () => abrirProyecto(cliente.id, proyecto.id));
-      tr.lastElementChild.append(btnAbrir);
-    }
-    tbody.append(tr);
+  for (const { tarifa, etiqueta, filas: filasGrupo } of agruparLote40PorTarifa(filas)) {
+    const wrap = document.createElement('div');
+    wrap.className = 'grupo-proyectos';
+    const h4 = document.createElement('h4');
+    h4.textContent = `${tarifa ? `Tarifa ${tarifa} — ${etiqueta}` : etiqueta} (${filasGrupo.length})`;
+    wrap.append(h4);
+    const lista = document.createElement('div');
+    lista.className = 'lista-clientes';
+    for (const f of filasGrupo) lista.append(tarjetaLote40(f));
+    wrap.append(lista);
+    cont.append(wrap);
   }
-  t.append(tbody);
-  wrap.append(t);
-  cont.append(wrap);
 }
 
 function renderLote40() {
@@ -708,19 +746,24 @@ function renderLote40() {
 }
 
 function exportarLote40Csv() {
-  const filas = datosLote40();
-  const lineas = [['#', 'Inmueble', 'RPU', 'RPU alterno', 'Recibo localizado', 'Verificación localizada', 'Pendiente de documentación',
+  // Mismo orden por tarifa que la pantalla (agruparLote40PorTarifa), para que el CSV
+  // no se sienta desordenado frente a lo que se ve -- pedido explicito del usuario,
+  // 2026-11-14: "agrupamelos por tarifas".
+  const grupos = agruparLote40PorTarifa(datosLote40());
+  const lineas = [['#', 'Inmueble', 'Tarifa', 'RPU', 'RPU alterno', 'Recibo localizado', 'Verificación localizada', 'Pendiente de documentación',
     'Cliente en esta app', 'Cotización en esta app', 'Estado de la cotización', 'Inversión', 'Ahorro anual', 'Actualizado', 'Definitiva'].join(',')];
-  for (const { def, cliente, proyecto } of filas) {
-    const estado = estadoCotizacionLote40(proyecto);
-    lineas.push([
-      def.id, csvEscape(def.inmueble), def.rpu, csvEscape(def.rpuAlt || ''),
-      def.reciboLocalizado ? 'Sí' : 'No', def.verificacionLocalizada ? 'Sí' : 'No', csvEscape(def.pendientes || ''),
-      csvEscape(cliente?.nombre || ''), csvEscape(proyecto?.nombre || ''), csvEscape(estado.etiqueta),
-      proyecto?.ultimaInversionTotal ?? '', proyecto?.ultimoAhorroAnual ?? '',
-      proyecto ? csvEscape(new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')) : '',
-      proyecto?.definitiva ? 'Sí' : 'No',
-    ].join(','));
+  for (const { tarifa, filas } of grupos) {
+    for (const { def, cliente, proyecto } of filas) {
+      const estado = estadoCotizacionLote40(proyecto);
+      lineas.push([
+        def.id, csvEscape(def.inmueble), csvEscape(tarifa || ''), def.rpu, csvEscape(def.rpuAlt || ''),
+        def.reciboLocalizado ? 'Sí' : 'No', def.verificacionLocalizada ? 'Sí' : 'No', csvEscape(def.pendientes || ''),
+        csvEscape(cliente?.nombre || ''), csvEscape(proyecto?.nombre || ''), csvEscape(estado.etiqueta),
+        proyecto?.ultimaInversionTotal ?? '', proyecto?.ultimoAhorroAnual ?? '',
+        proyecto ? csvEscape(new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')) : '',
+        proyecto?.definitiva ? 'Sí' : 'No',
+      ].join(','));
+    }
   }
   const blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
