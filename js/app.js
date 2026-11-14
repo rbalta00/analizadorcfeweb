@@ -33,7 +33,7 @@ import {
   supabaseEliminarArchivo, supabaseListarArchivos, supabaseUpsertar, supabaseEliminarPorFiltro,
 } from './supabase.js';
 import { subirANube, bajarDeNube, eliminarClienteDeNube, listarClientesEnNube } from './nube.js';
-import { LOTE_40_INMUEBLES, normalizarRpu } from './lote40.js';
+import { ETIQUETAS_TARIFA, ORDEN_TARIFAS } from './tarifas.js';
 import { panelesEnTecho, esquinasDelTecho, crearEditorPaneles, hornearImagenSembrado, PANEL_ANCHO_M, PANEL_ALTO_M } from './sembrador.js';
 
 window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
@@ -44,18 +44,9 @@ const $ = (id) => document.getElementById(id);
 const WHATSAPP_NUMERO = '522218367792';
 
 // Mismas 6 tarifas/etiquetas que ya se repiten en los 3 <select> de index.html
-// (selectTarifaDefinitivas/selectTarifaNuevoProyecto/filtroTarifaMachote) -- centralizado
-// aqui para el modulo nuevo "Cotizador por machote" (un boton por tarifa, 2026-11-14) en
-// vez de agregar una CUARTA copia del mismo texto en el HTML.
-const ETIQUETAS_TARIFA = {
-  GDMTO: 'GDMTO (media tensión, con demanda)',
-  GDMTH: 'GDMTH (media tensión, con demanda, por horario)',
-  GDBT: 'GDBT (baja tensión, con demanda)',
-  PDBT: 'PDBT (baja tensión, sin demanda)',
-  '01': '01 (doméstica)',
-  DAC: 'DAC (doméstica de alto consumo)',
-};
-const ORDEN_TARIFAS = ['GDMTO', 'GDMTH', 'GDBT', 'PDBT', '01', 'DAC'];
+// (selectTarifaDefinitivas/selectTarifaNuevoProyecto/filtroTarifaMachote) -- viven en
+// tarifas.js (extraidas de aqui, 2026-11-14) para que lote40Vista.js (pagina aparte)
+// tambien las use sin duplicar la lista.
 
 // Aviso visible de guardado fallido -- UN SOLO hook (alGuardar, clientes.js) que se
 // entera del resultado de CADA guardado real a localStorage, venga de donde venga
@@ -268,7 +259,6 @@ function mostrarPantallaClientes() {
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
-  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
@@ -483,7 +473,6 @@ function mostrarPantallaEnvios() {
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
-  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaEnvios').hidden = false;
@@ -595,200 +584,11 @@ function renderDashboard() {
 }
 $('chkSoloDefinitivasDashboard').addEventListener('change', renderDashboard);
 
-// =====================================================================
-// Pantalla: Estado del lote de 40 inmuebles -- pedido explicito del usuario,
-// 2026-11-14: "un boton... donde se muestre el status de cada cotizacion del
-// proyecto 40 inmuebles para saber cuantos se han generado y cuantos faltan".
-// LOTE_40_INMUEBLES (lote40.js) es la lista fija de los 40 inmuebles del lote de
-// gobierno (RPU + estado de recopilacion de documentos, copiado del control del
-// motor Python) -- esta pantalla la cruza contra los clientes/proyectos REALES
-// guardados aqui (por RPU) para saber cuales de los 40 ya tienen cotizacion en
-// esta app, en que etapa va cada una, y cuales siguen sin empezar. La info de
-// "recibo/verificacion localizados" complementa (no sustituye) lo que la app ya
-// sabe: un inmueble puede tener sus documentos listos y aun asi no tener ninguna
-// cotizacion creada aqui todavia, o traer un problema de identidad/RPU conocido
-// de antes (ver `pendientes`) que conviene resolver antes de confiar en el match.
-function datosLote40() {
-  const todosProyectos = [];
-  for (const c of listarClientes()) {
-    for (const p of (c.proyectos || [])) todosProyectos.push({ cliente: c, proyecto: p });
-  }
-  return LOTE_40_INMUEBLES.map((def) => {
-    const rpusDef = [def.rpu, def.rpuAlt].filter(Boolean).map(normalizarRpu);
-    // Match principal por el RPU capturado en el formulario; si el proyecto nunca
-    // llego a capturar RPU (ej. se creo pero no se le subio el recibo todavia), se
-    // intenta tambien contra el nombre del proyecto -- la convencion de esta misma
-    // app para este lote es nombrar cada cotizacion "<RPU> <institucion>" (ver
-    // nombreArchivoProyecto()/los nombres ya usados en el cliente "40 inmuebles").
-    const match = todosProyectos.find(({ proyecto: p }) => {
-      const rpuCapturado = normalizarRpu(p.formulario?.noServicio);
-      if (rpuCapturado && rpusDef.includes(rpuCapturado)) return true;
-      return rpusDef.some((r) => r && (p.nombre || '').replace(/\D+/g, '').includes(r));
-    });
-    return { def, cliente: match?.cliente || null, proyecto: match?.proyecto || null };
-  });
-}
-
-// Pedido explicito del usuario, 2026-11-14 (seguimiento): "agrupamelos por tarifas".
-// La tarifa de un inmueble NO esta en la lista fija de los 40 (el control de
-// documentos nunca la capturo -- solo se sabe hasta que alguien lee su recibo real
-// en esta app) -- se agrupa por `proyecto.formulario.tarifa` cuando ya existe
-// cotizacion con eso capturado, y los que todavia no tienen cotizacion (o la tienen
-// pero sin tarifa leida) caen en un grupo aparte al final. Mismo orden/etiquetas que
-// el resto de la app (ORDEN_TARIFAS/ETIQUETAS_TARIFA, ya usados en "Cotizador por
-// machote" y "Definitivas por tarifa") para no inventar un criterio nuevo.
-function agruparLote40PorTarifa(filas) {
-  const grupos = new Map();
-  for (const f of filas) {
-    const tarifa = f.proyecto?.formulario?.tarifa || null;
-    if (!grupos.has(tarifa)) grupos.set(tarifa, []);
-    grupos.get(tarifa).push(f);
-  }
-  const ordenTarifas = [...ORDEN_TARIFAS, ...[...grupos.keys()].filter((t) => t && !ORDEN_TARIFAS.includes(t))];
-  const resultado = [];
-  for (const tarifa of ordenTarifas) {
-    if (grupos.has(tarifa)) resultado.push({ tarifa, etiqueta: ETIQUETAS_TARIFA[tarifa] || tarifa, filas: grupos.get(tarifa) });
-  }
-  if (grupos.has(null)) resultado.push({ tarifa: null, etiqueta: 'Sin tarifa capturada todavía (sin cotización, o cotización sin recibo leído)', filas: grupos.get(null) });
-  return resultado;
-}
-
-function estadoCotizacionLote40(proyecto) {
-  if (!proyecto) return { clave: 'sin-crear', etiqueta: '— Sin crear' };
-  if (proyecto.definitiva) return { clave: 'definitiva', etiqueta: '✅ Definitiva' };
-  if (proyecto.ultimaInversionTotal != null) return { clave: 'calculada', etiqueta: '🧮 Calculada' };
-  if (proyecto.formulario) return { clave: 'sin-calcular', etiqueta: '⚠️ Sin calcular' };
-  return { clave: 'sin-datos', etiqueta: '⚠️ Sin datos' };
-}
-
-function renderLote40Totales(filas) {
-  const cont = $('lote40Totales');
-  cont.innerHTML = '';
-  const conProyecto = filas.filter((f) => f.proyecto);
-  const calculadas = filas.filter((f) => f.proyecto?.ultimaInversionTotal != null);
-  const definitivas = filas.filter((f) => f.proyecto?.definitiva);
-  const bloqueadas = filas.filter((f) => f.def.estadoDocs !== 'Recibo y verificación localizados');
-  const metricas = [
-    [`${conProyecto.length} de ${filas.length}`, 'Ya tienen cotización creada en esta app'],
-    [String(filas.length - conProyecto.length), 'Sin ninguna cotización todavía'],
-    [String(calculadas.length), 'Ya calculadas (con inversión/ahorro)'],
-    [String(definitivas.length), '✅ Marcadas como definitivas'],
-    [String(bloqueadas.length), '⚠️ Con pendiente de documentación/identidad conocido'],
-  ];
-  for (const [valor, etiqueta] of metricas) {
-    const m = document.createElement('div');
-    m.className = 'metrica';
-    m.innerHTML = `<div class="valor">${valor}</div><div class="etiqueta">${etiqueta}</div>`;
-    cont.append(m);
-  }
-}
-
-// Pedido explicito del usuario, 2026-11-14: "ajusta la info a la pantalla" -- la
-// primera version era una tabla de 10 columnas (RPU, documentos, estado, inversion,
-// ahorro, actualizado, pendiente...) que en una pantalla normal apretaba tanto cada
-// columna que el texto largo (el "pendiente conocido") se partia letra por letra y
-// era ilegible. Se cambia a tarjetas apiladas (mismo componente `tarjeta-cliente` que
-// ya usa el resto de la app para listas de clientes/proyectos, que SI es responsivo)
-// agrupadas por tarifa en vez de una tabla ancha de una sola pieza.
-function tarjetaLote40(fila) {
-  const { def, cliente, proyecto } = fila;
-  const estado = estadoCotizacionLote40(proyecto);
-  const docsOk = def.reciboLocalizado && def.verificacionLocalizada;
-  const docsTexto = `${def.reciboLocalizado ? '📄 recibo' : '❌ sin recibo'} · ${def.verificacionLocalizada ? '🔍 verificación' : '❌ sin verificación'}`;
-  const div = document.createElement('div');
-  div.className = 'tarjeta-cliente';
-  if (!proyecto) div.classList.add('fila-pendiente-lote40'); // atenuado SIN tachado -- aqui "no existe todavia", no "se excluyo a proposito"
-  const chipClase = estado.clave === 'sin-crear' || estado.clave === 'sin-datos' || estado.clave === 'sin-calcular' ? 'chip-etapa-negociando' : 'chip-etapa-ganado';
-  const cifras = proyecto?.ultimaInversionTotal != null
-    ? `Inversión ${M(proyecto.ultimaInversionTotal)}${proyecto.ultimoAhorroAnual != null ? ' · Ahorro anual ' + M(proyecto.ultimoAhorroAnual) : ''} · `
-    : '';
-  const info = document.createElement('div');
-  info.className = 'tarjeta-cliente-info';
-  info.innerHTML = `<strong>${def.id}. ${escapeHtml(def.inmueble)}</strong>` +
-    `<span class="chip-etapa ${chipClase}">${estado.etiqueta}</span>` +
-    `<span class="nota">RPU ${escapeHtml(def.rpu)}${def.rpuAlt ? ` (alt. ${escapeHtml(def.rpuAlt)})` : ''}` +
-    (proyecto ? ` · ${escapeHtml(cliente.nombre)} · ${escapeHtml(proyecto.nombre)}` : '') + `</span>` +
-    (proyecto ? `<span class="nota">${cifras}actualizado ${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</span>` : '') +
-    `<span class="nota${docsOk ? '' : ' aviso'}">${docsTexto}</span>` +
-    (def.pendientes ? `<span class="nota">⚠️ ${escapeHtml(def.pendientes)}</span>` : '');
-  div.append(info);
-  if (proyecto) {
-    const btnAbrir = document.createElement('button');
-    btnAbrir.className = 'btn-link';
-    btnAbrir.textContent = 'Abrir';
-    btnAbrir.addEventListener('click', () => abrirProyecto(cliente.id, proyecto.id));
-    div.append(btnAbrir);
-  }
-  return div;
-}
-
-function renderLote40Tabla(filas) {
-  const cont = $('lote40Tabla');
-  cont.innerHTML = '';
-  for (const { tarifa, etiqueta, filas: filasGrupo } of agruparLote40PorTarifa(filas)) {
-    const wrap = document.createElement('div');
-    wrap.className = 'grupo-proyectos';
-    const h4 = document.createElement('h4');
-    h4.textContent = `${tarifa ? `Tarifa ${tarifa} — ${etiqueta}` : etiqueta} (${filasGrupo.length})`;
-    wrap.append(h4);
-    const lista = document.createElement('div');
-    lista.className = 'lista-clientes';
-    for (const f of filasGrupo) lista.append(tarjetaLote40(f));
-    wrap.append(lista);
-    cont.append(wrap);
-  }
-}
-
-function renderLote40() {
-  const filas = datosLote40();
-  renderLote40Totales(filas);
-  renderLote40Tabla(filas);
-}
-
-function exportarLote40Csv() {
-  // Mismo orden por tarifa que la pantalla (agruparLote40PorTarifa), para que el CSV
-  // no se sienta desordenado frente a lo que se ve -- pedido explicito del usuario,
-  // 2026-11-14: "agrupamelos por tarifas".
-  const grupos = agruparLote40PorTarifa(datosLote40());
-  const lineas = [['#', 'Inmueble', 'Tarifa', 'RPU', 'RPU alterno', 'Recibo localizado', 'Verificación localizada', 'Pendiente de documentación',
-    'Cliente en esta app', 'Cotización en esta app', 'Estado de la cotización', 'Inversión', 'Ahorro anual', 'Actualizado', 'Definitiva'].join(',')];
-  for (const { tarifa, filas } of grupos) {
-    for (const { def, cliente, proyecto } of filas) {
-      const estado = estadoCotizacionLote40(proyecto);
-      lineas.push([
-        def.id, csvEscape(def.inmueble), csvEscape(tarifa || ''), def.rpu, csvEscape(def.rpuAlt || ''),
-        def.reciboLocalizado ? 'Sí' : 'No', def.verificacionLocalizada ? 'Sí' : 'No', csvEscape(def.pendientes || ''),
-        csvEscape(cliente?.nombre || ''), csvEscape(proyecto?.nombre || ''), csvEscape(estado.etiqueta),
-        proyecto?.ultimaInversionTotal ?? '', proyecto?.ultimoAhorroAnual ?? '',
-        proyecto ? csvEscape(new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')) : '',
-        proyecto?.definitiva ? 'Sí' : 'No',
-      ].join(','));
-    }
-  }
-  const blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `estado_lote_40_inmuebles_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function mostrarPantallaLote40() {
-  $('pantallaClientes').hidden = true;
-  $('pantallaEnvios').hidden = true;
-  $('pantallaDashboard').hidden = true;
-  $('pantallaDefinitivasPorTarifa').hidden = true;
-  $('pantallaCotizadorMachote').hidden = true;
-  $('pantallaProyectos').hidden = true;
-  $('pantallaCliente').hidden = true;
-  $('pantallaLote40').hidden = false;
-  renderLote40();
-}
-$('btnAbrirLote40').addEventListener('click', mostrarPantallaLote40);
-$('btnVolverClientesDesdeLote40').addEventListener('click', mostrarPantallaClientes);
-$('btnRefrescarLote40').addEventListener('click', renderLote40);
-$('btnExportarLote40Csv').addEventListener('click', exportarLote40Csv);
+// Pedido explicito del usuario, 2026-11-14: "que me abra en una ventana independiente"
+// -- el visor "Estado del lote de 40 inmuebles" se movio a su propia pagina
+// (lote40.html + js/lote40Vista.js), abierta en pestaña/ventana aparte desde el botón
+// de abajo, en vez de ser una pantalla mas dentro de esta SPA. Toda la logica de
+// datosLote40/agrupar/render que vivia aqui se fue con ella -- ver ese archivo.
 
 function csvEscape(v) {
   const s = String(v ?? '');
@@ -825,7 +625,6 @@ function mostrarPantallaDashboard() {
   $('pantallaEnvios').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
-  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaDashboard').hidden = false;
@@ -882,7 +681,6 @@ function mostrarPantallaDefinitivasPorTarifa() {
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
-  $('pantallaLote40').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = false;
   renderDefinitivasPorTarifa();
 }
@@ -1198,7 +996,6 @@ function mostrarPantallaProyectos(clienteId) {
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
-  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = false;
   $('pantallaCliente').hidden = true;
   $('clienteNombreBarraProyectos').value = clienteActual.nombre;
@@ -1727,7 +1524,6 @@ function mostrarPantallaCotizadorMachote() {
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
-  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaCotizadorMachote').hidden = false;
@@ -2077,7 +1873,6 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
   $('pantallaCotizadorMachote').hidden = true;
-  $('pantallaLote40').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = false;
   $('clienteNombreBarra').value = clienteActual.nombre;
@@ -4799,6 +4594,25 @@ $('btnVerificarPdf').addEventListener('click', async () => {
 // Arranque
 // =====================================================================
 (function arrancar() {
+  // Link directo "?cliente=ID&proyecto=ID" -- pedido explicito del usuario,
+  // 2026-11-14: el visor "Estado del lote de 40 inmuebles" ahora vive en su propia
+  // ventana (lote40.html) y su botón "Abrir" necesita poder entrar DIRECTO a una
+  // cotización ya existente desde ahí, en una pestaña nueva de esta misma app (no
+  // puede llamar a abrirProyecto() de aquí porque es otra página/contexto de JS).
+  // Se limpia la URL después de abrir para que un refresh normal use el mecanismo de
+  // "reanudar" de siempre, no se quede pegado reabriendo siempre lo mismo.
+  const parametros = new URLSearchParams(location.search);
+  const clienteParam = parametros.get('cliente');
+  const proyectoParam = parametros.get('proyecto');
+  if (clienteParam && proyectoParam) {
+    const cliente = obtenerCliente(clienteParam);
+    const proyecto = cliente ? obtenerProyecto(cliente, proyectoParam) : null;
+    if (cliente && proyecto) {
+      history.replaceState(null, '', location.pathname);
+      abrirProyecto(clienteParam, proyectoParam);
+      return;
+    }
+  }
   let reanudar = null;
   try { reanudar = JSON.parse(sessionStorage.getItem(CLAVE_REANUDAR) || 'null'); } catch (e) { /* ignorar marcador corrupto */ }
   sessionStorage.removeItem(CLAVE_REANUDAR); // de una sola vez -- no reaparece en un refresh normal del navegador

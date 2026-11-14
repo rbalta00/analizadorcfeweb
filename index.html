@@ -57,7 +57,7 @@
       <h4>Revisar / organizar lo ya capturado</h4>
       <div class="acciones">
         <button id="btnAbrirDashboard" class="btn-secundario">🕐 Historial / Dashboard</button>
-        <button id="btnAbrirLote40" class="btn-secundario">🏢 Estado del lote de 40 inmuebles</button>
+        <a href="lote40.html" target="_blank" id="btnAbrirLote40" class="btn-secundario">🏢 Estado del lote de 40 inmuebles ↗</a>
         <button id="btnAbrirDefinitivasPorTarifa" class="btn-secundario">✅ Definitivas por tarifa</button>
         <button id="btnAbrirCotizadorMachote" class="btn-secundario">🧭 Cotizador por machote</button>
         <button id="btnGuiaPresentacionGeneral" class="btn-secundario">📖 Guía para presentar (genérica)</button>
@@ -161,35 +161,9 @@
     </section>
   </main>
 
-  <!-- ================= PANTALLA: ESTADO DEL LOTE DE 40 INMUEBLES =================
-       Pedido explicito del usuario, 2026-11-14: "un boton donde despliegue un visor
-       donde se muestre el status de cada cotizacion del proyecto 40 inmuebles para
-       saber cuantos se han generado y cuantos faltan". LOTE_40_INMUEBLES (lote40.js)
-       es la lista fija de los 40 inmuebles del lote de gobierno (RPU + estado de
-       recopilacion de documentos) -- ver datosLote40() en app.js, que la cruza contra
-       los clientes/proyectos reales guardados aqui por RPU. -->
-  <main id="pantallaLote40" hidden>
-    <div class="cliente-barra">
-      <button id="btnVolverClientesDesdeLote40" class="btn-link">← Clientes</button>
-      <strong>🏢 Estado del lote de 40 inmuebles</strong>
-    </div>
-    <section class="tarjeta">
-      <p class="nota">Cruza los 40 inmuebles del lote de gobierno (lista fija, no depende de ningún cliente en
-        particular) contra las cotizaciones que ya existen en esta app (por RPU) -- para saber de un vistazo
-        cuántas ya se generaron, cuántas faltan, y cuáles traen un pendiente conocido de documentación o de
-        identidad/RPU desde antes de esta app.</p>
-      <div id="lote40Totales" class="tarjetas-metricas"></div>
-    </section>
-    <section class="tarjeta">
-      <div class="acciones">
-        <button id="btnExportarLote40Csv" class="btn-secundario">⬇️ Exportar a CSV</button>
-        <button id="btnRefrescarLote40" class="btn-secundario">↻ Refrescar</button>
-      </div>
-      <p class="nota">Las filas atenuadas son inmuebles sin ninguna cotización creada todavía. Clic en "Abrir" para
-        entrar directo a una cotización ya existente.</p>
-      <div id="lote40Tabla"></div>
-    </section>
-  </main>
+  <!-- El visor "Estado del lote de 40 inmuebles" ya NO vive aquí dentro -- pedido
+       explicito del usuario, 2026-11-14: "que me abra en una ventana independiente".
+       Ver lote40.html (pagina aparte, botón de arriba la abre en pestaña nueva). -->
 
   <!-- ================= PANTALLA: DEFINITIVAS POR TARIFA ================= -->
   <main id="pantallaDefinitivasPorTarifa" hidden>

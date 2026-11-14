@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Estado del lote de 40 inmuebles — CFE</title>
+  <meta name="description" content="Estado de cada cotización del lote de 40 inmuebles de gobierno (Puebla) -- cuántas ya se generaron y cuántas faltan." />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <meta name="theme-color" content="#163b4c" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>🏢 Estado del lote de 40 inmuebles</h1>
+    <p class="subtitulo">GESTORIA Y PROYECTOS SOELRB — ventana aparte, se puede dejar abierta junto al analizador</p>
+  </header>
+
+  <main>
+    <section class="tarjeta">
+      <p class="nota">Cruza los 40 inmuebles del lote de gobierno (lista fija, no depende de ningún cliente en
+        particular) contra las cotizaciones que ya existen en el Analizador (por RPU, leído del mismo navegador) --
+        para saber de un vistazo cuántas ya se generaron, cuántas faltan, y cuáles traen un pendiente conocido de
+        documentación o de identidad/RPU desde antes de esta app. Agrupadas por tarifa.</p>
+      <div id="lote40Totales" class="tarjetas-metricas"></div>
+    </section>
+    <section class="tarjeta">
+      <div class="acciones">
+        <button id="btnExportarLote40Csv" class="btn-secundario">⬇️ Exportar a CSV</button>
+        <button id="btnRefrescarLote40" class="btn-secundario">↻ Refrescar</button>
+      </div>
+      <p class="nota">Las tarjetas atenuadas son inmuebles sin ninguna cotización creada todavía. Clic en "Abrir"
+        para entrar directo a esa cotización -- se abre en una pestaña nueva del Analizador.</p>
+      <div id="lote40Tabla"></div>
+    </section>
+  </main>
+
+  <footer class="pie-cliente">
+    <p class="nota">Esta ventana solo lee los datos que ya están guardados en este navegador -- no modifica nada.</p>
+  </footer>
+
+  <script type="module" src="js/lote40Vista.js"></script>
+</body>
+</html>
