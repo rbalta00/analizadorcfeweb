@@ -149,32 +149,44 @@ function tarjetaLote40(fila) {
 // tarifa... para que pueda ver los de una tarifa en especifico y luego cambie a la
 // otra" -- el agrupado por tarifa ya existia (todas las tarifas a la vez, una debajo
 // de otra), pero el usuario queria poder ELEGIR una sola tarifa a la vez y cambiar
-// entre ellas, en vez de desplazarse por las 3 juntas. Selector nuevo
-// "selectTarifaLote40" (mismo patron que "Definitivas por tarifa" en app.js): sus
-// opciones se regeneran cada vez que hay datos nuevos (recuentos por tarifa pueden
-// cambiar si se crea una cotizacion), conservando la seleccion actual si sigue
-// existiendo.
-function poblarSelectorTarifa(grupos) {
-  const select = document.getElementById('selectTarifaLote40');
-  const actual = select.value;
-  select.innerHTML = '<option value="">Todas las tarifas</option>';
+// entre ellas. Primer intento con un <select> no funciono para el usuario ("no lo
+// hace") -- pidio en su lugar "un boton donde seleccione que grupo de tarifas quiero
+// solo ver", mismo patron de un boton por tarifa ya usado en "Cotizador por machote".
+// `filtroTarifaActual` (modulo, no en el DOM) guarda la seleccion; los botones se
+// regeneran cada vez que hay datos nuevos (recuentos por tarifa pueden cambiar si se
+// crea una cotizacion), conservando la seleccion actual si la tarifa sigue existiendo.
+let filtroTarifaActual = null;
+
+function poblarBotonesTarifa(grupos) {
+  const cont = document.getElementById('botonesTarifaLote40');
+  cont.innerHTML = '';
+  const tarifasDisponibles = grupos.filter((g) => g.tarifa !== null).map((g) => g.tarifa);
+  if (filtroTarifaActual && !tarifasDisponibles.includes(filtroTarifaActual)) filtroTarifaActual = null;
+
+  const total = grupos.reduce((s, g) => s + g.filas.length, 0);
+  const btnTodas = document.createElement('button');
+  btnTodas.className = `btn-secundario btn-filtro-tarifa${filtroTarifaActual === null ? ' activo' : ''}`;
+  btnTodas.textContent = `Todas (${total})`;
+  btnTodas.addEventListener('click', () => { filtroTarifaActual = null; renderTabla(datosLote40()); });
+  cont.append(btnTodas);
+
   for (const { tarifa, etiqueta, filas } of grupos) {
-    if (tarifa === null) continue; // "Sin tarifa capturada" no es una opcion elegible -- ya no deberia aparecer nunca (tarifaDelRecibo cubre los 40), pero por si acaso
-    const opt = document.createElement('option');
-    opt.value = tarifa;
-    opt.textContent = `Tarifa ${tarifa} — ${etiqueta} (${filas.length})`;
-    select.append(opt);
+    if (tarifa === null) continue; // "Sin tarifa capturada" no es un filtro elegible -- ya no deberia aparecer nunca (tarifaDelRecibo cubre los 40), pero por si acaso
+    const btn = document.createElement('button');
+    btn.className = `btn-secundario btn-filtro-tarifa${filtroTarifaActual === tarifa ? ' activo' : ''}`;
+    btn.textContent = `${tarifa} (${filas.length})`;
+    btn.title = etiqueta;
+    btn.addEventListener('click', () => { filtroTarifaActual = tarifa; renderTabla(datosLote40()); });
+    cont.append(btn);
   }
-  if ([...select.options].some((o) => o.value === actual)) select.value = actual;
 }
 
 function renderTabla(filas) {
   const cont = document.getElementById('lote40Tabla');
   cont.innerHTML = '';
   const grupos = agruparLote40PorTarifa(filas);
-  poblarSelectorTarifa(grupos);
-  const filtroTarifa = document.getElementById('selectTarifaLote40').value;
-  const gruposAMostrar = filtroTarifa ? grupos.filter((g) => g.tarifa === filtroTarifa) : grupos;
+  poblarBotonesTarifa(grupos);
+  const gruposAMostrar = filtroTarifaActual ? grupos.filter((g) => g.tarifa === filtroTarifaActual) : grupos;
 
   for (const { tarifa, etiqueta, filas: filasGrupo } of gruposAMostrar) {
     const titulo = `${tarifa ? `Tarifa ${tarifa} — ${etiqueta}` : etiqueta} (${filasGrupo.length})`;
@@ -243,5 +255,4 @@ function render() {
 
 document.getElementById('btnRefrescarLote40').addEventListener('click', render);
 document.getElementById('btnExportarLote40Csv').addEventListener('click', exportarCsv);
-document.getElementById('selectTarifaLote40').addEventListener('change', () => renderTabla(datosLote40()));
 render();

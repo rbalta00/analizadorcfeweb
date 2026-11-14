@@ -229,6 +229,11 @@ fieldset label { flex-direction: row; align-items: center; font-size: 0.85rem; }
   cursor: pointer;
 }
 .btn-secundario:active { opacity: 0.85; }
+/* Botones de filtro por tarifa del visor del lote de 40 -- el seleccionado se ve
+   relleno (igual criterio visual que un chip "activo"), el resto se queda con el
+   estilo normal de btn-secundario (borde, sin relleno). */
+.btn-filtro-tarifa { padding: 7px 14px; font-size: 0.85rem; }
+.btn-filtro-tarifa.activo { background: var(--teal); color: #fff; }
 a.btn-secundario { display: inline-flex; align-items: center; text-decoration: none; }
 .acciones-pdf { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .btn-link {
