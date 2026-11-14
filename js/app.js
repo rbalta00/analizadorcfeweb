@@ -129,6 +129,17 @@ let seccionObserver = null;
 // un proyecto distinto (abrirProyecto) o uno en blanco -- ver mas abajo.
 let archivosReciboAcumulados = [];
 
+// Normaliza para comparar texto de búsqueda sin importar acentos/mayúsculas/espacios
+// extra -- hallazgo real, auditoría "gestión y revisión de estudios" 2026-11-14: la
+// búsqueda de "Cotizaciones de este cliente" solo hacía .toLowerCase(), así que
+// buscar "mexico" no encontraba un inmueble guardado como "México" (ni "  méxico  "
+// con espacios de más). NFD + quitar diacríticos es el patrón estándar para esto en
+// JS sin librerías nuevas.
+function normalizarBusqueda(s) {
+  return (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
 function escapeHtml(s) {
   const d = document.createElement('div');
   d.textContent = s == null ? '' : String(s);
@@ -912,13 +923,19 @@ function renderListaProyectos() {
     cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: 'Todavía no hay cotizaciones para este cliente. Sube un recibo o arranca una en blanco.' }));
     return;
   }
-  const textoBusqueda = ($('inputBuscarProyecto')?.value || '').trim().toLowerCase();
+  // Hallazgo real (auditoría "gestión y revisión de estudios", 2026-11-14): la búsqueda
+  // no toleraba acentos/mayúsculas distintas ni buscaba por tarifa, aunque el usuario
+  // puede no recordar el nombre exacto que le puso a una cotización -- normalizarBusqueda()
+  // quita esa fricción, y se agrega formulario.tarifa a los campos que se comparan.
+  const textoBusquedaCrudo = ($('inputBuscarProyecto')?.value || '').trim();
+  const textoBusqueda = normalizarBusqueda(textoBusquedaCrudo);
   if (textoBusqueda) {
     proyectos = proyectos.filter((p) =>
-      (p.nombre || '').toLowerCase().includes(textoBusqueda) ||
-      (p.formulario?.noServicio || '').toLowerCase().includes(textoBusqueda));
+      normalizarBusqueda(p.nombre).includes(textoBusqueda) ||
+      normalizarBusqueda(p.formulario?.noServicio).includes(textoBusqueda) ||
+      normalizarBusqueda(p.formulario?.tarifa).includes(textoBusqueda));
     if (!proyectos.length) {
-      cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: `Ninguna cotización de este cliente coincide con "${textoBusqueda}" (nombre o RPU).` }));
+      cont.append(Object.assign(document.createElement('p'), { className: 'nota', textContent: `Ninguna cotización de este cliente coincide con "${textoBusquedaCrudo}" (nombre, RPU o tarifa).` }));
       return;
     }
   }
