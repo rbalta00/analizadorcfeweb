@@ -58,6 +58,7 @@
       <div class="acciones">
         <button id="btnAbrirDashboard" class="btn-secundario">🕐 Historial / Dashboard</button>
         <button id="btnAbrirDefinitivasPorTarifa" class="btn-secundario">✅ Definitivas por tarifa</button>
+        <button id="btnAbrirCotizadorMachote" class="btn-secundario">🧭 Cotizador por machote</button>
         <button id="btnGuiaPresentacionGeneral" class="btn-secundario">📖 Guía para presentar (genérica)</button>
       </div>
 
@@ -185,6 +186,35 @@
     </section>
   </main>
 
+  <!-- ================= PANTALLA: COTIZADOR POR MACHOTE (un boton por tarifa) =================
+       Pedido explicito del usuario, 2026-11-14: modulo con pantalla propia -- cada estudio
+       nuevo que se cree AQUI arranca EXCLUSIVAMENTE de un machote ya verificado para su
+       tarifa (nunca "en blanco" -- esa opcion sigue viviendo en "Cotizaciones de este
+       cliente", sin tocarse). Reusa el mismo motor/editor/guardado/exportadores de siempre
+       (ver app.js): crear el estudio es crearProyecto()+aplicarMachoteAProyecto(), y
+       abrirProyecto() entra a la MISMA pantalla de captura/secciones/PDF/Excel de cualquier
+       otra cotizacion -- no existe una segunda implementacion de nada de eso aqui. -->
+  <main id="pantallaCotizadorMachote" hidden>
+    <div class="cliente-barra">
+      <button id="btnVolverClientesDesdeCotizadorMachote" class="btn-link">← Clientes</button>
+      <strong>🧭 Cotizador por machote</strong>
+    </div>
+    <section class="tarjeta">
+      <p class="nota">Cada estudio nuevo que crees aquí parte EXCLUSIVAMENTE de un machote ya <strong>verificado</strong>
+        para su tarifa -- textos reutilizables, diseño, orden, tablas y secciones/gráficas encendidas o apagadas.
+        El RPU, la dirección, el recibo, el consumo, la demanda, la verificación en sitio, el sembrado y los
+        resultados siempre arrancan vacíos: se capturan y calculan aparte, con los datos reales de este servicio --
+        el machote nunca los toca.</p>
+      <label>Sube el recibo de este servicio para detectar su tarifa (opcional -- también puedes elegir el botón
+        de la tarifa directo, abajo)
+        <input type="file" id="archivoReciboCotizadorMachote" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
+      </label>
+      <p class="nota" id="estadoReciboCotizadorMachote"></p>
+      <div id="botonesTarifaMachote" class="lista-clientes"></div>
+    </section>
+    <section class="tarjeta" id="panelTarifaMachoteSeleccionada"></section>
+  </main>
+
   <!-- ================= PANTALLA: PROYECTOS/COTIZACIONES de un cliente ================= -->
   <main id="pantallaProyectos" hidden>
     <div class="cliente-barra">
@@ -283,6 +313,10 @@
       <div id="listaTextosSospechososMachote" hidden></div>
       <button id="btnMarcarPlantillaVerificada" class="btn-secundario">✅ Ya revisé esta cotización para este cliente</button>
     </section>
+
+    <!-- Cotizador por machote: aviso de tarifa distinta -- pedido explicito del usuario,
+         2026-11-14 (ver renderAvisoMachoteTarifaDistinta en app.js). -->
+    <section class="tarjeta" id="avisoMachoteTarifaDistinta" hidden></section>
 
     <!-- Pedido explicito del usuario, 2026-11-11: "realmente son etiquetas, si quiero
          que se puedan editar y volver a guardar los cambios... pero asi identifico

@@ -8,6 +8,7 @@ import {
   listarProyectos, obtenerProyecto, crearProyecto, guardarProyecto, eliminarProyecto, moverProyecto, alGuardar,
   aplicarMachoteAProyecto, clonarProyectoCongelado, clonarProyectoEditable, crearProyectoDesdeOrigen, detectarTextosConNumerosSospechosos,
   desbloquearProyecto, bloquearProyecto,
+  proyectosParaVerificarMachote, marcarMachotePredeterminado, crearBorradorMachote, obtenerOCrearClienteMachotes,
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
   textoContieneIdentidadDe,
 } from './clientes.js';
@@ -40,6 +41,20 @@ const $ = (id) => document.getElementById(id);
 // Numero de WhatsApp al que apunta "Enviar por WhatsApp" (dado por el usuario). 52 =
 // Mexico; WhatsApp no permite adjuntar archivos desde un enlace wa.me, solo texto.
 const WHATSAPP_NUMERO = '522218367792';
+
+// Mismas 6 tarifas/etiquetas que ya se repiten en los 3 <select> de index.html
+// (selectTarifaDefinitivas/selectTarifaNuevoProyecto/filtroTarifaMachote) -- centralizado
+// aqui para el modulo nuevo "Cotizador por machote" (un boton por tarifa, 2026-11-14) en
+// vez de agregar una CUARTA copia del mismo texto en el HTML.
+const ETIQUETAS_TARIFA = {
+  GDMTO: 'GDMTO (media tensión, con demanda)',
+  GDMTH: 'GDMTH (media tensión, con demanda, por horario)',
+  GDBT: 'GDBT (baja tensión, con demanda)',
+  PDBT: 'PDBT (baja tensión, sin demanda)',
+  '01': '01 (doméstica)',
+  DAC: 'DAC (doméstica de alto consumo)',
+};
+const ORDEN_TARIFAS = ['GDMTO', 'GDMTH', 'GDBT', 'PDBT', '01', 'DAC'];
 
 // Aviso visible de guardado fallido -- UN SOLO hook (alGuardar, clientes.js) que se
 // entera del resultado de CADA guardado real a localStorage, venga de donde venga
@@ -240,6 +255,7 @@ function mostrarPantallaClientes() {
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
+  $('pantallaCotizadorMachote').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
@@ -453,6 +469,7 @@ function mostrarPantallaEnvios() {
   $('pantallaClientes').hidden = true;
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
+  $('pantallaCotizadorMachote').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaEnvios').hidden = false;
@@ -598,6 +615,7 @@ function mostrarPantallaDashboard() {
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
+  $('pantallaCotizadorMachote').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
   $('pantallaDashboard').hidden = false;
@@ -653,6 +671,7 @@ function mostrarPantallaDefinitivasPorTarifa() {
   $('pantallaDashboard').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = true;
+  $('pantallaCotizadorMachote').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = false;
   renderDefinitivasPorTarifa();
 }
@@ -945,6 +964,7 @@ function mostrarPantallaProyectos(clienteId) {
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
+  $('pantallaCotizadorMachote').hidden = true;
   $('pantallaProyectos').hidden = false;
   $('pantallaCliente').hidden = true;
   $('clienteNombreBarraProyectos').value = clienteActual.nombre;
@@ -1187,6 +1207,339 @@ function renderListaMachotes() {
   }
 }
 
+// =====================================================================
+// Pantalla: Cotizador por machote (un botón por tarifa) -- pedido explicito del
+// usuario, 2026-11-14: un modulo con pantalla propia donde CADA estudio nuevo arranca
+// EXCLUSIVAMENTE de un machote ya verificado para su tarifa (nunca "en blanco" desde
+// aqui -- esa opcion sigue viviendo en "Cotizaciones de este cliente", sin tocarse).
+// Reusa 100% el motor/editor/guardado/exportadores de siempre: crear el estudio es
+// crearProyecto()+aplicarMachoteAProyecto() (igual que "Partir de la definitiva de
+// muestra" de toda la vida) y despues abrirProyecto() entra a la MISMA pantalla de
+// captura/secciones/PDF/Excel que cualquier otra cotizacion -- no existe una segunda
+// implementacion de nada de eso.
+//
+// "Machote verificado" de una tarifa = proyecto definitiva + bloqueada (congelada,
+// clientes.js) + propositoDefinitiva:'muestra' + su tarifaMachote (o formulario.tarifa
+// si nunca se fijo explicito) coincide. Verificar = clonarProyectoCongelado() sobre
+// una cotizacion ya trabajada -- el clon queda CONGELADO desde ese instante, asi que
+// seguir editando el proyecto de origen nunca altera la version ya verificada (para
+// actualizarla hay que volver a verificar a proposito, lo que crea una version NUEVA).
+function machotesVerificadosDeTarifa(tarifa) {
+  const filas = [];
+  for (const c of listarClientes()) {
+    for (const p of (c.proyectos || [])) {
+      const t = p.tarifaMachote || p.formulario?.tarifa;
+      if (t !== tarifa) continue;
+      if (!(p.propositoDefinitiva === 'muestra' && p.bloqueada)) continue;
+      filas.push({ cliente: c, proyecto: p });
+    }
+  }
+  return filas.sort((a, b) => {
+    const aPred = a.proyecto.machotePredeterminadoTarifa ? 1 : 0;
+    const bPred = b.proyecto.machotePredeterminadoTarifa ? 1 : 0;
+    if (aPred !== bPred) return bPred - aPred;
+    return (b.proyecto.actualizadoEn || '').localeCompare(a.proyecto.actualizadoEn || '');
+  });
+}
+
+// Mini-formulario inline de "elige un cliente registrado o crea uno nuevo" -- mismo
+// patron ya probado en tarjetaEnvio() (bandeja de envios), reconstruido aqui porque esa
+// version esta atada a los ids fijos de esa pantalla. Se usa UNA vez por panel (al
+// elegir una tarifa), no hace falta exponerlo mas alla de este archivo.
+function crearSelectorClienteMachote() {
+  const selectCliente = document.createElement('select');
+  const grupos = clientesAgrupadosPorTipo();
+  const hayClientesRegistrados = grupos.some(g => g.clientes.length);
+  if (hayClientesRegistrados) {
+    const optVacio = document.createElement('option');
+    optVacio.value = ''; optVacio.textContent = '-- Elige un cliente registrado --';
+    optVacio.disabled = true; optVacio.selected = true;
+    selectCliente.append(optVacio);
+  }
+  for (const { tipo, clientes: lista } of grupos) {
+    if (!lista.length) continue;
+    const og = document.createElement('optgroup');
+    og.label = etiquetaTipo(tipo);
+    for (const c of lista) {
+      const opt = document.createElement('option');
+      opt.value = c.id; opt.textContent = c.nombre;
+      og.append(opt);
+    }
+    selectCliente.append(og);
+  }
+  const optNuevo = document.createElement('option');
+  optNuevo.value = '__nuevo__'; optNuevo.textContent = '+ Crear cliente nuevo';
+  selectCliente.append(optNuevo);
+  if (!hayClientesRegistrados) selectCliente.value = '__nuevo__';
+
+  const filaNuevo = document.createElement('div');
+  filaNuevo.className = 'fila fila-nuevo-cliente-envio';
+  filaNuevo.innerHTML = `<label>Nombre del cliente nuevo<input type="text" class="input-nombre-nuevo" /></label>
+    <label>Tipo<input type="text" class="select-tipo-nuevo" list="listaTiposCliente" placeholder="Gobierno, Particular, u otro..."></label>`;
+  filaNuevo.hidden = selectCliente.value !== '__nuevo__';
+  selectCliente.addEventListener('change', () => { filaNuevo.hidden = selectCliente.value !== '__nuevo__'; });
+  return { selectCliente, filaNuevo };
+}
+function resolverClienteDeSelectorMachote(selectCliente, filaNuevo) {
+  if (!selectCliente.value) { alert('Elige un cliente registrado, o "+ Crear cliente nuevo".'); return null; }
+  if (selectCliente.value === '__nuevo__') {
+    const nombre = filaNuevo.querySelector('.input-nombre-nuevo').value.trim();
+    if (!nombre) { alert('Escribe el nombre del cliente nuevo.'); return null; }
+    const tipo = filaNuevo.querySelector('.select-tipo-nuevo').value;
+    return crearCliente({ nombre, tipo });
+  }
+  return obtenerCliente(selectCliente.value);
+}
+
+let tarifaMachoteSeleccionada = null;
+
+function renderBotonesTarifaMachote() {
+  const cont = $('botonesTarifaMachote');
+  cont.innerHTML = '';
+  for (const tarifa of ORDEN_TARIFAS) {
+    const verificados = machotesVerificadosDeTarifa(tarifa);
+    const habilitado = verificados.length > 0;
+    const predeterminado = verificados.find(f => f.proyecto.machotePredeterminadoTarifa) || verificados[0];
+    const div = document.createElement('div');
+    div.className = 'tarjeta-cliente';
+    div.style.cursor = 'pointer';
+    div.innerHTML = `<strong>${tarifa}</strong> <span class="nota">${ETIQUETAS_TARIFA[tarifa] || ''}</span>` +
+      (habilitado
+        ? `<div class="nota ok">✅ Machote verificado: ${escapeHtml(predeterminado.proyecto.nombre)}${verificados.length > 1 ? ` (+${verificados.length - 1} más disponibles)` : ''}</div>`
+        : '<div class="nota aviso">⚠️ Machote pendiente de verificar</div>');
+    div.addEventListener('click', () => seleccionarTarifaMachote(tarifa));
+    cont.append(div);
+  }
+}
+
+function seleccionarTarifaMachote(tarifa) {
+  tarifaMachoteSeleccionada = tarifa;
+  if (machotesVerificadosDeTarifa(tarifa).length) renderPanelCrearDesdeMachote(tarifa);
+  else renderPanelVerificarMachote(tarifa);
+}
+
+// Panel cuando la tarifa YA tiene al menos un machote verificado: elegir cual usar
+// (el predeterminado ⭐ ya viene pre-seleccionado) y crear el estudio nuevo.
+function renderPanelCrearDesdeMachote(tarifa) {
+  const panel = $('panelTarifaMachoteSeleccionada');
+  panel.innerHTML = '';
+  const verificados = machotesVerificadosDeTarifa(tarifa);
+  panel.append(Object.assign(document.createElement('h3'), { textContent: `Tarifa ${tarifa} — ${ETIQUETAS_TARIFA[tarifa] || ''}` }));
+  panel.append(Object.assign(document.createElement('p'), {
+    className: 'nota',
+    textContent: 'Elige qué machote verificado usar (el predeterminado ⭐ ya viene marcado). El estudio nuevo arranca con su estructura/textos/visibilidad -- el RPU, el recibo, el consumo, la demanda, la verificación en sitio, el sembrado y los resultados siempre arrancan vacíos y se capturan/calculan aparte, con los datos reales de este servicio.',
+  }));
+
+  const lista = document.createElement('div');
+  lista.className = 'lista-clientes';
+  let seleccionado = verificados.find(f => f.proyecto.machotePredeterminadoTarifa) || verificados[0];
+  const radios = [];
+  for (const fila of verificados) {
+    const { cliente, proyecto } = fila;
+    const div = document.createElement('div');
+    div.className = 'tarjeta-cliente';
+    const label = document.createElement('label');
+    label.style.cursor = 'pointer';
+    label.style.display = 'block';
+    const radio = document.createElement('input');
+    radio.type = 'radio'; radio.name = 'machoteElegido';
+    radio.checked = fila === seleccionado;
+    radio.addEventListener('change', () => { seleccionado = fila; });
+    radios.push(radio);
+    label.append(radio, document.createTextNode(' '));
+    const strong = document.createElement('strong'); strong.textContent = proyecto.nombre;
+    label.append(strong);
+    if (proyecto.machotePredeterminadoTarifa) label.innerHTML += ' <span class="chip-definitiva">⭐ predeterminado</span>';
+    const nota = document.createElement('div');
+    nota.className = 'nota';
+    nota.textContent = `Cliente: ${cliente.nombre} · verificado ${new Date(proyecto.entregadaEn || proyecto.actualizadoEn).toLocaleDateString('es-MX')}`;
+    label.append(nota);
+    div.append(label);
+
+    const acciones = document.createElement('div');
+    acciones.className = 'acciones';
+    const btnVer = document.createElement('button');
+    btnVer.className = 'btn-link'; btnVer.textContent = '👁 Ver qué incluye';
+    btnVer.addEventListener('click', () => alert(textoVistaPrevia(proyecto)));
+    acciones.append(btnVer);
+    if (!proyecto.machotePredeterminadoTarifa) {
+      const btnPred = document.createElement('button');
+      btnPred.className = 'btn-secundario'; btnPred.textContent = '⭐ Hacer predeterminado';
+      btnPred.addEventListener('click', () => {
+        marcarMachotePredeterminado(cliente.id, proyecto.id);
+        renderBotonesTarifaMachote();
+        renderPanelCrearDesdeMachote(tarifa);
+      });
+      acciones.append(btnPred);
+    }
+    div.append(acciones);
+    lista.append(div);
+  }
+  panel.append(lista);
+
+  panel.append(Object.assign(document.createElement('h4'), { textContent: 'Crear estudio nuevo con el machote elegido' }));
+
+  const filaNombre = document.createElement('label');
+  filaNombre.textContent = 'Nombre de esta cotización nueva';
+  const inputNombre = document.createElement('input');
+  inputNombre.type = 'text';
+  inputNombre.placeholder = `Ej. Nombre del servicio — ${tarifa}`;
+  filaNombre.append(document.createElement('br'), inputNombre);
+  panel.append(filaNombre);
+
+  const { selectCliente, filaNuevo } = crearSelectorClienteMachote();
+  const filaCliente = document.createElement('label');
+  filaCliente.textContent = 'Cliente';
+  filaCliente.append(document.createElement('br'), selectCliente);
+  panel.append(filaCliente, filaNuevo);
+
+  const btnCrear = document.createElement('button');
+  btnCrear.className = 'btn-primario';
+  btnCrear.textContent = '🧭 Crear estudio nuevo con este machote';
+  btnCrear.addEventListener('click', () => {
+    const nombre = inputNombre.value.trim();
+    if (!nombre) { alert('Escribe primero el nombre de esta cotización.'); return; }
+    if (!seleccionado) { alert('Elige un machote verificado de la lista.'); return; }
+    const cliente = resolverClienteDeSelectorMachote(selectCliente, filaNuevo);
+    if (!cliente) return;
+    const nuevo = crearProyecto(cliente, { nombre });
+    aplicarMachoteAProyecto(nuevo, { cliente: seleccionado.cliente, proyecto: seleccionado.proyecto });
+    // Se guarda aparte de plantillaOrigen (que ya puso aplicarMachoteAProyecto) para
+    // poder detectar mas adelante (calcularYRenderizar) si la tarifa que de verdad
+    // trae el recibo de este servicio coincide con la tarifa del machote elegido aqui.
+    nuevo.machoteOrigenId = seleccionado.proyecto.id;
+    nuevo.machoteOrigenTarifa = tarifa;
+    guardarProyecto(cliente, nuevo);
+    abrirProyecto(cliente.id, nuevo.id);
+  });
+  panel.append(btnCrear);
+}
+
+// Panel cuando la tarifa AUN NO tiene ningun machote verificado: elegir una cotizacion
+// ya trabajada con esa tarifa para verificarla, o (si GDMTO ya tiene uno verificado)
+// preparar un borrador copiando su estructura para adaptarlo a esta tarifa primero.
+function renderPanelVerificarMachote(tarifa) {
+  const panel = $('panelTarifaMachoteSeleccionada');
+  panel.innerHTML = '';
+  panel.append(Object.assign(document.createElement('h3'), { textContent: `Tarifa ${tarifa} — ⚠️ Machote pendiente de verificar` }));
+  panel.append(Object.assign(document.createElement('p'), {
+    className: 'nota aviso',
+    textContent: 'Todavía no hay ningún machote VERIFICADO para esta tarifa -- el botón de arriba se habilita en ' +
+      'cuanto verifiques uno. Elige abajo una cotización ya trabajada con esta tarifa y verifícala, o (si existe) ' +
+      'prepara primero un borrador copiando el machote de GDMTO ya verificado para adaptarlo a esta tarifa.',
+  }));
+
+  if (tarifa !== 'GDMTO') {
+    const gdmto = machotesVerificadosDeTarifa('GDMTO');
+    const gdmtoPred = gdmto.find(f => f.proyecto.machotePredeterminadoTarifa) || gdmto[0];
+    if (gdmtoPred) {
+      const div = document.createElement('div');
+      div.className = 'tarjeta-cliente';
+      div.innerHTML = `<strong>📑 Crear un borrador para ${tarifa} desde el machote GDMTO verificado</strong>` +
+        `<div class="nota">Copia los textos/estructura/visibilidad de "${escapeHtml(gdmtoPred.proyecto.nombre)}" en un ` +
+        'proyecto nuevo (sin calcular todavía) para que ahí adaptes tablas, cargos, períodos y conclusiones a esta ' +
+        'tarifa -- pruébalo con un recibo real representativo de esta tarifa antes de verificarlo.</div>';
+      const btnBorrador = document.createElement('button');
+      btnBorrador.className = 'btn-secundario';
+      btnBorrador.textContent = '📑 Crear borrador y abrirlo';
+      btnBorrador.addEventListener('click', () => {
+        const { cliente, proyecto } = crearBorradorMachote(tarifa, { cliente: gdmtoPred.cliente, proyecto: gdmtoPred.proyecto });
+        abrirProyecto(cliente.id, proyecto.id);
+      });
+      div.append(btnBorrador);
+      panel.append(div);
+    }
+  }
+
+  panel.append(Object.assign(document.createElement('h4'), { textContent: 'Verificar una cotización ya trabajada con esta tarifa' }));
+  const candidatos = proyectosParaVerificarMachote(tarifa);
+  if (!candidatos.length) {
+    panel.append(Object.assign(document.createElement('p'), {
+      className: 'nota',
+      textContent: `No hay ninguna cotización (ni borrador) con tarifa ${tarifa} todavía -- créala o calcúlala primero ` +
+        '(desde "Cotizaciones de este cliente"), o usa el borrador de arriba si ya existe.',
+    }));
+    return;
+  }
+  const lista = document.createElement('div');
+  lista.className = 'lista-clientes';
+  for (const { cliente, proyecto } of candidatos) {
+    const div = document.createElement('div');
+    div.className = 'tarjeta-cliente';
+    div.innerHTML = `<strong>${escapeHtml(proyecto.nombre)}</strong>` +
+      (proyecto.definitiva ? ` <span class="chip-definitiva">${proyecto.propositoDefinitiva === 'muestra' ? '📋 muestra' : '✅ definitiva'}${proyecto.bloqueada ? ' 🔒' : ''}</span>` : '') +
+      `<div class="nota">Cliente: ${escapeHtml(cliente.nombre)} · ${proyecto.formulario?.tarifa ? 'calculada' : 'sin calcular todavía'} · ${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</div>`;
+    const btnVerificar = document.createElement('button');
+    btnVerificar.className = 'btn-primario';
+    btnVerificar.textContent = `✅ Verificar como machote de ${tarifa}`;
+    btnVerificar.addEventListener('click', () => {
+      const preview = textoVistaPrevia(proyecto);
+      if (!confirm(`${preview}\n\n¿Verificar "${proyecto.nombre}" (${cliente.nombre}) como machote de la tarifa ${tarifa}? ` +
+        'Queda CONGELADA (como una definitiva de muestra) desde este momento -- seguir editando el proyecto de origen ' +
+        'después de esto nunca altera esta versión ya verificada; para actualizarla hay que volver a verificarla a propósito.')) return;
+      const clon = clonarProyectoCongelado(cliente, proyecto, 'muestra', tarifa);
+      if (machotesVerificadosDeTarifa(tarifa).length === 1) marcarMachotePredeterminado(cliente.id, clon.id);
+      renderBotonesTarifaMachote();
+      seleccionarTarifaMachote(tarifa);
+    });
+    div.append(btnVerificar);
+    lista.append(div);
+  }
+  panel.append(lista);
+}
+
+function mostrarPantallaCotizadorMachote() {
+  $('pantallaClientes').hidden = true;
+  $('pantallaEnvios').hidden = true;
+  $('pantallaDashboard').hidden = true;
+  $('pantallaDefinitivasPorTarifa').hidden = true;
+  $('pantallaProyectos').hidden = true;
+  $('pantallaCliente').hidden = true;
+  $('pantallaCotizadorMachote').hidden = false;
+  tarifaMachoteSeleccionada = null;
+  $('estadoReciboCotizadorMachote').textContent = '';
+  $('archivoReciboCotizadorMachote').value = '';
+  $('panelTarifaMachoteSeleccionada').innerHTML = '';
+  renderBotonesTarifaMachote();
+}
+$('btnAbrirCotizadorMachote').addEventListener('click', mostrarPantallaCotizadorMachote);
+$('btnVolverClientesDesdeCotizadorMachote').addEventListener('click', mostrarPantallaClientes);
+
+// Deteccion de tarifa ANTES de crear nada -- pedido explicito del usuario: "permite
+// elegir la tarifa o detectarla al cargar el recibo CFE... si el recibo indica una
+// tarifa distinta de la seleccionada, muestra la diferencia". Solo lee el recibo
+// (mismo leerReciboMultiple que usa el resto de la app) para enterarse de su tarifa --
+// no crea ningun proyecto todavia, eso sigue pasando solo al dar clic en "Crear
+// estudio nuevo con este machote" (arriba), que es cuando SI hace falta un cliente.
+$('archivoReciboCotizadorMachote').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+  const estadoEl = $('estadoReciboCotizadorMachote');
+  estadoEl.className = 'nota';
+  estadoEl.textContent = 'Leyendo el recibo para detectar su tarifa (puede tardar hasta 1 minuto si usa OCR)...';
+  try {
+    const campos = await leerReciboMultiple(files);
+    if (!campos.tarifa || !TARIFAS_SOPORTADAS.has(campos.tarifa)) {
+      estadoEl.className = 'nota aviso';
+      estadoEl.textContent = 'No se pudo detectar una tarifa soportada en este recibo -- elige el botón de la tarifa correcta manualmente.';
+      return;
+    }
+    if (tarifaMachoteSeleccionada && tarifaMachoteSeleccionada !== campos.tarifa) {
+      estadoEl.className = 'nota aviso';
+      estadoEl.textContent = `⚠️ Este recibo es de tarifa ${campos.tarifa}, distinta de la que tenías elegida ` +
+        `(${tarifaMachoteSeleccionada}) -- se cambió la selección a ${campos.tarifa}.`;
+    } else {
+      estadoEl.className = 'nota ok';
+      estadoEl.textContent = `Tarifa detectada: ${campos.tarifa}.`;
+    }
+    seleccionarTarifaMachote(campos.tarifa);
+  } catch (err) {
+    estadoEl.className = 'nota aviso';
+    estadoEl.textContent = 'No se pudo leer el recibo: ' + err.message;
+    console.error(err);
+  }
+});
+
 // "Mi formato predeterminado (fijo)" -- ver formatoFijo.js. Muestra de dónde y cuándo
 // se fijó, y cambia el texto del botón entre "Fijar" (primera vez) y "Actualizar"
 // (ya hay uno guardado) -- misma acción, mismo botón, solo cambia la etiqueta.
@@ -1288,6 +1641,63 @@ $('btnMarcarPlantillaVerificada').addEventListener('click', () => {
   guardarProyecto(clienteActual, proyectoActual);
   renderAvisoPlantillaOrigen();
 });
+
+// Aviso de tarifa distinta -- pedido explicito del usuario (refuerzo "Cotizador por
+// machote", 2026-11-14): "si el usuario cambia de tarifa despues de iniciar la
+// cotizacion, vuelve a filtrar los machotes y solicita uno verificado para la nueva
+// tarifa". `machoteOrigenTarifa` se fija una sola vez, al crear el estudio desde el
+// modulo por machote (ver renderPanelCrearDesdeMachote) -- si el recibo real que se
+// termina capturando aqui resulta de OTRA tarifa, se avisa y se ofrece reaplicar con
+// un machote verificado de la tarifa correcta, sin perder los datos del servicio ya
+// capturados (aplicarMachoteAProyecto nunca toca proyecto.formulario). Lee siempre
+// `proyectoActual.formulario.tarifa` ya GUARDADO (no leerFormulario() en vivo) para que
+// tambien funcione al reabrir el proyecto, antes de tocar cualquier campo del DOM.
+function renderAvisoMachoteTarifaDistinta() {
+  const avisoEl = $('avisoMachoteTarifaDistinta');
+  if (!avisoEl || !proyectoActual) return;
+  const origenTarifa = proyectoActual.machoteOrigenTarifa;
+  const tarifaActual = proyectoActual.formulario?.tarifa;
+  if (!origenTarifa || !tarifaActual || origenTarifa === tarifaActual) { avisoEl.hidden = true; return; }
+  avisoEl.hidden = false;
+  avisoEl.innerHTML = '';
+  avisoEl.append(Object.assign(document.createElement('p'), {
+    className: 'nota aviso',
+    textContent: `⚠️ Esta cotización se creó con un machote verificado de tarifa ${origenTarifa}, pero el recibo ` +
+      `capturado aquí es de tarifa ${tarifaActual} -- los textos reutilizables pueden no aplicar bien a esta tarifa. ` +
+      'Elige un machote verificado de la tarifa correcta:',
+  }));
+  const verificados = machotesVerificadosDeTarifa(tarifaActual);
+  if (!verificados.length) {
+    avisoEl.append(Object.assign(document.createElement('p'), {
+      className: 'nota',
+      textContent: `Todavía no hay ningún machote verificado para la tarifa ${tarifaActual} -- ve a "🧭 Cotizador por ` +
+        'machote" para verificar o preparar uno antes de seguir.',
+    }));
+    return;
+  }
+  for (const { cliente, proyecto } of verificados) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-secundario';
+    btn.textContent = `🔁 Aplicar "${proyecto.nombre}" (machote ${tarifaActual}${proyecto.machotePredeterminadoTarifa ? ', predeterminado' : ''})`;
+    btn.addEventListener('click', () => {
+      if (!confirm(`¿Aplicar "${proyecto.nombre}" (${cliente.nombre}) como machote de esta cotización? Se reemplazan ` +
+        'los textos/apagados editados por los de este machote (salvo los que traigan un número del cálculo anterior, ' +
+        'que se conservan marcados para revisión) -- tarifa, cargos, identidad y consumo de ESTE servicio NO se tocan.')) return;
+      aplicarMachoteAProyecto(proyectoActual, { cliente, proyecto });
+      proyectoActual.machoteOrigenId = proyecto.id;
+      proyectoActual.machoteOrigenTarifa = tarifaActual;
+      guardarProyecto(clienteActual, proyectoActual);
+      $('contenedorSecciones').innerHTML = '';
+      $('tabPdf').hidden = true;
+      $('estadoCalculo').className = 'nota aviso';
+      $('estadoCalculo').textContent = 'Machote aplicado -- pulsa "Calcular" para ver la cotización con los textos de este machote.';
+      renderAvisoPlantillaOrigen();
+      renderAvisoMachoteTarifaDistinta();
+      renderListaMachotes();
+    });
+    avisoEl.append(btn);
+  }
+}
 
 // Candado de definitivas -- pedido explicito del usuario, 2026-11-11: "realmente son
 // etiquetas, si quiero que se puedan editar y volver a guardar los cambios... pero asi
@@ -1431,6 +1841,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
+  $('pantallaCotizadorMachote').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = false;
   $('clienteNombreBarra').value = clienteActual.nombre;
@@ -1438,6 +1849,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('clienteTipoBarra').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
   sincronizarInputsNombreProyecto();
   renderAvisoPlantillaOrigen();
+  renderAvisoMachoteTarifaDistinta();
   renderAvisoBloqueo();
   revisarDuplicadoCliente();
   revisarDuplicadoProyecto(proyectoActual.nombre, proyectoActual.id);
@@ -2486,6 +2898,7 @@ function calcularYRenderizar() {
   }
 
   proyectoActual.formulario = leerFormulario();
+  renderAvisoMachoteTarifaDistinta();
   // Una vez que se logra calcular, los campos que seguian marcados "no detectado" ya
   // fueron confirmados por Isaac (si no, faltantesVisiblesParaCalcular() habria
   // bloqueado este calculo) -- hay que quitarlos de campos_no_encontrados de forma

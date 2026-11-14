@@ -425,7 +425,16 @@ export function bloquearProyecto(cliente, proyectoId) {
 // solo 'muestra' se ofrece como ejemplo generico reusable por tarifa (ver
 // mejorDefinitivaPorTarifa() en app.js) -- 'cliente' es la entrega real de ESE cliente,
 // no necesariamente un buen ejemplo generico para empezar la cotizacion de otro.
-export function clonarProyectoCongelado(cliente, proyecto, proposito = 'cliente') {
+// `tarifaMachote` (opcional): pedido explicito del usuario, 2026-11-14 (modulo
+// "Cotizador por machote") -- normalmente la tarifa de un machote verificado es la
+// misma que ya tiene capturada el proyecto (proyecto.formulario.tarifa), pero un
+// BORRADOR de machote para una tarifa nueva (ver crearBorradorMachote mas abajo) puede
+// todavia no tener ningun recibo calculado cuando se verifica por primera vez -- en
+// ese caso formulario.tarifa seria null y el machote quedaria "sin tarifa", invisible
+// para el modulo por tarifa. Este parametro fija la tarifa del machote de forma
+// explicita, independiente de si ya se calculo o no con un recibo real. Si no se pasa,
+// se usa formulario.tarifa (comportamiento de siempre, sin romper nada ya guardado).
+export function clonarProyectoCongelado(cliente, proyecto, proposito = 'cliente', tarifaMachote = null) {
   const ahora = new Date().toISOString();
   const clon = JSON.parse(JSON.stringify(proyecto));
   clon.id = uuid();
@@ -435,9 +444,93 @@ export function clonarProyectoCongelado(cliente, proyecto, proposito = 'cliente'
   clon.bloqueada = true;
   clon.entregadaEn = ahora;
   clon.propositoDefinitiva = proposito === 'muestra' ? 'muestra' : 'cliente';
+  clon.tarifaMachote = tarifaMachote || proyecto.formulario?.tarifa || proyecto.tarifaMachote || null;
   (cliente.proyectos = cliente.proyectos || []).push(clon);
   guardarCliente(cliente);
   return clon;
+}
+
+// ---------------------------------------------------------------------------
+// Cotizador por machote (modulo por tarifa) -- pedido explicito del usuario,
+// 2026-11-14: cada tarifa soportada por el motor tiene su propio boton, habilitado
+// solo cuando existe al menos un machote VERIFICADO (definitiva + bloqueada +
+// propositoDefinitiva:'muestra') para esa tarifa. "Verificar" un machote es tomar
+// clonarProyectoCongelado() de arriba sobre una cotizacion ya trabajada -- el clon
+// queda CONGELADO (bloqueada) desde ese instante, asi que seguir editando el proyecto
+// de origen nunca altera la version ya verificada; para actualizarla hay que volver a
+// verificar explicitamente (clonarProyectoCongelado crea una version NUEVA, la vieja
+// se queda tal cual en el historial salvo que se elimine a mano).
+// ---------------------------------------------------------------------------
+
+// Lista TODOS los proyectos de CUALQUIER cliente que correspondan a `tarifa` (por
+// tarifaMachote si ya se fijo, si no por formulario.tarifa) -- sin filtrar por
+// definitiva/bloqueada, a diferencia de candidatosDefinitivaPorTarifa (app.js): el
+// punto aqui es poder elegir CUALQUIER cotizacion ya trabajada (incluida un borrador
+// sin congelar) como fuente para "Verificar como machote de esta tarifa".
+export function proyectosParaVerificarMachote(tarifa) {
+  const filas = [];
+  for (const c of listarClientes()) {
+    for (const p of (c.proyectos || [])) {
+      const t = p.tarifaMachote || p.formulario?.tarifa;
+      if (t !== tarifa) continue;
+      filas.push({ cliente: c, proyecto: p });
+    }
+  }
+  return filas.sort((a, b) => (b.proyecto.actualizadoEn || '').localeCompare(a.proyecto.actualizadoEn || ''));
+}
+
+// Marca COMO predeterminado (para el boton de su tarifa) un machote YA verificado --
+// solo puede haber uno predeterminado por tarifa a la vez, asi que se recorren TODOS
+// los clientes/proyectos para apagar la bandera de cualquier otro machote de la misma
+// tarifa antes de encenderla en el elegido. Devuelve false sin hacer nada si el
+// proyecto indicado no es (todavia) un machote verificado -- no tendria sentido volver
+// predeterminado algo que ni siquiera esta congelado.
+export function marcarMachotePredeterminado(clienteId, proyectoId) {
+  const todos = leerTodos();
+  const clienteObjetivo = todos.find((c) => c.id === clienteId);
+  const proyectoObjetivo = clienteObjetivo && (clienteObjetivo.proyectos || []).find((p) => p.id === proyectoId);
+  if (!clienteObjetivo || !proyectoObjetivo) return false;
+  if (!(proyectoObjetivo.propositoDefinitiva === 'muestra' && proyectoObjetivo.bloqueada)) return false;
+  const tarifa = proyectoObjetivo.tarifaMachote || proyectoObjetivo.formulario?.tarifa;
+  if (!tarifa) return false;
+  for (const c of todos) {
+    for (const p of (c.proyectos || [])) {
+      const t = p.tarifaMachote || p.formulario?.tarifa;
+      if (t === tarifa) p.machotePredeterminadoTarifa = (p.id === proyectoId);
+    }
+  }
+  guardarTodos(todos);
+  return true;
+}
+
+// Cliente "carpeta" reservado para los BORRADORES de machote que todavia no tienen un
+// servicio/cliente real propio (ver crearBorradorMachote) -- pedido explicito del
+// usuario, 2026-11-14: "crea copias independientes para las demas tarifas". Se
+// reconoce por nombre fijo en vez de un campo aparte en el modelo de cliente, para no
+// tener que migrar clientes ya guardados -- si ya existe (de una sesion anterior) se
+// reusa tal cual.
+const NOMBRE_CLIENTE_MACHOTES = '🗂️ Machotes (borradores por tarifa)';
+export function obtenerOCrearClienteMachotes() {
+  const existente = listarClientes().find((c) => c.nombre === NOMBRE_CLIENTE_MACHOTES);
+  if (existente) return existente;
+  return crearCliente({ nombre: NOMBRE_CLIENTE_MACHOTES, tipo: 'Machotes' });
+}
+
+// Crea un borrador de machote para `tarifaDestino`, heredando SOLO lo editorial
+// (textos/tablas/orden/visibilidad, via aplicarMachoteAProyecto) de `origen` -- pedido
+// explicito del usuario, 2026-11-14: "selecciona uno [GDMTO] como base y crea copias
+// independientes para las demas tarifas que se necesiten". El borrador nace SIN
+// calcular (formulario null, igual que cualquier proyecto nuevo) para que quien lo
+// adapte lo pruebe con un recibo real representativo de `tarifaDestino` antes de
+// verificarlo -- `tarifaMachote` se fija aqui de una vez para que el modulo por tarifa
+// lo reconozca como borrador de ESA tarifa aunque todavia no se haya calculado nada.
+export function crearBorradorMachote(tarifaDestino, origen, nombre) {
+  const cliente = obtenerOCrearClienteMachotes();
+  const proyecto = crearProyecto(cliente, { nombre: nombre || `Borrador machote ${tarifaDestino}` });
+  aplicarMachoteAProyecto(proyecto, origen);
+  proyecto.tarifaMachote = tarifaDestino;
+  guardarProyecto(cliente, proyecto);
+  return { cliente, proyecto };
 }
 
 // "Guardar como copia" -- pedido explicito del usuario, 2026-11-12: crea un estudio
