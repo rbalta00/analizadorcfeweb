@@ -183,10 +183,11 @@ export function obtenerProyecto(cliente, proyectoId) {
 }
 
 export function crearProyecto(cliente, { nombre } = {}) {
+  const proyectosFrescos = proyectosFrescosDe(cliente);
   const ahora = new Date().toISOString();
   const proyecto = {
     id: uuid(),
-    nombre: nombre || `Cotización ${(cliente.proyectos || []).length + 1}`,
+    nombre: nombre || `Cotización ${proyectosFrescos.length + 1}`,
     creadoEn: ahora,
     actualizadoEn: ahora,
     formulario: null,
@@ -253,8 +254,8 @@ export function crearProyecto(cliente, { nombre } = {}) {
     },
     pasoActivo: 'completo',
   };
-  cliente.proyectos = cliente.proyectos || [];
-  cliente.proyectos.push(proyecto);
+  proyectosFrescos.push(proyecto);
+  cliente.proyectos = proyectosFrescos;
   guardarCliente(cliente);
   return proyecto;
 }
@@ -384,12 +385,23 @@ export function eliminarPaso(proyecto, idPaso) {
 // editan y guardan el MISMO proyecto casi al mismo tiempo, sigue ganando el último
 // guardado, sin aviso -- evitar eso necesitaría detectar el conflicto y avisar en
 // la interfaz, que es una función nueva aparte, no un fix de pérdida de datos.
-// `crearProyecto`/`eliminarProyecto`/`moverProyecto`/`clonarProyecto*` comparten el
-// mismo riesgo de fondo (tambien parten de `cliente.proyectos` en memoria) -- no se
-// tocaron en este pase, quedan con el mismo riesgo si se editan en paralelo.
-export function guardarProyecto(cliente, proyecto) {
+//
+// Seguimiento, 2026-11-14 (revisión sobre el commit f1b08d0): el mismo riesgo de
+// fondo -- guardar sobre `cliente.proyectos` posiblemente viejo -- seguía reproducible
+// en eliminarProyecto/crearProyecto/clonarProyecto*/bloquear/desbloquear, todos los
+// cuales terminan en guardarCliente() igual que guardarProyecto. Caso confirmado:
+// pestaña 1 edita y guarda X; pestaña 2 (sin recargar) elimina Y -- eliminarProyecto
+// filtraba la copia vieja de `cliente.proyectos` de la pestaña 2 (sin la edición de
+// X) y la guardaba completa, revirtiendo a X. Se extrae `proyectosFrescosDe()` (lo
+// que ya hacía guardarProyecto a mano) y se reusa en todos esos caminos -- un solo
+// lugar con el fix, en vez de repetirlo suelto en cada función.
+function proyectosFrescosDe(cliente) {
   const clienteGuardado = leerTodos().find((c) => c.id === cliente.id);
-  const proyectosFrescos = clienteGuardado ? [...clienteGuardado.proyectos] : [...(cliente.proyectos || [])];
+  return clienteGuardado ? [...clienteGuardado.proyectos] : [...(cliente.proyectos || [])];
+}
+
+export function guardarProyecto(cliente, proyecto) {
+  const proyectosFrescos = proyectosFrescosDe(cliente);
   const existente = proyectosFrescos.find((p) => p.id === proyecto.id);
   if (existente && existente.bloqueada) {
     console.warn(`Cotización "${proyecto.nombre}" está bloqueada (ya se entregó como definitiva) -- se ignora este intento de modificarla.`);
@@ -403,7 +415,7 @@ export function guardarProyecto(cliente, proyecto) {
 }
 
 export function eliminarProyecto(cliente, proyectoId) {
-  cliente.proyectos = (cliente.proyectos || []).filter(p => p.id !== proyectoId);
+  cliente.proyectos = proyectosFrescosDe(cliente).filter((p) => p.id !== proyectoId);
   return guardarCliente(cliente);
 }
 
@@ -418,16 +430,30 @@ export function eliminarProyecto(cliente, proyectoId) {
 // existente.bloqueada sea true -- por diseño no puede usarse para quitar su propio
 // candado). La etiqueta (definitiva/propositoDefinitiva) nunca se toca aqui -- sigue
 // identificando cual es cual, solo cambia si esta protegida contra escritura o no.
+// Nota, las dos funciones siguientes: ademas de mutar la copia FRESCA que se va a
+// guardar, se busca y mutua tambien el objeto que YA tuviera `cliente.proyectos` en
+// memoria (si existe) -- app.js lee `proyectoActual.bloqueada` directo (por
+// referencia, ver renderAvisoBloqueo), y `proyectoActual` suele ser ese mismo objeto
+// dentro de `clienteActual.proyectos`. Sin esto, el aviso en pantalla no reflejaria
+// el cambio aunque el guardado real si haya sido correcto.
 export function desbloquearProyecto(cliente, proyectoId) {
-  const p = (cliente.proyectos || []).find(x => x.id === proyectoId);
+  const proyectosFrescos = proyectosFrescosDe(cliente);
+  const p = proyectosFrescos.find((x) => x.id === proyectoId);
   if (!p) return cliente;
   p.bloqueada = false;
+  const pEnMemoria = (cliente.proyectos || []).find((x) => x.id === proyectoId);
+  if (pEnMemoria) pEnMemoria.bloqueada = false;
+  cliente.proyectos = proyectosFrescos;
   return guardarCliente(cliente);
 }
 export function bloquearProyecto(cliente, proyectoId) {
-  const p = (cliente.proyectos || []).find(x => x.id === proyectoId);
+  const proyectosFrescos = proyectosFrescosDe(cliente);
+  const p = proyectosFrescos.find((x) => x.id === proyectoId);
   if (!p) return cliente;
   p.bloqueada = true;
+  const pEnMemoria = (cliente.proyectos || []).find((x) => x.id === proyectoId);
+  if (pEnMemoria) pEnMemoria.bloqueada = true;
+  cliente.proyectos = proyectosFrescos;
   return guardarCliente(cliente);
 }
 
@@ -475,7 +501,9 @@ export function clonarProyectoCongelado(cliente, proyecto, proposito = 'cliente'
   clon.entregadaEn = ahora;
   clon.propositoDefinitiva = proposito === 'muestra' ? 'muestra' : 'cliente';
   clon.tarifaMachote = tarifaMachote || proyecto.formulario?.tarifa || proyecto.tarifaMachote || null;
-  (cliente.proyectos = cliente.proyectos || []).push(clon);
+  const proyectosFrescos = proyectosFrescosDe(cliente);
+  proyectosFrescos.push(clon);
+  cliente.proyectos = proyectosFrescos;
   guardarCliente(cliente);
   return clon;
 }
@@ -580,7 +608,9 @@ export function clonarProyectoEditable(cliente, proyecto, nombreNuevo) {
   clon.bloqueada = false;
   clon.entregadaEn = null;
   clon.propositoDefinitiva = null;
-  (cliente.proyectos = cliente.proyectos || []).push(clon);
+  const proyectosFrescos = proyectosFrescosDe(cliente);
+  proyectosFrescos.push(clon);
+  cliente.proyectos = proyectosFrescos;
   guardarCliente(cliente);
   return clon;
 }
@@ -779,16 +809,35 @@ export function crearProyectoDesdeOrigen(cliente, origen, { nombre } = {}) {
 // equivocado, o se decide que en realidad corresponde a otro ya registrado). `proyecto`
 // se recibe completo (no se vuelve a leer de storage) para no perder cambios en
 // memoria que todavia no se hubieran guardado.
+//
+// Bug real, revision sobre el commit f1b08d0 (2026-11-14): esto guardaba PRIMERO el
+// origen SIN la cotizacion, y DESPUES intentaba guardar el destino CON ella -- si el
+// segundo guardado fallaba (ej. cuota de localStorage llena), la cotizacion ya se
+// habia quitado del origen pero nunca llego a existir en el destino: se perdia por
+// completo, sin aviso especifico de esta funcion (aunque el hook global de guardado
+// fallido, clientes.js:alGuardar, si se dispara).
+//
+// Fix: se invierte el orden -- se escribe el DESTINO primero. Si ese guardado falla,
+// se regresa null sin tocar el origen en absoluto (la cotizacion se queda exactamente
+// donde estaba, intacta) -- el call site en app.js ya trata `null` como "no se pudo
+// mover" y lo avisa. Solo si el destino SI se guardo correctamente se intenta quitarla
+// del origen; si ESE segundo paso llegara a fallar, la cotizacion queda duplicada en
+// los dos (visible, recuperable) en vez de perdida -- el peor caso posible pasa de
+// "desaparece" a "aparece de mas", y el aviso global de guardado fallido ya informa
+// que algo no se guardo, para poder reintentar.
 export function moverProyecto(clienteOrigenId, clienteDestinoId, proyecto) {
   if (clienteOrigenId === clienteDestinoId) return obtenerCliente(clienteDestinoId);
   const origen = obtenerCliente(clienteOrigenId);
   const destino = obtenerCliente(clienteDestinoId);
   if (!origen || !destino) return null;
-  origen.proyectos = (origen.proyectos || []).filter(p => p.id !== proyecto.id);
-  guardarCliente(origen);
-  destino.proyectos = destino.proyectos || [];
-  destino.proyectos.push(proyecto);
-  guardarCliente(destino);
+  destino.proyectos = [...(destino.proyectos || []), proyecto];
+  const okDestino = guardarCliente(destino);
+  if (!okDestino) return null; // origen nunca se tocó -- la cotización sigue donde estaba
+  origen.proyectos = (origen.proyectos || []).filter((p) => p.id !== proyecto.id);
+  const okOrigen = guardarCliente(origen);
+  if (!okOrigen) {
+    console.warn(`"${proyecto.nombre}" ya se guardó en el cliente destino, pero no se pudo quitar del cliente origen -- puede aparecer duplicada hasta que se reintente el guardado.`);
+  }
   return destino;
 }
 
