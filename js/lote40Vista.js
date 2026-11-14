@@ -145,23 +145,47 @@ function tarjetaLote40(fila) {
   return div;
 }
 
+// Pedido explicito del usuario, 2026-11-14 (seguimiento): "permite agruparlos por
+// tarifa... para que pueda ver los de una tarifa en especifico y luego cambie a la
+// otra" -- el agrupado por tarifa ya existia (todas las tarifas a la vez, una debajo
+// de otra), pero el usuario queria poder ELEGIR una sola tarifa a la vez y cambiar
+// entre ellas, en vez de desplazarse por las 3 juntas. Selector nuevo
+// "selectTarifaLote40" (mismo patron que "Definitivas por tarifa" en app.js): sus
+// opciones se regeneran cada vez que hay datos nuevos (recuentos por tarifa pueden
+// cambiar si se crea una cotizacion), conservando la seleccion actual si sigue
+// existiendo.
+function poblarSelectorTarifa(grupos) {
+  const select = document.getElementById('selectTarifaLote40');
+  const actual = select.value;
+  select.innerHTML = '<option value="">Todas las tarifas</option>';
+  for (const { tarifa, etiqueta, filas } of grupos) {
+    if (tarifa === null) continue; // "Sin tarifa capturada" no es una opcion elegible -- ya no deberia aparecer nunca (tarifaDelRecibo cubre los 40), pero por si acaso
+    const opt = document.createElement('option');
+    opt.value = tarifa;
+    opt.textContent = `Tarifa ${tarifa} — ${etiqueta} (${filas.length})`;
+    select.append(opt);
+  }
+  if ([...select.options].some((o) => o.value === actual)) select.value = actual;
+}
+
 function renderTabla(filas) {
   const cont = document.getElementById('lote40Tabla');
   cont.innerHTML = '';
-  // Pedido explicito del usuario, 2026-11-14: "en el visor no me lo agrupaste por
-  // tarifa esta todo en uno" -- el agrupado SI estaba funcionando, pero en la
-  // practica casi todos los 40 (los que aun no tienen tarifa leida de un recibo real)
-  // caen en el grupo "Sin tarifa capturada todavia", que al ser el mas grande por
-  // mucho (ej. 37 de 40) dominaba la pantalla y hacia que los 2-3 grupos de tarifa
-  // real, chicos, se sintieran invisibles -- "todo se veia junto" aunque tecnicamente
-  // no lo estuviera. Se vuelve colapsable (cerrado por defecto) SOLO ese grupo
-  // catch-all, para que los grupos de tarifa real salten a la vista de inmediato.
-  for (const { tarifa, etiqueta, filas: filasGrupo } of agruparLote40PorTarifa(filas)) {
+  const grupos = agruparLote40PorTarifa(filas);
+  poblarSelectorTarifa(grupos);
+  const filtroTarifa = document.getElementById('selectTarifaLote40').value;
+  const gruposAMostrar = filtroTarifa ? grupos.filter((g) => g.tarifa === filtroTarifa) : grupos;
+
+  for (const { tarifa, etiqueta, filas: filasGrupo } of gruposAMostrar) {
     const titulo = `${tarifa ? `Tarifa ${tarifa} — ${etiqueta}` : etiqueta} (${filasGrupo.length})`;
     const lista = document.createElement('div');
     lista.className = 'lista-clientes';
     for (const f of filasGrupo) lista.append(tarjetaLote40(f));
 
+    // El grupo catch-all "Sin tarifa capturada todavia" se queda colapsado por
+    // defecto (ver entrada anterior, 2026-11-14) -- pedido explicito del usuario
+    // ("en el visor... esta todo en uno") porque, cuando aparece, suele ser el mas
+    // grande por mucho y tapaba visualmente los grupos de tarifa real.
     if (tarifa === null) {
       const details = document.createElement('details');
       details.className = 'grupo-proyectos grupo-lote40-sin-tarifa';
@@ -219,4 +243,5 @@ function render() {
 
 document.getElementById('btnRefrescarLote40').addEventListener('click', render);
 document.getElementById('btnExportarLote40Csv').addEventListener('click', exportarCsv);
+document.getElementById('selectTarifaLote40').addEventListener('change', () => renderTabla(datosLote40()));
 render();
