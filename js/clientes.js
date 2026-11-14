@@ -360,15 +360,45 @@ export function eliminarPaso(proyecto, idPaso) {
 // `proyecto` que llega, que podria venir ya con `bloqueada` puesto a proposito) --
 // clonarProyectoCongelado() guarda su clon nuevo con guardarCliente() directo, sin
 // pasar por aqui, asi que no hace falta ninguna excepcion para "la primera vez".
+// Bug real reproducido con 2 pestañas abiertas sobre el MISMO cliente, 2026-11-14
+// (auditoría "fallas de uso diario"): antes esta función siempre guardaba
+// `cliente.proyectos` tal cual estaba en la memoria de ESTA pestaña -- si otra
+// pestaña/sesión ya había guardado mientras tanto un cambio a OTRO proyecto
+// HERMANO (uno que esta pestaña nunca tocó), ese cambio se perdía en silencio,
+// pisado por la copia vieja que esta pestaña todavía tenía en memoria desde que
+// cargó al cliente. Reproducido exacto: pestaña 1 edita y guarda el proyecto X,
+// pestaña 2 (abierta desde antes, sin recargar) solo calcula/guarda el proyecto Y
+// -- el guardado de Y en la pestaña 2 revertía a X a su estado de ANTES de que la
+// pestaña 1 lo editara, sin ningún aviso.
+//
+// Fix de raíz: en vez de confiar en `cliente.proyectos` (posible copia vieja),
+// se parte de la lista de proyectos MÁS RECIENTE ya guardada en localStorage y
+// solo se reemplaza/agrega ESTE proyecto -- cualquier otro proyecto hermano que
+// haya cambiado en otro lado desde que esta pestaña cargó al cliente se conserva
+// tal como está guardado, en vez de revertirse. `cliente` sigue siendo el MISMO
+// objeto que ya tenía la pestaña (clienteActual en app.js) -- se actualiza su
+// `.proyectos` en sitio para que quede sincronizado con lo que se va a guardar,
+// sin romper nada que ya dependa de esa misma referencia.
+//
+// Límite conocido, no resuelto aquí (alcance mínimo a propósito): si DOS pestañas
+// editan y guardan el MISMO proyecto casi al mismo tiempo, sigue ganando el último
+// guardado, sin aviso -- evitar eso necesitaría detectar el conflicto y avisar en
+// la interfaz, que es una función nueva aparte, no un fix de pérdida de datos.
+// `crearProyecto`/`eliminarProyecto`/`moverProyecto`/`clonarProyecto*` comparten el
+// mismo riesgo de fondo (tambien parten de `cliente.proyectos` en memoria) -- no se
+// tocaron en este pase, quedan con el mismo riesgo si se editan en paralelo.
 export function guardarProyecto(cliente, proyecto) {
-  const existente = (cliente.proyectos || []).find(p => p.id === proyecto.id);
+  const clienteGuardado = leerTodos().find((c) => c.id === cliente.id);
+  const proyectosFrescos = clienteGuardado ? [...clienteGuardado.proyectos] : [...(cliente.proyectos || [])];
+  const existente = proyectosFrescos.find((p) => p.id === proyecto.id);
   if (existente && existente.bloqueada) {
     console.warn(`Cotización "${proyecto.nombre}" está bloqueada (ya se entregó como definitiva) -- se ignora este intento de modificarla.`);
     return cliente;
   }
   proyecto.actualizadoEn = new Date().toISOString();
-  const i = (cliente.proyectos || []).findIndex(p => p.id === proyecto.id);
-  if (i >= 0) cliente.proyectos[i] = proyecto; else (cliente.proyectos = cliente.proyectos || []).push(proyecto);
+  const i = proyectosFrescos.findIndex((p) => p.id === proyecto.id);
+  if (i >= 0) proyectosFrescos[i] = proyecto; else proyectosFrescos.push(proyecto);
+  cliente.proyectos = proyectosFrescos;
   return guardarCliente(cliente);
 }
 
