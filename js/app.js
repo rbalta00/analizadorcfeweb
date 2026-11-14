@@ -870,11 +870,27 @@ function tarjetaProyecto(p) {
   // 2026-11-12: "nombre del inmueble, el RPU, la tarifa y la fecha de última
   // modificación" para poder encontrar cualquier estudio rapido.
   const rpu = p.formulario?.noServicio ? `<span class="nota">RPU ${escapeHtml(p.formulario.noServicio)}</span>` : '';
+  // Avance por inmueble -- pedido explicito del usuario, 2026-11-14 (auditoria "varios
+  // inmuebles y periodos"): antes la lista no decia, de un vistazo, cuales estudios ya
+  // tenian recibo/calculo (lo INDISPENSABLE) ni cuales traian verificacion en sitio o
+  // sembrado (OPCIONALES segun el alcance -- no todo estudio los necesita). Se
+  // distinguen a proposito con estilos distintos: lo indispensable faltante se marca
+  // en naranja (mismo tono que "Negociando", ya existente) para que llame la atencion;
+  // lo opcional presente se marca neutral (mismo tono que el chip de tarifa).
+  const indicadores = [];
+  if (!p.formulario) {
+    indicadores.push('<span class="chip-etapa chip-etapa-negociando">⚠️ Sin recibo/datos</span>');
+  } else if (p.ultimaInversionTotal == null) {
+    indicadores.push('<span class="chip-etapa chip-etapa-negociando">⚠️ Sin calcular</span>');
+  }
+  if (p.archivosVerificacion && p.archivosVerificacion.length) indicadores.push('<span class="chip-etapa chip-tarifa-proyecto">🔍 Verificación en sitio</span>');
+  if (p.fotoSembrado || p.sembradorAuto) indicadores.push('<span class="chip-etapa chip-tarifa-proyecto">🗺️ Sembrado</span>');
   div.innerHTML = `<div class="tarjeta-cliente-info"><strong>${escapeHtml(p.nombre)}</strong>` +
     chipTarifa + rpu +
     (p.definitiva ? `<span class="chip-definitiva">✅ Definitiva${p.bloqueada ? ' 🔒' : ''}${p.propositoDefinitiva === 'muestra' ? ' 📋 muestra' : ''}</span>` : '') +
     (p.plantillaOrigen && !p.plantillaVerificada ? `<span class="chip-etapa chip-etapa-cotizado">📋 desde plantilla, sin verificar</span>` : '') +
     `<span class="chip-etapa chip-etapa-${etapa}">${ETAPAS_PROYECTO[etapa]}</span>` +
+    indicadores.join('') +
     `<span class="nota">${estado} · actualizado ${new Date(p.actualizadoEn).toLocaleDateString('es-MX')}</span></div>`;
   div.addEventListener('click', () => abrirProyecto(clienteActual.id, p.id));
   const btnBorrar = document.createElement('button');
