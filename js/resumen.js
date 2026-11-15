@@ -70,7 +70,7 @@ export function generarResumenEjecutivo(r) {
   }
 
   return buildPdf(`Resumen ejecutivo · ${r.titular}`, 'GESTORIA Y PROYECTOS SOELRB',
-    'Resumen de apoyo para la presentación — ver la cotización completa de 21 páginas para el detalle.', [pagina]);
+    'Resumen de apoyo para la presentación — ver la estudio completa de 21 páginas para el detalle.', [pagina]);
 }
 
 const GUIA_FILAS = [
@@ -98,7 +98,7 @@ const GUIA_FILAS = [
 
 export function generarGuiaPresentacion() {
   function pagina(doc) {
-    let y = headX(doc, CONTENT_TOP, 'Guía para presentar la cotización (21 páginas)');
+    let y = headX(doc, CONTENT_TOP, 'Guía para presentar la estudio (21 páginas)');
     y = notice(doc, y, 'Empieza SIEMPRE por la página 1: es lo único que le importa a un cliente nuevo (cuánto ' +
       'cuesta, en cuánto se paga, cuánto ahorra). El resto del documento solo respalda esos 3 números si pide más detalle.');
     y = spacer(y, 8);
@@ -115,8 +115,8 @@ export function generarGuiaPresentacion() {
     bodyX(doc, y, '• "¿Esto es definitivo?" -> No: es preliminar, precios y levantamiento en sitio pendientes (pág. 17).');
   }
 
-  return buildPdf('Guía de presentación · Cotizador FV CFE', 'GESTORIA Y PROYECTOS SOELRB',
-    'Guía de apoyo para presentar cualquier cotización — no es específica de un predio.', [pagina]);
+  return buildPdf('Guía de presentación · Analizador FV CFE', 'GESTORIA Y PROYECTOS SOELRB',
+    'Guía de apoyo para presentar cualquier estudio — no es específica de un predio.', [pagina]);
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +132,7 @@ const REQUISITOS_TRAMITE_CFE = [
   ['Croquis de ubicación', 'Mapa de dónde está la instalación. Usa el link de Google Maps de abajo (domicilio del recibo) y toma una captura.'],
   ['Diagrama unifilar', 'Vea la referencia de abajo -- es un punto de partida con los datos YA calculados. El instalador/perito responsable debe firmar la versión final.'],
   ['Copia del recibo CFE pagado', 'O el Registro Móvil de Usuario (RMU) de tu contrato de suministro vigente.'],
-  ['Cumplimiento de Normas Oficiales Mexicanas', 'La instalación eléctrica debe cumplir las NOM aplicables -- lo certifica el instalador, no esta cotización.'],
+  ['Cumplimiento de Normas Oficiales Mexicanas', 'La instalación eléctrica debe cumplir las NOM aplicables -- lo certifica el instalador, no esta estudio.'],
 ];
 
 function cajaDiagrama(doc, x, y, w, h, titulo, subtitulo) {
@@ -183,7 +183,7 @@ export function generarAnexoInterconexion(r) {
     let y = headX(doc, CONTENT_TOP, 'Documentación de apoyo para tu trámite de interconexión con CFE');
     y = notice(doc, y, 'Este anexo es de ORIENTACIÓN para reunir lo que pide CFE -- NO es el diagrama unifilar ' +
       'certificado que CFE exige: ese debe elaborarlo y firmarlo el instalador o perito responsable de la obra, ' +
-      'con los datos finales de la instalación (no los de esta cotización preliminar).');
+      'con los datos finales de la instalación (no los de esta estudio preliminar).');
     y = spacer(y, 8);
     y = subX(doc, y, 'Qué pide CFE para activar el contrato de interconexión');
     y = table(doc, y, ['Documento', 'Qué es / de dónde sale'], REQUISITOS_TRAMITE_CFE,
@@ -205,6 +205,6 @@ export function generarAnexoInterconexion(r) {
     y = spacer(y, 6);
     diagramaUnifilarReferencia(doc, y, r);
   }
-  return buildPdf('Anexo de interconexión CFE · Cotizador FV CFE', `${r.titular || 'Cliente'} — ${r.fechaEstudio}`,
+  return buildPdf('Anexo de interconexión CFE · Analizador FV CFE', `${r.titular || 'Cliente'} — ${r.fechaEstudio}`,
     'Material de orientación -- no sustituye el diagrama firmado por el instalador/perito responsable.', [pagina]);
 }

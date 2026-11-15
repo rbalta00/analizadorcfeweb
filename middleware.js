@@ -16,7 +16,7 @@
 // matcher viejo).
 //
 // Para activarlo: en Vercel > Settings > Environment Variables de ESTE proyecto
-// (cotizador-fv-cfe-web), agrega ADMIN_PASSWORD con la contraseña que quieras (el
+// (analizador-fv-cfe-web), agrega ADMIN_PASSWORD con la contraseña que quieras (el
 // usuario queda fijo como "admin", lo pide el navegador aparte). Mientras esa
 // variable no exista, el middleware NO bloquea nada -- para no dejar el editor
 // inaccesible por un olvido de configuracion -- asi que hasta que se configure,
@@ -36,7 +36,7 @@ export default function middleware(request) {
     return new Response("Acceso restringido", {
       status: 401,
       headers: {
-        "WWW-Authenticate": 'Basic realm="Cotizador FV CFE - Acceso Admin"',
+        "WWW-Authenticate": 'Basic realm="Analizador FV CFE - Acceso Admin"',
       },
     });
   }

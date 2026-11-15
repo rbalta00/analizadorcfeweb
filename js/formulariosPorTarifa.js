@@ -139,7 +139,7 @@ function crearSeccionDomestica(prefijo, { conEscalones }) {
 
   if (conEscalones) {
     sec.append(el('h4', { text: 'Escalones de tu tarifa (si tu recibo los trae impresos)' }));
-    sec.append(el('p', { class: 'nota', text: 'Busca en tu recibo la tabla con los renglones "Básico", "Intermedio" y "Excedente" (los límites de kWh y el precio por kWh de cada uno). Si no la encuentras, déjalo como está -- usaremos valores típicos y los confirmamos contigo antes de la cotización final.' }));
+    sec.append(el('p', { class: 'nota', text: 'Busca en tu recibo la tabla con los renglones "Básico", "Intermedio" y "Excedente" (los límites de kWh y el precio por kWh de cada uno). Si no la encuentras, déjalo como está -- usaremos valores típicos y los confirmamos contigo antes de la estudio final.' }));
     sec.append(el('div', { class: 'fila' }, [
       campoNumero(`${p}basicoKwh`, 'Límite Básico (kWh)', 150, { step: '1' }),
       campoNumero(`${p}basicoRate`, 'Tarifa Básico ($/kWh)', 1.140, { step: '0.001' }),

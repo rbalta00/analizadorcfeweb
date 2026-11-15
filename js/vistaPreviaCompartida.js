@@ -38,7 +38,7 @@ function render(fila) {
   const estado = $('estadoVistaPrevia');
   if (!fila) {
     $('contenedorSecciones').innerHTML = '';
-    estado.textContent = 'Este link ya no está activo, o el vendedor todavía no ha compartido una cotización con él.';
+    estado.textContent = 'Este link ya no está activo, o el vendedor todavía no ha compartido una estudio con él.';
     document.title = 'Vista previa compartida -- sin datos';
     window._vistaPreviaActual = null;
     return;
@@ -47,11 +47,11 @@ function render(fila) {
   const r = construirRDesdeProyecto(proyecto);
   if (!r) {
     $('contenedorSecciones').innerHTML = '';
-    estado.textContent = 'Esta cotización todavía no se ha calculado del lado del vendedor.';
+    estado.textContent = 'Esta estudio todavía no se ha calculado del lado del vendedor.';
     window._vistaPreviaActual = null;
     return;
   }
-  document.title = `Vista previa -- ${fila.cliente_nombre || proyecto.nombre || 'Cotización'}`;
+  document.title = `Vista previa -- ${fila.cliente_nombre || proyecto.nombre || 'Estudio'}`;
   $('tituloVistaPrevia').textContent = `${fila.cliente_nombre || ''} -- ${proyecto.nombre || ''}`;
   $('subtituloVistaPrevia').textContent = `${r.tarifa} · servicio ${r.noServicio || 'por confirmar'} · ${r.n} paneles de ${r.moduloWp} W`;
   estado.textContent = `Última actualización: ${new Date(fila.actualizado_en).toLocaleTimeString('es-MX')}`;
@@ -80,7 +80,7 @@ $('btnRefrescarVistaPrevia').addEventListener('click', () => { ultimoActualizado
 
 $('btnGenerarPdfVistaPrevia').addEventListener('click', async () => {
   const datos = window._vistaPreviaActual;
-  if (!datos) { alert('No hay una cotización calculada que generar.'); return; }
+  if (!datos) { alert('No hay una estudio calculada que generar.'); return; }
   const boton = $('btnGenerarPdfVistaPrevia');
   boton.disabled = true;
   const textoOriginal = boton.textContent;

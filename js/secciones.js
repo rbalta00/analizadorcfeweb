@@ -311,7 +311,7 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   if (cls) e.className = cls;
   e.classList.add('texto-editable');
   e.contentEditable = _bloqueadaActual ? 'false' : 'true';
-  if (_bloqueadaActual) e.title = 'Esta cotización está congelada (ya se entregó como definitiva) -- no se puede editar.';
+  if (_bloqueadaActual) e.title = 'Esta estudio está congelada (ya se entregó como definitiva) -- no se puede editar.';
   e.spellcheck = false;
   e.dataset.textoId = id;
   const tieneProyecto = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
@@ -356,14 +356,14 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   // siguiente quite el foco del campo. YA NO promueve nada a predeterminado global (esa
   // parte se quito el mismo dia -- ver nota arriba en `base`).
   if (_bloqueadaActual) {
-    wrap.append(el('span', 'nota-texto-oculto', '🔒 Cotización congelada -- no editable'));
+    wrap.append(el('span', 'nota-texto-oculto', '🔒 Estudio congelado -- no editable'));
     return wrap;
   }
   const btnGuardar = document.createElement('button');
   btnGuardar.type = 'button';
   btnGuardar.className = 'btn-guardar-texto';
   btnGuardar.textContent = '💾 Guardar';
-  btnGuardar.title = 'Guarda este texto para esta cotización.';
+  btnGuardar.title = 'Guarda este texto para este estudio.';
   btnGuardar.addEventListener('click', () => _onEditarTextoActual(id, e.textContent, base));
   wrap.append(btnGuardar);
   // oculto siempre es false en este punto (el caso oculto=true ya regresó arriba) --
@@ -373,7 +373,7 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   btnOcultar.type = 'button';
   btnOcultar.className = 'btn-ocultar-texto';
   btnOcultar.textContent = '🙈 Apagar';
-  btnOcultar.title = 'Apagar este párrafo -- no aparece en la cotización final.';
+  btnOcultar.title = 'Apagar este párrafo -- no aparece en el estudio final.';
   btnOcultar.addEventListener('click', () => _onOcultarTextoActual(id, true));
   wrap.append(btnOcultar);
   return wrap;
@@ -412,7 +412,7 @@ function textoChico(textoDefecto, idOverride) {
   const span = document.createElement('span');
   span.className = 'texto-editable-chico' + (tieneProyecto ? ' texto-editable-chico-editado' : '');
   span.contentEditable = _bloqueadaActual ? 'false' : 'true';
-  if (_bloqueadaActual) span.title = 'Esta cotización está congelada -- no se puede editar.';
+  if (_bloqueadaActual) span.title = 'Esta estudio está congelada -- no se puede editar.';
   span.spellcheck = false;
   span.dataset.textoId = id;
   span.textContent = tieneProyecto ? _overridesActuales[id] : base;
@@ -431,7 +431,7 @@ function textoChico(textoDefecto, idOverride) {
   btnGuardar.type = 'button';
   btnGuardar.className = 'btn-guardar-texto btn-guardar-texto-chico';
   btnGuardar.textContent = '💾';
-  btnGuardar.title = 'Guarda este texto para esta cotización.';
+  btnGuardar.title = 'Guarda este texto para este estudio.';
   btnGuardar.setAttribute('aria-label', btnGuardar.title);
   btnGuardar.addEventListener('click', (ev) => {
     ev.preventDefault();
@@ -482,7 +482,7 @@ function celdaEditable(id, textoDefecto) {
   span.dataset.textoId = id;
   span.textContent = tieneProyecto ? _overridesActuales[id] : base;
   span.title = _bloqueadaActual
-    ? 'Esta cotización está congelada -- no se puede editar.'
+    ? 'Esta estudio está congelada -- no se puede editar.'
     : tieneProyecto
     ? 'Editado para este cliente -- borra el texto y vuelve a escribir el original para restaurar el de fábrica.'
     : 'Clic para editar esta etiqueta/descripción (los montos y porcentajes calculados no son editables aquí).';
@@ -496,12 +496,15 @@ function celdaEditable(id, textoDefecto) {
   frag.append(span);
   if (_bloqueadaActual) return frag;
   // Boton explicito "💾" -- mismo guardado que el focusout (ver nota en
-  // campoEditableConId, 2026-11-13). Ya NO promueve a predeterminado global.
+  // campoEditableConId, 2026-11-13). Ya NO promueve a predeterminado global. El
+  // apagado de la celda vive en botonOcultarColFila (columna/fila completa, más abajo
+  // en tabla()), no aquí -- "✕" suelto aquí chocaría con el "✕" de ese otro botón que
+  // vive junto a esta misma celda, por eso se usa el icono "💾" en vez de "✓/✕".
   const btnGuardar = document.createElement('button');
   btnGuardar.type = 'button';
   btnGuardar.className = 'btn-guardar-texto btn-guardar-texto-celda';
   btnGuardar.textContent = '💾';
-  btnGuardar.title = 'Guarda este texto para esta cotización.';
+  btnGuardar.title = 'Guarda este texto para este estudio.';
   btnGuardar.setAttribute('aria-label', btnGuardar.title);
   btnGuardar.addEventListener('click', (ev) => {
     ev.preventDefault();
@@ -550,7 +553,7 @@ function botonOcultarColFila(oculto, onClick) {
 // clientes tienen distintas filas presentes, el indice de las filas de ABAJO se corre,
 // y una celda editada en un cliente (ej. renombrar "Subtotal") queda guardada bajo un
 // indice que en otro cliente apunta a una fila distinta. Bug real reportado por el
-// usuario, 2026-11-11 ("todos los textos que edité no salen en la cotización nueva"),
+// usuario, 2026-11-11 ("todos los textos que edité no salen en la estudio nueva"),
 // mismo patron ya corregido para parrafos sueltos (ver commits 9ecd60a/6b712ab) pero
 // aqui aplicado a celdas de tabla. Si no se pasa, el comportamiento es IDENTICO al de
 // siempre (usa el indice `fi`).
@@ -761,7 +764,7 @@ export function seccionesActivasEnOrden(r) {
 // Uso: `sección ${refSeccion(19, r)}` en vez de escribir "sección 19" a mano.
 function refSeccion(numero, r) {
   const pos = seccionesActivasEnOrden(r).indexOf(numero) + 1;
-  return pos > 0 ? String(pos) : '(no incluida en esta cotización)';
+  return pos > 0 ? String(pos) : '(no incluida en esta estudio)';
 }
 
 // Toggle INDIVIDUAL por seccion (no por bloque completo) -- pedido explicito del
@@ -785,7 +788,7 @@ function toggleSeccionIndividual(r, numero, onToggle) {
   input.disabled = bloque === 'resumen';
   input.addEventListener('change', () => onToggle(numero, input.checked));
   wrap.append(input, document.createTextNode(
-    bloque === 'resumen' ? ' Siempre incluida' : ' Incluir esta sección en la cotización final (pantalla y PDF)'));
+    bloque === 'resumen' ? ' Siempre incluida' : ' Incluir esta sección en la estudio final (pantalla y PDF)'));
   return wrap;
 }
 
@@ -822,7 +825,7 @@ function bloqueCalculo(numero, nodoOArray, r) {
   const textoHermanas = hermanas.length
     ? ` (aplica también a ${hermanas.length > 1 ? 'las secciones' : 'la sección'} ${hermanas.map(n => refSeccion(n, r)).join(' y ')})`
     : '';
-  wrap.append(input, document.createTextNode(` Incluir este detalle en la cotización final (pantalla)${textoHermanas}`));
+  wrap.append(input, document.createTextNode(` Incluir este detalle en la estudio final (pantalla)${textoHermanas}`));
   header.append(wrap);
   cont.append(header);
   // Pedido explicito del usuario, 2026-11-14: "se siguen viendo los elementos apagados
@@ -897,7 +900,7 @@ function s01(r, _leido, onToggle) {
     // BUG REAL encontrado y corregido 2026-11-11: este parrafo (y el avisoCream de mas
     // abajo, dentro de este mismo "if (ev)") usaban p()/avisoCream(), que consumen
     // siguienteTextoId() -- un contador SECUENCIAL. Como este bloque entero SOLO se
-    // ejecuta cuando hay escenario verificado, el parrafo "Esta cotización es válida
+    // ejecuta cuando hay escenario verificado, el parrafo "Esta estudio es válida
     // hasta..." (unas lineas mas abajo, fuera de este if) tenia un id DISTINTO segun si
     // esta cotizacion tenia o no verificacion en sitio (s1-t2 sin verificacion, s1-t4
     // con ella) -- el mismo reporte real del usuario: "el texto del N13... dice [texto
@@ -947,8 +950,8 @@ function s01(r, _leido, onToggle) {
   // Pedido explicito del usuario, 2026-11-10: este aviso (el №13 del editor en la
   // seccion 1 con verificacion en sitio) va con el MISMO tamaño y tipo de letra que el
   // titulo de la seccion (№1) -- clase 'letra-titulo' (styles.css + propuestaDom.js).
-  art.append(textoEditable('div', 'aviso-cream letra-titulo', `Esta cotización es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días). Los ` +
-    'precios de materiales son una provisión de mercado, no una cotización fija de proveedor -- después de esa ' +
+  art.append(textoEditable('div', 'aviso-cream letra-titulo', `Esta estudio es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días). Los ` +
+    'precios de materiales son una provisión de mercado, no una estudio fija de proveedor -- después de esa ' +
     'fecha hay que revisarlos antes de confirmar.'));
   art.append(graficoToggle('g01-tarjetas-principales', 'Tarjetas: inversión, recuperación y ahorro año 1', tarjetas([
     [M(r.investment), 'Lo que cuesta el sistema, IVA incluido'],
@@ -1050,7 +1053,7 @@ function s02(r, leido, onToggle) {
         ['Cargos (Suministro, Distribución, Energía, Capacidad, etc.)', `Se lee la tabla de desglose de cargos del recibo, identificando cada concepto por su nombre impreso y tomando el importe de la columna de total de esa fila (ver sección ${refSeccion(3, r)} para la fórmula que arma el pago con estos mismos importes).`],
         ['Columna "$/kW" (decide si hay demanda contratada)', leido.rate_kw_via_ocr != null
           ? (leido.rate_kw_via_ocr ? 'Detectada por OCR -- se recomienda confirmarla a simple vista contra el PDF antes de ofertar en firme.' : 'Detectada leyendo el texto nativo del PDF directamente.')
-          : 'Capturada a mano por quien armó la cotización, revisando el recibo impreso.'],
+          : 'Capturada a mano por quien armó la estudio, revisando el recibo impreso.'],
         ['Historial de consumo (si el recibo lo trae)', `Se lee la tabla de histórico de consumo que algunos recibos de CFE traen impresa, mes por mes -- se usa para promediar el consumo base en vez de extrapolar un solo período (ver sección ${refSeccion(5, r)}).`],
       ], { small: true, textCols: [1], id: 'g02-calc-trazabilidad' })),
       avisoCream(`Cualquier dato que la lectura automática no haya podido encontrar se deja marcado para captura ` +
@@ -1145,7 +1148,7 @@ function s22(r, _leido, onToggle) {
     art.append(grid);
   } else {
     art.append(badgeEstado('pendiente'));
-    art.append(p('Aún no se adjuntó el recibo original a esta cotización. Para adjuntarlo: abre este proyecto, ' +
+    art.append(p('Aún no se adjuntó el recibo original a esta estudio. Para adjuntarlo: abre este proyecto, ' +
       'sube el PDF o la foto del recibo con "Adjuntar archivo(s) del recibo" (arriba, en la captura de datos), y ' +
       'aparecerá aquí.'));
   }
@@ -1181,7 +1184,7 @@ function s23(r, _leido, onToggle) {
     }
   } else {
     art.append(badgeEstado('pendiente'));
-    art.append(p('Aún no se adjuntó el documento de "Verificación en sitio" del gobierno a esta cotización. Para ' +
+    art.append(p('Aún no se adjuntó el documento de "Verificación en sitio" del gobierno a esta estudio. Para ' +
       'adjuntarlo: abre este proyecto, sube el PDF o la foto en "1b. Verificación en sitio" (en la captura de ' +
       'datos), y aparecerá aquí.'));
   }
@@ -2030,7 +2033,7 @@ function s12(r, _leido, onToggle) {
     'de adquisición, contingencia y margen comercial se reparten de forma proporcional dentro del precio de cada ' +
     'partida — no se exponen como un renglón de utilidad aparte en este documento para el cliente.')));
   art.append(avisoCream('Las capacidades, longitudes y accesorios son provisiones. El modelo de inversor, ' +
-    'calibres y cantidades finales se ajustarán mediante ingeniería y cotización vigente antes de contratar.'));
+    'calibres y cantidades finales se ajustarán mediante ingeniería y estudio vigente antes de contratar.'));
   return art;
 }
 
@@ -2205,7 +2208,7 @@ function s16(r, _leido, onToggle) {
 function s17(r, leido, onToggle) {
   const art = crearSeccion(21, 'Qué hace falta para cerrar el ahorro', '¿Qué pendientes hay antes de ofertar en firme?', r, onToggle);
   art.append(badgeEstado('pendiente'));
-  art.append(p('Esta cotización se calculó únicamente con la información del recibo de CFE que se cargó o ' +
+  art.append(p('Esta estudio se calculó únicamente con la información del recibo de CFE que se cargó o ' +
     'capturó — sin importar si ese recibo venía completo o no, esto SIEMPRE hace falta confirmar antes de ' +
     'poder ofrecer un presupuesto real y firme de este servicio:'));
   art.append(graficoToggle('g21-pendientes', 'Tabla de pendientes para un presupuesto real', tabla(['Pendiente para un presupuesto real'], REQUISITOS_PRESUPUESTO_REAL.map(x => [x]), { small: true, id: 'g21-pendientes' })));
