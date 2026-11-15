@@ -288,6 +288,25 @@ function subtituloChico(numero, clave, textoDefecto) {
 function campoEditableConId(tag, cls, textoDefecto, id) {
   const oculto = !!_ocultosActuales[id];
   const wrap = el('div', 'campo-editable' + (oculto ? ' campo-oculto' : ''));
+  // Pedido explicito del usuario, 2026-11-14: "se siguen viendo los elementos apagados
+  // que ya no se van a utilizar" -- antes, un parrafo/titulo apagado seguia mostrando su
+  // texto completo (solo atenuado con CSS). Ahora, apagado, NO se construye el texto en
+  // absoluto -- solo un renglon compacto con el boton para reactivarlo (unica excepcion:
+  // cotizacion congelada, donde no hay boton de reactivar porque esta todo bloqueado).
+  if (oculto) {
+    if (_bloqueadaActual) {
+      wrap.append(el('span', 'nota-texto-oculto', '🙈 Texto apagado (cotización congelada -- no se puede reactivar desde aquí)'));
+      return wrap;
+    }
+    const btnMostrar = document.createElement('button');
+    btnMostrar.type = 'button';
+    btnMostrar.className = 'btn-ocultar-texto';
+    btnMostrar.textContent = '👁 Mostrar este texto (apagado)';
+    btnMostrar.title = 'Este texto está apagado -- no aparece en la cotización final. Clic para mostrarlo de nuevo.';
+    btnMostrar.addEventListener('click', () => _onOcultarTextoActual(id, false));
+    wrap.append(btnMostrar);
+    return wrap;
+  }
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   e.classList.add('texto-editable');
@@ -338,7 +357,6 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   // parte se quito el mismo dia -- ver nota arriba en `base`).
   if (_bloqueadaActual) {
     wrap.append(el('span', 'nota-texto-oculto', '🔒 Cotización congelada -- no editable'));
-    if (oculto) wrap.append(el('span', 'nota-texto-oculto', 'Apagado -- no aparece en la cotización final'));
     return wrap;
   }
   const btnGuardar = document.createElement('button');
@@ -348,14 +366,16 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   btnGuardar.title = 'Guarda este texto para esta cotización.';
   btnGuardar.addEventListener('click', () => _onEditarTextoActual(id, e.textContent, base));
   wrap.append(btnGuardar);
+  // oculto siempre es false en este punto (el caso oculto=true ya regresó arriba) --
+  // este boton siempre apaga, nunca muestra (ese camino lo cubre el renglon compacto
+  // de arriba).
   const btnOcultar = document.createElement('button');
   btnOcultar.type = 'button';
   btnOcultar.className = 'btn-ocultar-texto';
-  btnOcultar.textContent = oculto ? '👁 Mostrar' : '🙈 Apagar';
-  btnOcultar.title = oculto ? 'Mostrar este párrafo de nuevo.' : 'Apagar este párrafo -- no aparece en la cotización final.';
-  btnOcultar.addEventListener('click', () => _onOcultarTextoActual(id, !oculto));
+  btnOcultar.textContent = '🙈 Apagar';
+  btnOcultar.title = 'Apagar este párrafo -- no aparece en la cotización final.';
+  btnOcultar.addEventListener('click', () => _onOcultarTextoActual(id, true));
   wrap.append(btnOcultar);
-  if (oculto) wrap.append(el('span', 'nota-texto-oculto', 'Apagado -- no aparece en la cotización final'));
   return wrap;
 }
 
@@ -651,16 +671,20 @@ function graficoToggle(id, etiqueta, nodo, { notaAlternativa } = {}) {
   input.addEventListener('change', () => _onToggleGraficoActual(id, input.checked));
   wrap.append(input, document.createTextNode(` Mostrar: ${etiqueta}`));
   cont.append(wrap);
+  // Pedido explicito del usuario, 2026-11-14: "se siguen viendo los elementos apagados
+  // que ya no se van a utilizar" -- antes, apagada esta grafica/tabla, el contenido
+  // real NUNCA se quitaba del DOM (solo se atenuaba con CSS, decision explicita del
+  // 2026-11-05) -- ahora, apagada, no se construye/agrega el contenido en absoluto.
+  // Solo queda el checkbox "Mostrar: X" (sin marcar), que ya es el control para
+  // reactivarla -- nada de nota aparte ni nota-alternativa, para no dejar ningun hueco.
+  if (excluido) return cont;
   // id estable derivado del propio id del grafico (no siguienteTextoId()) -- esta nota
   // es condicional (algunas llamadas la traen, otras no, a veces segun datos del
   // cliente), asi que un contador secuencial se hubiera desfasado entre renders
   // distintos. Hueco real encontrado en el barrido final de 2026-11-05 continuacion 9.
   if (notaAlternativa) cont.append(campoEditableConId('p', 'nota-grafico-alternativo', notaAlternativa, `${id}-nota-alt`));
-  if (excluido) cont.append(el('p', 'nota', '🚫 Apagado -- no se incluirá en el PDF ni en lo que vería el cliente. Se sigue mostrando aquí, atenuado, solo como referencia para ti.'));
   // nodo puede ser un solo elemento o un arreglo (ej. g02-datos-recibo agrupa 2
   // tablas bajo un solo toggle) -- mismo patron que bloqueCalculo()/detalle().
-  // Se agrega SIEMPRE, este apagado o no -- la clase .grafico-apagado (CSS) es la
-  // que lo atenua visualmente, el contenido real nunca se quita del DOM.
   for (const n of Array.isArray(nodo) ? nodo : [nodo]) cont.append(n);
   return cont;
 }
@@ -801,7 +825,12 @@ function bloqueCalculo(numero, nodoOArray, r) {
   wrap.append(input, document.createTextNode(` Incluir este detalle en la cotización final (pantalla)${textoHermanas}`));
   header.append(wrap);
   cont.append(header);
-  if (!activo) cont.append(el('p', 'nota', 'Apagado: no se incluirá al generar la cotización para este cliente.'));
+  // Pedido explicito del usuario, 2026-11-14: "se siguen viendo los elementos apagados
+  // que ya no se van a utilizar" -- antes, apagado este bloque SOLO se atenuaba con CSS
+  // (calculo-detalle-apagado) pero el contenido completo (cuerpo) seguia en el DOM,
+  // ocupando espacio. Ahora, apagado, NO se construye/agrega el cuerpo en absoluto --
+  // solo queda el encabezado (titulo + checkbox), que ya es el control para reactivarlo.
+  if (!activo) return cont;
   const cuerpo = el('div', 'calculo-detalle-cuerpo');
   for (const n of Array.isArray(nodoOArray) ? nodoOArray : [nodoOArray]) cuerpo.append(n);
   cont.append(cuerpo);
