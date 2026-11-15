@@ -2959,6 +2959,14 @@ function calcularYRenderizar() {
   r.textosOcultos = proyectoActual.textosOcultos || {};
   r.fotoSembrado = proyectoActual.fotoSembrado || null;
   r.fotosInmueble = proyectoActual.fotosInmueble || [];
+  // Pedido explicito del usuario, 2026-11-14 (auditoria metodologica): "paneles y
+  // potencia deben coincidir en resumen, tablas, texto Y SEMBRADO" -- antes nada
+  // comparaba r.n (calculado por consumo, puede cambiar si se recalcula con otro
+  // historial/cobertura) contra sembradorAuto.paneles.length (snapshot congelado de
+  // la ULTIMA vez que se sembraron paneles, ver btnSembrarAuto). Si se recalcula
+  // despues de haber sembrado, el sembrado puede quedar desactualizado en silencio --
+  // se expone aqui para que secciones.js pueda avisarlo (ver s06).
+  r.sembradorAuto = proyectoActual.sembradorAuto || null;
   r.archivosRecibo = proyectoActual.archivosRecibo || null;
   r.archivosVerificacion = proyectoActual.archivosVerificacion || null;
   r.seccionesPersonalizadas = proyectoActual.seccionesPersonalizadas || [];

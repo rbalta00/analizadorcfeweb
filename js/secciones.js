@@ -1274,7 +1274,14 @@ function s25(r, _leido, onToggle) {
       conclusion += ` Los ${dif} paneles adicionales cuestan ${M(difInv)} y solo agregan ${M(Math.max(difAh, 0))} de ahorro al año` +
         (anosExtra ? ` (se pagarían solos en ${anosExtra.toFixed(1)} años)` : ' (no se pagarían solos)') +
         `: con los ${r.n} paneles calculados el ahorro ya está cerca de su máximo posible para este recibo, porque lo que queda por pagar ` +
-        `es sobre todo la parte que ningún panel reduce (cargos fijos/por demanda y alumbrado público, ver sección ${refSeccion(4, r)}).`;
+        // Hallazgo real de la auditoria metodologica de 2026-11-14: esta frase decia
+        // "ningun panel reduce" como si fuera una ley fisica universal -- la razon real
+        // (ver seccion 4) es una decision METODOLOGICA prudente (no se acredita ahorro de
+        // demanda sin medir la demanda real despues de instalar, criterio CRE RES/142/2017
+        // Anexo I), no una imposibilidad fisica. Se reformula para que coincida con el
+        // mismo matiz que ya tenia la seccion 4, sin perder la referencia cruzada.
+        `es sobre todo la parte que este estudio NO acredita como reducible con paneles bajo su criterio prudente ` +
+        `(cargos fijos/por demanda y alumbrado público -- ver sección ${refSeccion(4, r)} para la razón metodológica).`;
     }
     conclusion += ' La verificación en campo suele basarse en el espacio disponible observado en sitio, no necesariamente en el consumo exacto -- ' +
       'conviene presentarle al cliente las dos referencias antes de decidir el tamaño final.';
@@ -1675,6 +1682,20 @@ function s06(r, _leido, onToggle) {
     img.className = 'seccion-img-sembrado';
     art.append(img);
     art.append(badgeEstado('declarado'));
+    // Pedido explicito del usuario, 2026-11-14 (auditoria metodologica -- "paneles y
+    // potencia deben coincidir en resumen, tablas, texto Y SEMBRADO"): antes nada
+    // comparaba el numero de paneles CALCULADO (r.n, puede cambiar si se recalcula con
+    // otro historial/cobertura despues de haber sembrado) contra los paneles que de
+    // verdad quedaron dibujados en esta imagen (sembradorAuto.paneles.length, un
+    // snapshot congelado desde "③ Sembrar paneles"). Sin este aviso, un recalculo
+    // posterior podia dejar el sembrado desactualizado sin que se notara.
+    const panelesSembrados = r.sembradorAuto && Array.isArray(r.sembradorAuto.paneles) ? r.sembradorAuto.paneles.length : null;
+    if (panelesSembrados != null && panelesSembrados !== r.n) {
+      art.append(avisoCream(`⚠️ Este sembrado tiene ${panelesSembrados} panel(es) dibujado(s), pero el cálculo ` +
+        `actual propone ${r.n} -- probablemente se recalculó (otro consumo, cobertura o historial) después de ` +
+        'sembrar. Vuelve a usar "③ Sembrar paneles" (pestaña Datos y recibo) para que la imagen coincida con el ' +
+        'número vigente, o confirma cuál de los dos quieres mostrarle al cliente.'));
+    }
   }
 
   // --- Condiciones actuales del inmueble (dato nuevo que no tenia un lugar en las 21
