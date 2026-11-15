@@ -253,6 +253,21 @@ export function crearProyecto(cliente, { nombre } = {}) {
       completo: { nombre: 'Análisis completo', seccionesExcluidas: [], graficosExcluidos: [], tablaColumnasOcultas: {}, tablaFilasOcultas: {} },
     },
     pasoActivo: 'completo',
+    // seccionesPersonalizadas: "Agregar sección o texto" -- pedido explicito del
+    // usuario, 2026-11-14 (refuerzo "Cotizador por machote"): poder ampliar el estudio
+    // con contenido libre que no vive en ninguna de las 25 secciones fijas (numeradas,
+    // con su propio calculo/orden/referencias cruzadas -- ver TITULOS_SECCIONES en
+    // secciones.js). En vez de meter esto en esa maquinaria numerica (arriesgaria
+    // romper ordenSecciones/refSeccion/el paginado del PDF, todo ya validado), es un
+    // arreglo APARTE, mas simple: cada entrada es solo {id, titulo, texto, activa}, se
+    // renderiza DESPUES de las 25 fijas con la MISMA clase .seccion (para que
+    // generarPdfCompletaDesdeVista/vistaPreviaComun la incluyan gratis, por construccion
+    // genericamente igual que cualquier otra) pero con un id no numerico
+    // (seccion-custom-<uuid>) -- nunca colisiona con 1..25 ni con los casos especiales
+    // 17/18 de propuesta.js (Number(id) da NaN, nunca === 17/18). Se copia completo al
+    // aplicar un machote (ver CAMPOS_EDITORIAL_MACHOTE mas abajo) para que una seccion
+    // personalizada agregada al machote tambien aparezca en los estudios nuevos.
+    seccionesPersonalizadas: [],
   };
   proyectosFrescos.push(proyecto);
   cliente.proyectos = proyectosFrescos;
@@ -668,7 +683,35 @@ export function clonarProyectoEditable(cliente, proyecto, nombreNuevo) {
 export const CAMPOS_EDITORIAL_MACHOTE = [
   'textosEditados', 'textosOcultos', 'seccionesExcluidas', 'graficosExcluidos',
   'calculosActivos', 'tablaColumnasOcultas', 'tablaFilasOcultas', 'ordenSecciones',
+  'seccionesPersonalizadas',
 ];
+
+// ---------------- "Agregar sección o texto" (secciones personalizadas) ----------------
+// Pedido explicito del usuario, 2026-11-14. Ver el comentario del campo en
+// crearProyecto() (arriba) para el porque de ser un arreglo aparte en vez de sumarse a
+// las 25 secciones fijas. `activa` sigue el MISMO patron visual/de exportacion que
+// seccionesExcluidas (nunca se borra al apagar, solo deja de incluirse en PDF/Excel) --
+// pero a diferencia de esas, aqui SI se quita del DOM igual que una seccion fija apagada
+// (ver renderSeccionesPersonalizadas en app.js), nunca "difuminada".
+export function agregarSeccionPersonalizada(proyecto, { titulo, texto } = {}) {
+  if (!Array.isArray(proyecto.seccionesPersonalizadas)) proyecto.seccionesPersonalizadas = [];
+  const sp = { id: uuid(), titulo: (titulo || 'Sección nueva').trim(), texto: (texto || '').trim(), activa: true };
+  proyecto.seccionesPersonalizadas.push(sp);
+  return sp;
+}
+
+export function actualizarSeccionPersonalizada(proyecto, id, cambios) {
+  const sp = (proyecto.seccionesPersonalizadas || []).find((s) => s.id === id);
+  if (!sp) return null;
+  if (typeof cambios.titulo === 'string') sp.titulo = cambios.titulo;
+  if (typeof cambios.texto === 'string') sp.texto = cambios.texto;
+  if (typeof cambios.activa === 'boolean') sp.activa = cambios.activa;
+  return sp;
+}
+
+export function eliminarSeccionPersonalizada(proyecto, id) {
+  proyecto.seccionesPersonalizadas = (proyecto.seccionesPersonalizadas || []).filter((s) => s.id !== id);
+}
 // Bug real reportado por el usuario, 2026-11-12 (caso ITS de Acatlán): tras aplicar un
 // machote y cargar el recibo del servicio nuevo, el parrafo "S1.1" (titular · domicilio,
 // primer parrafo de la seccion 1) seguia mostrando la direccion del MACHOTE, no la del
@@ -751,6 +794,12 @@ export function aplicarMachoteAProyecto(proyecto, origen) {
       continue;
     }
     proyecto[campo] = JSON.parse(JSON.stringify(origenProyecto[campo]));
+    // Ids nuevos para las secciones personalizadas copiadas del machote -- evita que
+    // dos estudios distintos (este nuevo y el origen) compartan el mismo id de sección
+    // personalizada, aunque en la practica nunca se renderizan a la vez en esta SPA.
+    if (campo === 'seccionesPersonalizadas' && Array.isArray(proyecto.seccionesPersonalizadas)) {
+      proyecto.seccionesPersonalizadas = proyecto.seccionesPersonalizadas.map((sp) => ({ ...sp, id: uuid() }));
+    }
   }
   if (origenProyecto.pasos) {
     proyecto.pasos = JSON.parse(JSON.stringify(origenProyecto.pasos));

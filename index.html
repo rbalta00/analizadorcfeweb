@@ -381,6 +381,20 @@
       <div id="plantillasLista" class="indice-lista"></div>
     </nav>
 
+    <!-- "Agregar sección o texto" -- pedido explicito del usuario, 2026-11-14 (refuerzo
+         "Cotizador por machote"): ampliar el estudio con contenido libre que no vive en
+         ninguna de las 25 secciones fijas. Se edita SOLO aqui (titulo/texto) -- lo que
+         se ve dentro de #contenedorSecciones, mas abajo, es de solo lectura (el mismo
+         texto ya guardado) para no duplicar un segundo lugar de edicion. -->
+    <section class="tarjeta" id="seccionesPersonalizadasPanel">
+      <h3>➕ Secciones y textos agregados</h3>
+      <p class="nota">Amplía el estudio con una sección libre (texto que no pertenece a ninguna de las 25 secciones
+        fijas). Mientras esté activa se incluye en el editor, el PDF y el Excel igual que cualquier otra sección --
+        apagada, desaparece de los tres sin borrarse (puedes reactivarla aquí mismo).</p>
+      <div id="listaSeccionesPersonalizadas"></div>
+      <button type="button" id="btnAgregarSeccionPersonalizada" class="btn-secundario">➕ Agregar sección o texto</button>
+    </section>
+
     <section class="tarjeta" id="barraPasosEntrega">
       <h3>📑 Paso de entrega de esta cotización</h3>
       <p class="nota">Elige qué tanto vas a mostrar/entregar ahora -- todos los pasos comparten exactamente los

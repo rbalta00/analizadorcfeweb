@@ -2308,6 +2308,19 @@ export function renderSeccion(numero, r, leido, onToggle, onEditarTexto, onToggl
   _filasOcultasActual = r.tablaFilasOcultas || {};
   _onToggleColumnaActual = onToggleColumna || (() => {});
   _onToggleFilaActual = onToggleFila || (() => {});
+  // Pedido explicito del usuario, 2026-11-14 (refuerzo "Cotizador por machote"): una
+  // seccion apagada (individual, por bloque, o sin datos todavia) ya NO se construye
+  // en absoluto -- antes crearSeccion() SIEMPRE armaba el <article> completo (titulo,
+  // pregunta, checkbox, nota "🚫 Apagada") y solo lo atenuaba con CSS (vista admin de
+  // lo apagado, 2026-11-05). El usuario reporto que un machote con una seccion apagada
+  // seguia mostrando ese hueco difuminado en el editor de la cotizacion nueva -- pedido
+  // explicito ahora: que no aparezca "difuminada, colapsada ni como un hueco", osea
+  // ausente de verdad. El control para volver a prenderla sigue intacto en el indice de
+  // secciones (renderIndice en app.js), que lista las 25 por numero/titulo
+  // independientemente de que exista o no su <article> en #contenedorSecciones -- no se
+  // pierde ninguna forma de reactivarla.
+  const activos = seccionesActivasEnOrden(r);
+  if (activos.indexOf(numero) + 1 <= 0) return null;
   const fn = RENDERERS[numero - 1];
   return fn(r, leido, onToggle);
 }

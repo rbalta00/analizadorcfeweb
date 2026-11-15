@@ -11,6 +11,7 @@ import {
   proyectosParaVerificarMachote, marcarMachotePredeterminado, crearBorradorMachote, obtenerOCrearClienteMachotes,
   asegurarPasos, sincronizarPasoActivoDesdeFlat, aplicarPaso, crearPasoDesdeActual, renombrarPaso, eliminarPaso,
   textoContieneIdentidadDe,
+  agregarSeccionPersonalizada, actualizarSeccionPersonalizada, eliminarSeccionPersonalizada,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo, detectarCamposDinamicosConvertibles } from './secciones.js';
 import { TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
@@ -1256,13 +1257,25 @@ function renderListaMachotes() {
 // seguir editando el proyecto de origen nunca altera la version ya verificada (para
 // actualizarla hay que volver a verificar a proposito, lo que crea una version NUEVA).
 function machotesVerificadosDeTarifa(tarifa) {
+  return todosLosMachotesVerificados().filter((f) => f.tarifa === tarifa);
+}
+
+// Pedido explicito del usuario, 2026-11-14 (refuerzo "Cotizador por machote"): "permite
+// usar cualquier machote como referencia de presentacion para un estudio de cualquier
+// tarifa" -- un machote SOLO aporta estructura/orden/textos/apagados (ver
+// CAMPOS_EDITORIAL_MACHOTE en clientes.js, aplicarMachoteAProyecto NUNCA toca tarifa/
+// cargos/escalones del estudio nuevo), asi que no hay ninguna razon tecnica para
+// restringir su uso a estudios de SU MISMA tarifa. Devuelve TODOS los machotes
+// verificados de cualquier tarifa, cada uno con su propia `tarifa` adjunta (para poder
+// mostrarla como referencia al elegir uno de otra tarifa).
+function todosLosMachotesVerificados() {
   const filas = [];
   for (const c of listarClientes()) {
     for (const p of (c.proyectos || [])) {
       const t = p.tarifaMachote || p.formulario?.tarifa;
-      if (t !== tarifa) continue;
+      if (!t) continue;
       if (!(p.propositoDefinitiva === 'muestra' && p.bloqueada)) continue;
-      filas.push({ cliente: c, proyecto: p });
+      filas.push({ cliente: c, proyecto: p, tarifa: t });
     }
   }
   return filas.sort((a, b) => {
@@ -1327,6 +1340,7 @@ let tarifaMachoteSeleccionada = null;
 function renderBotonesTarifaMachote() {
   const cont = $('botonesTarifaMachote');
   cont.innerHTML = '';
+  const hayAlgunMachote = todosLosMachotesVerificados().length > 0;
   for (const tarifa of ORDEN_TARIFAS) {
     const verificados = machotesVerificadosDeTarifa(tarifa);
     const habilitado = verificados.length > 0;
@@ -1334,10 +1348,20 @@ function renderBotonesTarifaMachote() {
     const div = document.createElement('div');
     div.className = 'tarjeta-cliente';
     div.style.cursor = 'pointer';
-    div.innerHTML = `<strong>${tarifa}</strong> <span class="nota">${ETIQUETAS_TARIFA[tarifa] || ''}</span>` +
-      (habilitado
-        ? `<div class="nota ok">✅ Machote verificado: ${escapeHtml(predeterminado.proyecto.nombre)}${verificados.length > 1 ? ` (+${verificados.length - 1} más disponibles)` : ''}</div>`
-        : '<div class="nota aviso">⚠️ Machote pendiente de verificar</div>');
+    let estado;
+    if (habilitado) {
+      estado = `<div class="nota ok">✅ Machote propio: ${escapeHtml(predeterminado.proyecto.nombre)}${verificados.length > 1 ? ` (+${verificados.length - 1} más disponibles)` : ''}</div>`;
+    } else if (hayAlgunMachote) {
+      // Pedido explicito del usuario, 2026-11-14: "permite usar cualquier machote como
+      // referencia de presentacion para un estudio de cualquier tarifa" -- no hace
+      // falta tener UN machote propio de esta tarifa para poder crear un estudio aqui,
+      // cualquier machote verificado de otra tarifa sirve de referencia editorial (ver
+      // renderPanelCrearDesdeMachote).
+      estado = '<div class="nota">🔁 Sin machote propio todavía -- puedes usar uno de otra tarifa como referencia</div>';
+    } else {
+      estado = '<div class="nota aviso">⚠️ Todavía no hay ningún machote verificado</div>';
+    }
+    div.innerHTML = `<strong>${tarifa}</strong> <span class="nota">${ETIQUETAS_TARIFA[tarifa] || ''}</span>` + estado;
     div.addEventListener('click', () => seleccionarTarifaMachote(tarifa));
     cont.append(div);
   }
@@ -1345,28 +1369,51 @@ function renderBotonesTarifaMachote() {
 
 function seleccionarTarifaMachote(tarifa) {
   tarifaMachoteSeleccionada = tarifa;
-  if (machotesVerificadosDeTarifa(tarifa).length) renderPanelCrearDesdeMachote(tarifa);
+  if (todosLosMachotesVerificados().length) renderPanelCrearDesdeMachote(tarifa);
   else renderPanelVerificarMachote(tarifa);
 }
 
-// Panel cuando la tarifa YA tiene al menos un machote verificado: elegir cual usar
-// (el predeterminado ⭐ ya viene pre-seleccionado) y crear el estudio nuevo.
+// Panel para crear un estudio nuevo de `tarifa` -- pedido explicito del usuario,
+// 2026-11-14: "permite usar cualquier machote como referencia de presentacion para un
+// estudio de cualquier tarifa que el cotizador tenga implementada". Ya NO exige que
+// `tarifa` tenga su PROPIO machote verificado -- aplicarMachoteAProyecto() (clientes.js)
+// solo copia campos EDITORIALES (textos/orden/apagados/secciones personalizadas, ver
+// CAMPOS_EDITORIAL_MACHOTE) y nunca toca tarifa/cargos/escalones, asi que un machote de
+// OTRA tarifa sirve igual de bien como punto de partida de presentacion -- el calculo
+// real de este estudio sigue saliendo 100% del recibo/RPU que se capture aqui, nunca
+// del machote. Los propios de esta tarifa se listan primero (y predeterminado ⭐ sigue
+// preseleccionado entre esos); los de otras tarifas se listan despues, marcados con de
+// qué tarifa vienen, para que quede claro que son solo referencia de presentacion.
 function renderPanelCrearDesdeMachote(tarifa) {
   const panel = $('panelTarifaMachoteSeleccionada');
   panel.innerHTML = '';
-  const verificados = machotesVerificadosDeTarifa(tarifa);
+  const propios = machotesVerificadosDeTarifa(tarifa);
+  const otros = todosLosMachotesVerificados().filter((f) => f.tarifa !== tarifa);
+  const verificados = [...propios, ...otros];
   panel.append(Object.assign(document.createElement('h3'), { textContent: `Tarifa ${tarifa} — ${ETIQUETAS_TARIFA[tarifa] || ''}` }));
   panel.append(Object.assign(document.createElement('p'), {
     className: 'nota',
-    textContent: 'Elige qué machote verificado usar (el predeterminado ⭐ ya viene marcado). El estudio nuevo arranca con su estructura/textos/visibilidad -- el RPU, el recibo, el consumo, la demanda, la verificación en sitio, el sembrado y los resultados siempre arrancan vacíos y se capturan/calculan aparte, con los datos reales de este servicio.',
+    textContent: 'Elige qué machote usar como referencia de presentación (el predeterminado ⭐ de esta tarifa, si ' +
+      'existe, ya viene marcado). El estudio nuevo arranca con su estructura/textos/visibilidad -- el RPU, el ' +
+      'recibo, el consumo, la demanda, la verificación en sitio, el sembrado y los resultados siempre arrancan ' +
+      `vacíos y se calculan aparte, SIEMPRE con la tarifa ${tarifa} real de este servicio (nunca con la del machote ` +
+      'elegido, aunque sea de otra tarifa).',
   }));
+  if (!propios.length && otros.length) {
+    panel.append(Object.assign(document.createElement('p'), {
+      className: 'nota aviso',
+      textContent: `Todavía no tienes un machote propio verificado de ${tarifa} -- cualquiera de los de abajo (de ` +
+        'otra tarifa) sirve igual como referencia de presentación mientras tanto.',
+    }));
+  }
 
   const lista = document.createElement('div');
   lista.className = 'lista-clientes';
-  let seleccionado = verificados.find(f => f.proyecto.machotePredeterminadoTarifa) || verificados[0];
+  let seleccionado = propios.find(f => f.proyecto.machotePredeterminadoTarifa) || verificados[0];
   const radios = [];
   for (const fila of verificados) {
     const { cliente, proyecto } = fila;
+    const esPropio = fila.tarifa === tarifa;
     const div = document.createElement('div');
     div.className = 'tarjeta-cliente';
     const label = document.createElement('label');
@@ -1380,7 +1427,8 @@ function renderPanelCrearDesdeMachote(tarifa) {
     label.append(radio, document.createTextNode(' '));
     const strong = document.createElement('strong'); strong.textContent = proyecto.nombre;
     label.append(strong);
-    if (proyecto.machotePredeterminadoTarifa) label.innerHTML += ' <span class="chip-definitiva">⭐ predeterminado</span>';
+    if (!esPropio) label.innerHTML += ` <span class="chip-tarifa-proyecto">🔁 machote de ${fila.tarifa}</span>`;
+    if (esPropio && proyecto.machotePredeterminadoTarifa) label.innerHTML += ' <span class="chip-definitiva">⭐ predeterminado</span>';
     const nota = document.createElement('div');
     nota.className = 'nota';
     nota.textContent = `Cliente: ${cliente.nombre} · verificado ${new Date(proyecto.entregadaEn || proyecto.actualizadoEn).toLocaleDateString('es-MX')}`;
@@ -1393,7 +1441,7 @@ function renderPanelCrearDesdeMachote(tarifa) {
     btnVer.className = 'btn-link'; btnVer.textContent = '👁 Ver qué incluye';
     btnVer.addEventListener('click', () => alert(textoVistaPrevia(proyecto)));
     acciones.append(btnVer);
-    if (!proyecto.machotePredeterminadoTarifa) {
+    if (esPropio && !proyecto.machotePredeterminadoTarifa) {
       const btnPred = document.createElement('button');
       btnPred.className = 'btn-secundario'; btnPred.textContent = '⭐ Hacer predeterminado';
       btnPred.addEventListener('click', () => {
@@ -1407,6 +1455,14 @@ function renderPanelCrearDesdeMachote(tarifa) {
     lista.append(div);
   }
   panel.append(lista);
+
+  if (!propios.length) {
+    const btnVerificarPropio = document.createElement('button');
+    btnVerificarPropio.className = 'btn-link';
+    btnVerificarPropio.textContent = `O verifica una cotización ya trabajada con la tarifa ${tarifa} como su propio machote`;
+    btnVerificarPropio.addEventListener('click', () => renderPanelVerificarMachote(tarifa));
+    panel.append(btnVerificarPropio);
+  }
 
   panel.append(Object.assign(document.createElement('h4'), { textContent: 'Crear estudio nuevo con el machote elegido' }));
 
@@ -1912,6 +1968,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   mostrarSembradorAuto(proyectoActual.sembradorAuto);
   renderArchivosRecibo();
   renderArchivosVerificacion();
+  renderGestorSeccionesPersonalizadas();
   renderFotosInmueble();
   renderIndice(null);
   renderComparacion();
@@ -2904,6 +2961,7 @@ function calcularYRenderizar() {
   r.fotosInmueble = proyectoActual.fotosInmueble || [];
   r.archivosRecibo = proyectoActual.archivosRecibo || null;
   r.archivosVerificacion = proyectoActual.archivosVerificacion || null;
+  r.seccionesPersonalizadas = proyectoActual.seccionesPersonalizadas || [];
   // Nota cliente-facing (no solo interna) cuando todavia no hay verificacion en sitio
   // adjunta -- pedido explicito del usuario: decirle al cliente que esta propuesta se
   // calculo SOLO con su recibo, y que falta la visita/verificacion en sitio como
@@ -3427,12 +3485,24 @@ function renderSecciones(r) {
   const cont = $('contenedorSecciones');
   cont.innerHTML = '';
   $('ayudaEdicion').hidden = false;
-  const numeros = ordenSeccionesEfectivo(r).filter(n => seccionTieneDatos(n, r));
-  numeros.forEach((n, i) => {
+  // Solo se construyen/aparecen las secciones ACTIVAS -- pedido explicito del usuario,
+  // 2026-11-14 (refuerzo "Cotizador por machote"): una apagada (individual, por bloque,
+  // heredada de un machote, o sin datos todavia) ya no debe verse "difuminada, colapsada
+  // ni como un hueco" en el editor -- debe estar de verdad ausente. renderSeccion() ya
+  // regresa null para cualquier numero inactivo (ver secciones.js); aqui simplemente se
+  // itera solo sobre las activas en vez de sobre todas y filtrar despues, para no
+  // construir ni navegar hacia una que nunca va a existir en el DOM. El indice de
+  // secciones (renderIndice, mas abajo) sigue listando las 25 siempre, activas o no --
+  // ahi es donde se reactiva una apagada, independientemente de este contenedor.
+  const activos = seccionesActivasEnOrden(r);
+  activos.forEach((n, i) => {
     const art = renderSeccion(n, r, ultimoLeido, onToggleSeccion, onEditarTexto, onToggleCalculo, onOcultarTexto, onToggleGrafico, onToggleColumna, onToggleFila);
-    agregarNavegacionSeccion(art, numeros[i - 1] ?? null, numeros[i + 1] ?? null);
+    if (!art) return; // no deberia pasar (activos ya viene filtrado), pero por seguridad
+    agregarNavegacionSeccion(art, activos[i - 1] ?? null, activos[i + 1] ?? null);
     cont.append(art);
   });
+  renderSeccionesPersonalizadasEnContenido(r);
+  renderGestorSeccionesPersonalizadas();
   renderIndice(r);
   renderPlantillasTarifa(r);
   renderSelectorPasos();
@@ -3692,6 +3762,120 @@ function renderIndice(r) {
   });
   pie.append(btnGuardar, estadoGuardado);
   cont.append(pie);
+}
+
+// ---------------- "Agregar sección o texto" (secciones personalizadas) -- pedido
+// explicito del usuario, 2026-11-14 (refuerzo "Cotizador por machote"): ver el
+// comentario de seccionesPersonalizadas en clientes.js para el porque de ser un
+// arreglo aparte de las 25 secciones fijas. Edicion de titulo/texto SOLO vive aqui
+// (este panel, siempre visible) -- lo que se agrega mas abajo, dentro de
+// #contenedorSecciones, es de solo lectura (el mismo texto ya guardado), para no
+// duplicar un segundo lugar de edicion del mismo contenido. ----------------
+function renderGestorSeccionesPersonalizadas() {
+  const cont = $('listaSeccionesPersonalizadas');
+  if (!cont || !proyectoActual) return;
+  cont.innerHTML = '';
+  const lista = proyectoActual.seccionesPersonalizadas || [];
+  if (!lista.length) {
+    cont.append(Object.assign(document.createElement('p'), {
+      className: 'nota',
+      textContent: 'Todavía no has agregado ninguna sección o texto libre a este estudio.',
+    }));
+    return;
+  }
+  const refrescar = () => {
+    guardarProyecto(clienteActual, proyectoActual);
+    if (ultimoResultado) { ultimoResultado.seccionesPersonalizadas = proyectoActual.seccionesPersonalizadas; renderSecciones(ultimoResultado); }
+    else renderGestorSeccionesPersonalizadas();
+  };
+  for (const sp of lista) {
+    const div = document.createElement('div');
+    div.className = 'tarjeta-cliente';
+
+    const filaTitulo = document.createElement('label');
+    filaTitulo.textContent = 'Título de esta sección';
+    const inputTitulo = document.createElement('input');
+    inputTitulo.type = 'text';
+    inputTitulo.value = sp.titulo;
+    inputTitulo.addEventListener('change', () => { actualizarSeccionPersonalizada(proyectoActual, sp.id, { titulo: inputTitulo.value }); refrescar(); });
+    filaTitulo.append(document.createElement('br'), inputTitulo);
+    div.append(filaTitulo);
+
+    const filaTexto = document.createElement('label');
+    filaTexto.textContent = 'Texto (un párrafo por renglón)';
+    const textarea = document.createElement('textarea');
+    textarea.rows = 4;
+    textarea.value = sp.texto;
+    textarea.addEventListener('change', () => { actualizarSeccionPersonalizada(proyectoActual, sp.id, { texto: textarea.value }); refrescar(); });
+    filaTexto.append(document.createElement('br'), textarea);
+    div.append(filaTexto);
+
+    const acciones = document.createElement('div');
+    acciones.className = 'acciones';
+    const chkActiva = document.createElement('label');
+    chkActiva.className = 'toggle-seccion';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = sp.activa;
+    check.addEventListener('change', () => { actualizarSeccionPersonalizada(proyectoActual, sp.id, { activa: check.checked }); refrescar(); });
+    chkActiva.append(check, document.createTextNode(' Incluir en el editor, el PDF y el Excel'));
+    acciones.append(chkActiva);
+
+    const btnEliminar = document.createElement('button');
+    btnEliminar.type = 'button';
+    btnEliminar.className = 'btn-link';
+    btnEliminar.textContent = '🗑 Eliminar';
+    btnEliminar.addEventListener('click', () => {
+      if (!confirm(`¿Eliminar la sección "${sp.titulo}"? No se puede deshacer.`)) return;
+      eliminarSeccionPersonalizada(proyectoActual, sp.id);
+      refrescar();
+    });
+    acciones.append(btnEliminar);
+    div.append(acciones);
+    cont.append(div);
+  }
+}
+
+$('btnAgregarSeccionPersonalizada').addEventListener('click', () => {
+  if (!proyectoActual) return;
+  agregarSeccionPersonalizada(proyectoActual, { titulo: 'Sección nueva', texto: '' });
+  guardarProyecto(clienteActual, proyectoActual);
+  if (ultimoResultado) { ultimoResultado.seccionesPersonalizadas = proyectoActual.seccionesPersonalizadas; renderSecciones(ultimoResultado); }
+  else renderGestorSeccionesPersonalizadas();
+});
+
+// Agrega las secciones personalizadas ACTIVAS al final de #contenedorSecciones, con la
+// MISMA clase .seccion que las 25 fijas -- por construccion, generarPdfCompletaDesdeVista
+// (propuesta.js) y el extractor de Excel (excel.js) ya recorren ese contenedor
+// genericamente; esto basta para que aparezcan en PDF y en pantalla sin tocar ninguno de
+// los dos (Excel no tiene tablas que extraer de texto libre, asi que no agrega nada ahi,
+// correcto). id no numerico (seccion-custom-<id>) para no colisionar nunca con 1..25 ni
+// con los casos especiales 17/18 de propuesta.js.
+function renderSeccionesPersonalizadasEnContenido(r) {
+  const cont = $('contenedorSecciones');
+  if (!cont) return;
+  const lista = (r.seccionesPersonalizadas || []).filter((sp) => sp.activa);
+  for (const sp of lista) {
+    const art = document.createElement('article');
+    art.className = 'seccion';
+    art.id = `seccion-custom-${sp.id}`;
+    const header = document.createElement('div');
+    header.className = 'seccion-header';
+    const h2 = document.createElement('h2');
+    h2.textContent = sp.titulo || 'Sección nueva';
+    header.append(h2);
+    art.append(header);
+    const parrafos = (sp.texto || '').split(/\n+/).map((t) => t.trim()).filter(Boolean);
+    if (parrafos.length) {
+      parrafos.forEach((texto) => { const p = document.createElement('p'); p.textContent = texto; art.append(p); });
+    } else {
+      const p = document.createElement('p');
+      p.className = 'nota';
+      p.textContent = 'Sección sin texto todavía -- agrégalo arriba, en "➕ Secciones y textos agregados".';
+      art.append(p);
+    }
+    cont.append(art);
+  }
 }
 
 function observarSecciones() {
