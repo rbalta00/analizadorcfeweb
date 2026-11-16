@@ -680,11 +680,17 @@ export function clonarProyectoEditable(cliente, proyecto, nombreNuevo) {
 // formatoFijo.js pueda construir un "proyecto origen" sintetico con exactamente los
 // mismos campos que un machote real -- una sola lista de campos editoriales, no dos
 // copias que se puedan desincronizar.
-export const CAMPOS_EDITORIAL_MACHOTE = [
-  'textosEditados', 'textosOcultos', 'seccionesExcluidas', 'graficosExcluidos',
-  'calculosActivos', 'tablaColumnasOcultas', 'tablaFilasOcultas', 'ordenSecciones',
-  'seccionesPersonalizadas',
-];
+// Redefinido 2026-11-16, pedido explicito del usuario ("solo viaja lo que se VE en el
+// machote"): antes esta lista tambien copiaba textosOcultos/seccionesExcluidas/
+// graficosExcluidos/calculosActivos/tablaColumnasOcultas/tablaFilasOcultas -- un estudio
+// nuevo heredaba apagados del machote en silencio, en vez de nacer completo y encendido
+// (que es lo que un estudio nuevo deberia ser por default, con el usuario decidiendo que
+// apagar caso por caso). Ahora SOLO viaja lo editorial que se VE: los textos editados
+// visibles (ver aplicarMachoteAProyecto, que ademas excluye los ocultos del origen), el
+// orden de secciones, y las secciones personalizadas que esten activas. Todo lo demas
+// (apagados, columnas/filas ocultas, pasos reducidos) se queda en blanco -- ver el reset
+// de `pasos` dentro de aplicarMachoteAProyecto.
+export const CAMPOS_EDITORIAL_MACHOTE = ['textosEditados', 'ordenSecciones', 'seccionesPersonalizadas'];
 
 // ---------------- "Agregar sección o texto" (secciones personalizadas) ----------------
 // Pedido explicito del usuario, 2026-11-14. Ver el comentario del campo en
@@ -759,12 +765,17 @@ export function textoContieneIdentidadDe(texto, proyecto) {
 export function aplicarMachoteAProyecto(proyecto, origen) {
   const origenProyecto = origen.proyecto;
   const identidadOrigen = valoresIdentidadDe(origenProyecto);
+  const ocultosOrigen = origenProyecto.textosOcultos || {};
   const revision = [];
   for (const campo of CAMPOS_EDITORIAL_MACHOTE) {
     if (origenProyecto[campo] === undefined) continue;
     if (campo === 'textosEditados') {
       const limpio = {};
       for (const [id, texto] of Object.entries(origenProyecto.textosEditados || {})) {
+        // 2026-11-16: un texto editado pero OCULTO en el origen no viaja -- ni su
+        // contenido ni su estado de oculto. El estudio nuevo nace con ese parrafo
+        // visible y con el texto GENERICO (nunca con la redaccion oculta del machote).
+        if (ocultosOrigen[id]) continue;
         if (typeof texto !== 'string') { limpio[id] = texto; continue; }
         const textoMin = texto.toLowerCase();
         if (identidadOrigen.some((v) => textoMin.includes(v))) {
@@ -793,18 +804,40 @@ export function aplicarMachoteAProyecto(proyecto, origen) {
       proyecto.textosEditados = limpio;
       continue;
     }
-    proyecto[campo] = JSON.parse(JSON.stringify(origenProyecto[campo]));
-    // Ids nuevos para las secciones personalizadas copiadas del machote -- evita que
-    // dos estudios distintos (este nuevo y el origen) compartan el mismo id de sección
-    // personalizada, aunque en la practica nunca se renderizan a la vez en esta SPA.
-    if (campo === 'seccionesPersonalizadas' && Array.isArray(proyecto.seccionesPersonalizadas)) {
-      proyecto.seccionesPersonalizadas = proyecto.seccionesPersonalizadas.map((sp) => ({ ...sp, id: uuid() }));
+    if (campo === 'seccionesPersonalizadas') {
+      // 2026-11-16: solo viajan las secciones personalizadas ACTIVAS del origen (las
+      // apagadas no viajan, el estudio nuevo nace sin ellas). Ids nuevos para evitar que
+      // dos estudios distintos compartan el mismo id de sección personalizada.
+      proyecto.seccionesPersonalizadas = (origenProyecto.seccionesPersonalizadas || [])
+        .filter((sp) => sp && sp.activa)
+        .map((sp) => ({ ...sp, id: uuid(), activa: true }));
+      continue;
     }
+    proyecto[campo] = JSON.parse(JSON.stringify(origenProyecto[campo]));
   }
+  // 2026-11-16: la ESTRUCTURA de pasos (que pasos existen, con que nombre) si viaja,
+  // pero cada paso nace sin ningun apagado -- antes se clonaba tal cual (incluyendo las
+  // secciones/graficas/columnas/filas que el machote tuviera ocultas en cada paso) y
+  // ademas se aplicaba de inmediato con aplicarPaso(), que es exactamente el atajo que
+  // volvia a meter apagados del origen por la puerta de atras aunque ya no estuvieran en
+  // CAMPOS_EDITORIAL_MACHOTE. Ahora cada paso nace con sus 4 campos de apagado vacios, y
+  // pasoActivo se queda en 'completo' (el default de crearProyecto) -- el estudio nuevo
+  // siempre arranca completo y encendido, nunca en un paso reducido heredado del machote.
   if (origenProyecto.pasos) {
-    proyecto.pasos = JSON.parse(JSON.stringify(origenProyecto.pasos));
-    proyecto.pasoActivo = origenProyecto.pasoActivo || 'completo';
-    aplicarPaso(proyecto, proyecto.pasoActivo);
+    const pasosNuevos = {};
+    for (const [clave, paso] of Object.entries(origenProyecto.pasos)) {
+      pasosNuevos[clave] = {
+        nombre: paso?.nombre || clave,
+        seccionesExcluidas: [],
+        graficosExcluidos: [],
+        tablaColumnasOcultas: {},
+        tablaFilasOcultas: {},
+      };
+    }
+    if (!pasosNuevos.completo) {
+      pasosNuevos.completo = { nombre: 'Análisis completo', seccionesExcluidas: [], graficosExcluidos: [], tablaColumnasOcultas: {}, tablaFilasOcultas: {} };
+    }
+    proyecto.pasos = pasosNuevos;
   }
   proyecto.plantillaOrigen = {
     clienteNombre: origen.cliente.nombre,
