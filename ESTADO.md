@@ -8,8 +8,13 @@ da 0, por como Streamlit sirve sus archivos estaticos). El patron de
 (otro proyecto del usuario, ya funciona como PWA instalada) -- ese proyecto
 NO se toca, solo se usa como referencia de que esa configuracion si funciona.
 
-Repo git independiente (no es parte del repo de `app/`). Repo privado en GitHub:
-`rbalta00/cotizador-fv-cfe-web` — https://github.com/rbalta00/cotizador-fv-cfe-web
+Repo git independiente (no es parte del repo de `app/`). Repo PÚBLICO en GitHub (desde
+2026-11-15, renombrado cotizador->analizador por otra sesión/agente que trabaja en
+paralelo, "Mause"): `rbalta00/analizadorcfeweb` — https://github.com/rbalta00/analizadorcfeweb.
+**OJO**: `rbalta00/cotizador-fv-cfe-web` (privado) fue el nombre viejo de este mismo
+repo en algún punto, pero se separó en un duplicado independiente -- ya NO usar ese
+nombre para pushear. Detalle completo de la reconciliación en `REPOS_GIT.md` (mismo
+directorio).
 
 **Publicado**: https://cotizador-fv-cfe-web.vercel.app (Vercel, conectado al repo de
 GitHub, cada push a `master` redespliega solo). Backend compartido en Supabase

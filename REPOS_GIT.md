@@ -8,10 +8,8 @@
 
 ## Repo viejo — YA NO USAR
 `rbalta00/cotizador-fv-cfe-web` (privado) — https://github.com/rbalta00/cotizador-fv-cfe-web.
-Esta misma carpeta (`cfe-presupuestos/web`) todavía tiene su `git remote origin`
-apuntando aquí (no se ha corregido todavía, ver pendiente abajo). `ESTADO.md`
-(línea 11-12) también sigue citando este repo viejo como si fuera el actual —
-desactualizado, no corregido en esta pasada porque solo se pidió hacer esta nota.
+**Corregido el 2026-11-16** (ver actualización abajo): el `git remote origin` de esta
+carpeta ya NO apunta aquí, ya apunta a `analizadorcfeweb`.
 
 ## Hallazgo importante: NO tienen el mismo contenido — faltan cosas en los dos lados
 Se comparó el historial de git de ambos repos (`git merge-base` confirma que sí
@@ -57,12 +55,34 @@ la vuelva a generar.
 - Intento de GitHub Pages (agregado y luego removido).
 - Corrección: "guardar machotes completos sin filtrar redacción".
 
-## Pendiente, no resuelto en esta nota
-Esta carpeta local sigue sin apuntar al repo correcto, y los dos repos siguen
-sin unificarse — nadie ha hecho el merge real de los 27+22 commits. Mientras
-eso no pase, cualquiera de los dos lados (tú trabajando aquí, Mause trabajando
-en `analizadorcfeweb`) puede seguir perdiendo el trabajo del otro sin darse
-cuenta. Cuando se decida unificar, avisar para hacerlo con cuidado (hay
-archivos que cambiaron en ambos lados, como `service-worker.js` y
-`vercel.json`, que van a necesitar resolver conflicto a mano, no solo un
-merge automático).
+## Actualización 2026-11-15: merge hecho localmente, falta el push
+Se hizo el merge real de los 27+22 commits (commit local `d77c79f`, rama
+`master` de esta carpeta). Los 6 archivos con conflicto real (`index.html`,
+`js/app.js`, `js/clientes.js`, `js/excel.js`, `js/secciones.js`,
+`service-worker.js`, 20 bloques en total) se resolvieron a mano, caso por
+caso, nunca "el último que gana" -- el detalle completo de qué se conservó
+de cada lado y por qué está en el mensaje del commit `d77c79f`
+(`git show d77c79f` en esta carpeta). `node --check` en los 6 archivos y
+`npm test` (motor/recibo/clientes) siguen en `TODO OK` después del merge.
+
+## Actualización 2026-11-16: push hecho, origin corregido — YA ESTÁ COMPLETO
+Antes del push se verificó el merge completo en vivo en Chrome (servidor local,
+nunca tocó producción): carga sin errores, terminología correcta, cálculo GDMTO
+con datos reales, toggles "Cómo se calculó"/"apagado = ausente del DOM", y
+exportación a Excel con celdas numéricas reales — los 3 puntos más riesgosos
+del merge sobrevivieron intactos.
+
+Con autorización explícita de Isaac, se corrió `git push analizador master`:
+`4da7c90..d77c79f  master -> master` — **`analizadorcfeweb` ya tiene TODO el
+trabajo de ambos lados (los 27 commits que le faltaban + sus 22 propios)**.
+Ya no le falta nada.
+
+También se corrió `git remote set-url origin https://github.com/rbalta00/analizadorcfeweb.git`
+en esta carpeta — `origin` y `analizador` ya apuntan los dos a `analizadorcfeweb`.
+Un `git push` sin especificar remoto ya va al lugar correcto.
+
+**Único pendiente real que queda**: avisarle a Mause que ya se subió el merge,
+para que no reconstruya por su cuenta algo que ya llegó de este lado (esto no lo
+puede hacer Claude, requiere que Isaac le avise directamente). También sigue
+pendiente, de menor prioridad, revisar si la URL de Vercel citada en `ESTADO.md`
+sigue siendo la correcta ahora que el repo canónico es `analizadorcfeweb`.
