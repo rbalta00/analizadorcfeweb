@@ -83,6 +83,19 @@ Un `git push` sin especificar remoto ya va al lugar correcto.
 
 **Único pendiente real que queda**: avisarle a Mause que ya se subió el merge,
 para que no reconstruya por su cuenta algo que ya llegó de este lado (esto no lo
-puede hacer Claude, requiere que Isaac le avise directamente). También sigue
+puede hacer Claude, requiere que Isaac le avise directamente -- Mause no aparece
+como una sesión a la que Claude pueda mandarle mensaje). También sigue
 pendiente, de menor prioridad, revisar si la URL de Vercel citada en `ESTADO.md`
 sigue siendo la correcta ahora que el repo canónico es `analizadorcfeweb`.
+
+## Regla fija de ahora en adelante, para que esto no se vuelva a repetir
+**Dos agentes de IA distintos (Claude, en esta carpeta local, y Mause) trabajan
+sobre el MISMO repo `analizadorcfeweb`.** Si cualquiera de los dos empieza una
+sesión de trabajo sin antes traer lo más reciente del otro, el historial se
+vuelve a separar en silencio -- exactamente lo que pasó y tomó esta sesión larga
+reconciliar (27+22 commits, 20 bloques de conflicto resueltos a mano).
+
+**Antes de empezar a trabajar en este repo (cualquiera de los dos lados):**
+correr `git pull origin master` primero, SIEMPRE, sin excepción -- así quien
+empiece a trabajar parte de la versión más reciente, venga el trabajo anterior
+de donde venga.
