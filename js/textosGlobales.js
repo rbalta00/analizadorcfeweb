@@ -1,3 +1,5 @@
+import { textoTieneCifraOConclusionSinToken } from './clientes.js';
+
 // El predeterminado GLOBAL de texto (un solo default para CUALQUIER tarifa, aplicado a
 // cotizaciones actuales y futuras) se quito a peticion explicita del usuario,
 // 2026-11-13: "ya no usamos lo de guardar predeterminado global... cuando elijamos un
@@ -53,7 +55,23 @@ export function aplicarPlantillaTarifa(proyecto, tarifa) {
   const plantilla = leerPlantillaTarifa(tarifa);
   if (!plantilla || !Object.keys(plantilla).length) return; // sin plantilla, no hace nada
 
-  if (plantilla.textosEditados) proyecto.textosEditados = { ...plantilla.textosEditados };
+  // Bug real reportado por el usuario, 2026-11-16: un texto como "la verificación en
+  // campo sugiere N paneles menos/más..." trae la diferencia ya calculada pegada como
+  // numero crudo (no {{token}}) -- si quedo guardado en la plantilla de esta tarifa
+  // (antes de este fix, guardarPlantillaTarifa() no filtraba nada), se aplicaba tal cual
+  // a CUALQUIER estudio nuevo de esa tarifa, sin importar lo que SU PROPIA verificacion
+  // en sitio sugiriera -- el texto parecia "no actualizarse" aunque se recalculara con
+  // datos nuevos. Filtrado aqui tambien (no solo al guardar) para que plantillas YA
+  // guardadas antes de este fix dejen de aplicar ese numero congelado sin que el usuario
+  // tenga que volver a guardar la plantilla a mano.
+  if (plantilla.textosEditados) {
+    const limpios = {};
+    for (const [id, texto] of Object.entries(plantilla.textosEditados)) {
+      if (textoTieneCifraOConclusionSinToken(texto)) continue;
+      limpios[id] = texto;
+    }
+    proyecto.textosEditados = limpios;
+  }
   if (plantilla.textosOcultos) proyecto.textosOcultos = { ...plantilla.textosOcultos };
   if (plantilla.seccionesExcluidas) proyecto.seccionesExcluidas = [...plantilla.seccionesExcluidas];
   if (plantilla.graficosExcluidos) proyecto.graficosExcluidos = [...plantilla.graficosExcluidos];
@@ -72,8 +90,16 @@ export function aplicarPlantillaTarifa(proyecto, tarifa) {
 // plantilla capture exactamente cómo está quedando el usuario (2026-11-12).
 export function guardarPlantillaTarifa(tarifa, proyectoSnapshot) {
   const todas = leerTodasLasPlantillas();
+  // Mismo filtro que aplicarPlantillaTarifa() -- no dejar que un numero/cifra/conclusion
+  // del calculo de ESTE proyecto (ej. "sugiere 3 paneles menos") quede congelado en la
+  // plantilla de la tarifa, donde se aplicaria igual a cualquier otro estudio futuro.
+  const textosEditadosLimpios = {};
+  for (const [id, texto] of Object.entries(proyectoSnapshot.textosEditados || {})) {
+    if (textoTieneCifraOConclusionSinToken(texto)) continue;
+    textosEditadosLimpios[id] = texto;
+  }
   todas[tarifa] = {
-    textosEditados: { ...(proyectoSnapshot.textosEditados || {}) },
+    textosEditados: textosEditadosLimpios,
     textosOcultos: { ...(proyectoSnapshot.textosOcultos || {}) },
     seccionesExcluidas: [...(proyectoSnapshot.seccionesExcluidas || [])],
     graficosExcluidos: [...(proyectoSnapshot.graficosExcluidos || [])],

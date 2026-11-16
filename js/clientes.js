@@ -861,6 +861,24 @@ const PATRON_POSIBLE_NUMERO_CALCULADO = /\$\s?[\d,]+(\.\d+)?|\d+(\.\d+)?\s?%|\d+
 // CALCULADO no las detecta porque no siempre matchea un numero. Deteccion aparte,
 // independiente, para marcarlas para revision igual.
 const PATRON_CONCLUSION_COMPARATIVA = /convien(e|en)|se recomienda|recomendamos|sugiere (agregar|aumentar|reducir|quitar|menos|más)|vale la pena (agregar|aumentar|reducir|quitar)|no vale la pena|ya no (es necesario|conviene)|mejor (opci[oó]n|optar)|preferible|convendr[ií]a/i;
+// Exportado 2026-11-16 -- bug real reportado por el usuario: el texto comparativo
+// "la verificación en campo sugiere N paneles menos/más..." (s1-verif-aviso, secciones.js)
+// trae la diferencia de paneles pegada como numero crudo, no como {{token}}. Si ese texto
+// quedo guardado alguna vez dentro de una "plantilla por tarifa" (guardarPlantillaTarifa,
+// textosGlobales.js -- que hasta ahora copiaba textosEditados TAL CUAL, sin este filtro),
+// TODO estudio nuevo de esa tarifa heredaba ese numero ya congelado via
+// aplicarPlantillaTarifa(), sin importar lo que SU PROPIA verificacion en sitio sugiriera
+// -- el texto "no se actualizaba" aunque se recalculara con datos nuevos. Mismo criterio
+// (cifra/monto/%/paneles/años sin convertir a token, o una conclusion comparativa) que ya
+// usaba aplicarMachoteAProyecto(), ahora reusado tambien ahi para que una plantilla por
+// tarifa nunca pueda congelar un numero del cálculo.
+export function textoTieneCifraOConclusionSinToken(texto) {
+  if (typeof texto !== 'string') return false;
+  const tieneCifra = texto.indexOf('{{') === -1 && PATRON_POSIBLE_NUMERO_CALCULADO.test(texto);
+  const tieneConclusion = PATRON_CONCLUSION_COMPARATIVA.test(texto);
+  return tieneCifra || tieneConclusion;
+}
+
 export function detectarTextosConNumerosSospechosos(textosEditados) {
   if (!textosEditados) return [];
   const hallazgos = [];
