@@ -1464,15 +1464,39 @@ function renderPanelCrearDesdeMachote(tarifa) {
     panel.append(btnVerificarPropio);
   }
 
+  // Pedido explicito del usuario, 2026-11-17 (dos vueltas): al escribir el nombre de la
+  // cotizacion nueva, previsualizar si ya existe un estudio (en CUALQUIER cliente, no
+  // solo el que se vaya a elegir abajo) con ese nombre -- si se elige uno de la lista,
+  // el campo "Cliente" se autocompleta solo con el que ya tiene guardado (no hace falta
+  // buscarlo a mano) y el MISMO boton de abajo, en vez de crear un proyecto nuevo, le
+  // aplica el machote elegido a ESE estudio ya existente (mismo patron de aplicar
+  // machote que "Guardar cotización", ver el aviso/confirm de renderListaMachotes mas
+  // arriba). Si no hay coincidencia, el flujo de siempre sigue igual: nombre nuevo +
+  // cliente a elegir/crear.
   panel.append(Object.assign(document.createElement('h4'), { textContent: 'Crear estudio nuevo con el machote elegido' }));
+  panel.append(Object.assign(document.createElement('p'), {
+    className: 'nota',
+    textContent: 'Escribe el nombre de la cotización -- si ya existe un estudio editable con ese nombre, aparece ' +
+      'abajo para que lo elijas (el cliente se autocompleta solo y el machote se le aplica a ESE estudio, sin ' +
+      'duplicarlo). Si no aparece ninguno, se crea una cotización nueva con el nombre que escribas.',
+  }));
 
   const filaNombre = document.createElement('label');
-  filaNombre.textContent = 'Nombre de esta cotización nueva';
+  filaNombre.textContent = 'Nombre de esta cotización nueva (o de una ya existente)';
   const inputNombre = document.createElement('input');
   inputNombre.type = 'text';
   inputNombre.placeholder = `Ej. Nombre del servicio — ${tarifa}`;
   filaNombre.append(document.createElement('br'), inputNombre);
   panel.append(filaNombre);
+
+  const listaCoincidencias = document.createElement('div');
+  listaCoincidencias.className = 'lista-clientes';
+  panel.append(listaCoincidencias);
+
+  const avisoExistente = document.createElement('p');
+  avisoExistente.className = 'nota ok';
+  avisoExistente.hidden = true;
+  panel.append(avisoExistente);
 
   const { selectCliente, filaNuevo } = crearSelectorClienteMachote();
   const filaCliente = document.createElement('label');
@@ -1480,13 +1504,78 @@ function renderPanelCrearDesdeMachote(tarifa) {
   filaCliente.append(document.createElement('br'), selectCliente);
   panel.append(filaCliente, filaNuevo);
 
+  // Cuando se elige una coincidencia de la lista, aqui queda el {cliente, proyecto}
+  // real -- el boton de abajo aplica el machote a ESE proyecto en vez de crear uno
+  // nuevo. Se limpia en cuanto el nombre escrito ya no coincide con lo elegido (se
+  // asume que el usuario cambio de opinion y quiere un estudio nuevo de nuevo).
+  let existenteElegido = null;
+  const limpiarExistenteElegido = () => {
+    existenteElegido = null;
+    avisoExistente.hidden = true;
+    filaCliente.hidden = false;
+    filaNuevo.hidden = selectCliente.value !== '__nuevo__';
+  };
+
+  const renderCoincidencias = () => {
+    const texto = normalizarBusqueda(inputNombre.value);
+    listaCoincidencias.innerHTML = '';
+    if (existenteElegido && normalizarBusqueda(existenteElegido.proyecto.nombre) !== texto) limpiarExistenteElegido();
+    if (!texto || existenteElegido) return;
+    const resultados = [];
+    for (const c of listarClientes()) {
+      for (const p of (c.proyectos || [])) {
+        if (p.bloqueada) continue; // congelada (definitiva/machote verificado) -- no se le puede aplicar un machote encima
+        const campos = [p.nombre, c.nombre, p.formulario?.noServicio].filter(Boolean).map(normalizarBusqueda);
+        if (campos.some((v) => v.includes(texto))) resultados.push({ cliente: c, proyecto: p });
+      }
+    }
+    if (!resultados.length) return;
+    resultados.sort((a, b) => (b.proyecto.actualizadoEn || '').localeCompare(a.proyecto.actualizadoEn || ''));
+    listaCoincidencias.append(Object.assign(document.createElement('p'), {
+      className: 'nota',
+      textContent: '¿Es alguno de estos estudios ya iniciados? Elígelo para aplicarle el machote ahí mismo, sin crear uno nuevo:',
+    }));
+    for (const { cliente, proyecto } of resultados.slice(0, 8)) {
+      const div = document.createElement('div');
+      div.className = 'tarjeta-cliente';
+      div.style.cursor = 'pointer';
+      div.innerHTML = `<strong>${escapeHtml(proyecto.nombre)}</strong>` +
+        `<div class="nota">Cliente: ${escapeHtml(cliente.nombre)} · ${proyecto.formulario?.tarifa ? `Tarifa ${escapeHtml(proyecto.formulario.tarifa)}` : 'sin calcular todavía'}` +
+        `${proyecto.formulario?.noServicio ? ` · No. servicio: ${escapeHtml(proyecto.formulario.noServicio)}` : ''}</div>`;
+      div.addEventListener('click', () => {
+        existenteElegido = { cliente, proyecto };
+        inputNombre.value = proyecto.nombre;
+        listaCoincidencias.innerHTML = '';
+        avisoExistente.hidden = false;
+        avisoExistente.textContent = `✅ "${proyecto.nombre}" ya existe (cliente: ${cliente.nombre}) -- el machote se le va a aplicar a ESE estudio en vez de crear uno nuevo.`;
+        filaCliente.hidden = true; // ya no hace falta elegirlo, se usa el real del estudio encontrado
+        filaNuevo.hidden = true;
+      });
+      listaCoincidencias.append(div);
+    }
+  };
+  inputNombre.addEventListener('input', renderCoincidencias);
+
   const btnCrear = document.createElement('button');
   btnCrear.className = 'btn-primario';
   btnCrear.textContent = '🧭 Crear estudio nuevo con este machote';
   btnCrear.addEventListener('click', () => {
+    if (!seleccionado) { alert('Elige un machote verificado de la lista.'); return; }
+    if (existenteElegido) {
+      const { cliente, proyecto } = existenteElegido;
+      if (!confirm(`¿Aplicar "${seleccionado.proyecto.nombre}" como machote sobre "${proyecto.nombre}" (${cliente.nombre})? ` +
+        'Se reemplazan los pasos y TODOS los textos/apagados editados de ese estudio (se quedan igual que en el ' +
+        'machote, salvo los que traigan pegado un número/monto del cálculo del cliente anterior) -- tarifa, cargos, ' +
+        'identidad y consumo de ESE proyecto NO se tocan, se quedan tal cual ya los tenga capturados.')) return;
+      aplicarMachoteAProyecto(proyecto, { cliente: seleccionado.cliente, proyecto: seleccionado.proyecto });
+      proyecto.machoteOrigenId = seleccionado.proyecto.id;
+      proyecto.machoteOrigenTarifa = tarifa;
+      guardarProyecto(cliente, proyecto);
+      abrirProyecto(cliente.id, proyecto.id);
+      return;
+    }
     const nombre = inputNombre.value.trim();
     if (!nombre) { alert('Escribe primero el nombre de esta cotización.'); return; }
-    if (!seleccionado) { alert('Elige un machote verificado de la lista.'); return; }
     const cliente = resolverClienteDeSelectorMachote(selectCliente, filaNuevo);
     if (!cliente) return;
     const nuevo = crearProyecto(cliente, { nombre });
