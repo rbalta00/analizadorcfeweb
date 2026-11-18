@@ -2836,8 +2836,24 @@ $('tabCaptura').addEventListener('input', (e) => {
 // como revisado -- un clic/tab hacia el campo (focusin, dispara con clic Y con Tab)
 // ya basta para confirmar que Isaac lo vio. Si está vacío, 'input' de arriba sigue
 // siendo lo que lo limpia cuando de verdad se captura un valor nuevo.
+//
+// SOLO para titular/domicilio (texto de identidad) -- bug real encontrado 2026-11-18:
+// para los campos NUMERICOS que alimentan el calculo (periodoKwh, periodoDias, dap,
+// cargos...) este mismo atajo dejaba pasar basura sin ningun aviso. Secuencia real:
+// un estudio anterior (sin guardar) deja un numero cualquiera en el input compartido
+// de "kWh del periodo"; se crea un cliente/estudio NUEVO y se sube un recibo cuyo
+// kWh del periodo NO se pudo leer solo (campo_no_encontrado real); el input YA tenia
+// ese numero de otro lado (no vacio) -- bastaba un clic/Tab para que este listener lo
+// diera por "revisado", sin que Isaac hubiera escrito nada, y el calculo siguio
+// adelante con un numero que no tenia nada que ver con ESTE recibo (caso real:
+// "kWh del periodo" quedo en 999.98 mientras el historial del mismo recibo, si leido
+// correctamente, promediaba 11,400 kWh/mes -- ahorro anual calculado 5x la inversion,
+// imposible). Para estos campos ahora hace falta el evento 'input' de arriba (escribir
+// algo de verdad) para confirmarlos -- un clic/Tab solo over ya no basta.
+const CAMPOS_CONFIRMABLES_CON_SOLO_FOCO = new Set(['titular', 'domicilio']);
 $('tabCaptura').addEventListener('focusin', (e) => {
-  if (e.target.classList && e.target.classList.contains('campo-no-detectado') && e.target.value) {
+  if (e.target.classList && e.target.classList.contains('campo-no-detectado') && e.target.value
+      && CAMPOS_CONFIRMABLES_CON_SOLO_FOCO.has(e.target.id)) {
     e.target.classList.remove('campo-no-detectado');
   }
 });
