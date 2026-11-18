@@ -1709,7 +1709,7 @@ function s06(r, _leido, onToggle) {
   if (r.fotoSembrado) {
     art.append(subtitulo(6, 'sembrado', 'Distribución de paneles sobre el techo/azotea (sembrado)'));
     const img = document.createElement('img');
-    img.src = r.fotoSembrado.dataUrl;
+    img.src = r.fotoSembrado.url || r.fotoSembrado.dataUrl; // .url desde que vive en Supabase Storage (2026-11-17); .dataUrl de respaldo para estudios guardados antes
     img.alt = 'Distribución de paneles sobre el techo/azotea';
     img.className = 'seccion-img-sembrado';
     art.append(img);
@@ -1782,7 +1782,7 @@ function s06(r, _leido, onToggle) {
     fotosInm.forEach((foto, i) => {
       const fig = document.createElement('figure');
       const img = document.createElement('img');
-      img.src = foto.dataUrl;
+      img.src = foto.url || foto.dataUrl; // .url desde que vive en Supabase Storage (2026-11-17); .dataUrl de respaldo para estudios guardados antes
       img.alt = foto.etiqueta || `Foto del inmueble ${i + 1}`;
       const cap = document.createElement('figcaption');
       cap.textContent = foto.etiqueta || `Foto ${i + 1}`;

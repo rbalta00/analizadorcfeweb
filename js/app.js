@@ -21,7 +21,7 @@ import { descargarExcelCotizacion } from './excel.js';
 import { generarGuiaPresentacion } from './resumen.js';
 import { leerFormatoFijo, hayFormatoFijo, fijarFormatoDesde, aplicarFormatoFijoAProyecto, textoVistaPrevia } from './formatoFijo.js';
 import { leerReciboMultiple } from './leerRecibo.js';
-import { archivoAImagenComprimida } from './imagenes.js';
+import { archivoAImagenComprimida, conDataUrlResuelto, resolverImagenesRemotasEnDom } from './imagenes.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, escalaCostosParaTarifa, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion, seccionesDelBloque, BLOQUES_COTIZACION } from './bloques.js';
 import { M, PCT } from './util.js';
@@ -2303,12 +2303,72 @@ $('archivoVerificacion').addEventListener('change', async (e) => {
   if (ultimoResultado) { ultimoResultado.archivosVerificacion = proyectoActual.archivosVerificacion; renderSecciones(ultimoResultado); }
 });
 
+// ---------------- Migracion unica (en segundo plano): fotos ya guardadas localmente ----------------
+// Las estudios que ya tenian fotoSembrado/fotosInmueble guardados ANTES del 2026-11-17
+// (como data URL completo) son justo las que estaban llenando la cuota de localStorage
+// -- "No se pudo guardar... Borra fotos/archivos viejos" (ver avisoErrorGuardado,
+// alGuardar en clientes.js). En vez de pedirle al usuario que las borre a mano, esto
+// las sube a Supabase Storage (mismo bucket que ya usan archivosRecibo/
+// archivosVerificacion/fotoSembrado nuevo) y reemplaza el dataUrl guardado por la
+// referencia {url,...} -- la foto se conserva, solo deja de pesar en el navegador.
+// Se corre una vez al arrancar la app (ver arrancar() al final del archivo),
+// silenciosa, en segundo plano: si algo falla (sin internet, proyecto bloqueado/
+// `bloqueada`, que nunca se puede modificar) simplemente se queda para el proximo
+// intento -- nunca bloquea ni retrasa el arranque normal de la app.
+async function migrarFotosLocalesANube() {
+  let migradas = 0, fallidas = 0;
+  for (const cliente of listarClientes()) {
+    for (const proyecto of (cliente.proyectos || [])) {
+      let cambio = false;
+      if (proyecto.fotoSembrado && proyecto.fotoSembrado.dataUrl && !proyecto.fotoSembrado.url) {
+        try {
+          const blob = await (await fetch(proyecto.fotoSembrado.dataUrl)).blob();
+          const subido = await supabaseSubirArchivo('sembrado', new File([blob], 'sembrado.jpg', { type: 'image/jpeg' }));
+          proyecto.fotoSembrado = { ...subido, ancho: proyecto.fotoSembrado.ancho, alto: proyecto.fotoSembrado.alto };
+          cambio = true; migradas++;
+        } catch (err) {
+          fallidas++;
+          console.error(`No se pudo migrar la foto del sembrado de "${proyecto.nombre}" (${cliente.nombre}) a la nube:`, err);
+        }
+      }
+      if (proyecto.fotosInmueble && proyecto.fotosInmueble.some((f) => f.dataUrl && !f.url)) {
+        const nuevas = [];
+        for (const foto of proyecto.fotosInmueble) {
+          if (!foto.dataUrl || foto.url) { nuevas.push(foto); continue; }
+          try {
+            const blob = await (await fetch(foto.dataUrl)).blob();
+            const subido = await supabaseSubirArchivo('fotos-inmueble', new File([blob], 'foto-inmueble.jpg', { type: 'image/jpeg' }));
+            nuevas.push({ ...subido, ancho: foto.ancho, alto: foto.alto, etiqueta: foto.etiqueta || '' });
+            cambio = true; migradas++;
+          } catch (err) {
+            fallidas++;
+            nuevas.push(foto);
+            console.error(`No se pudo migrar una foto del inmueble de "${proyecto.nombre}" (${cliente.nombre}) a la nube:`, err);
+          }
+        }
+        proyecto.fotosInmueble = nuevas;
+      }
+      if (cambio) guardarProyecto(cliente, proyecto);
+    }
+  }
+  if (migradas) console.log(`Migradas ${migradas} foto(s) de sembrado/inmueble a Supabase Storage -- liberan espacio en el navegador.`);
+  if (fallidas) console.warn(`${fallidas} foto(s) no se pudieron migrar a la nube todavía (revisa tu conexión) -- se reintentará la próxima vez que abras la app.`);
+}
+
 // ---------------- Foto del sembrado de paneles (se agrega a la seccion 6 y al PDF) ----------------
-// Se guarda como {dataUrl, ancho, alto} -- no solo el data URL -- porque el PDF
-// (propuesta.js) necesita las dimensiones reales para calcular el tamano de la imagen
-// en la pagina sin deformarla, y jsPDF no las puede leer solo de un data URL.
+// Se guarda como {nombre,tipo,url,ruta,ancho,alto} -- NO como data URL completo --
+// desde el 2026-11-17: guardar la imagen entera dentro del proyecto llenaba la cuota de
+// localStorage (ver "No se pudo guardar" en clientes.js/guardarTodos) con solo unas
+// cuantas estudios con sembrado + fotos del inmueble. Ahora se sube al mismo bucket de
+// Supabase Storage que ya usan archivosRecibo/archivosVerificacion (ver supabase.js) y
+// solo se guarda la referencia -- ancho/alto se conservan porque el PDF (propuesta.js)
+// los necesita para dibujar la imagen sin deformarla, sin tener que volver a descargarla
+// solo para medirla.
 function mostrarPreviaSembrado(foto) {
-  $('imgPreviaSembrado').src = foto ? foto.dataUrl : '';
+  // foto.dataUrl como respaldo: estudios guardados ANTES del 2026-11-17 (ver comentario
+  // de arriba) todavia tienen la imagen completa ahi, nunca se subieron a Storage, y no
+  // hay por que forzar una re-subida solo para poder seguir viendolas.
+  $('imgPreviaSembrado').src = foto ? (foto.url || foto.dataUrl) : '';
   $('previsualizacionSembrado').hidden = !foto;
 }
 
@@ -2318,12 +2378,18 @@ $('archivoSembrado').addEventListener('change', async (e) => {
   $('archivoSembrado').disabled = true;
   try {
     const foto = await archivoAImagenComprimida(file);
-    proyectoActual.fotoSembrado = foto;
+    const blob = await (await fetch(foto.dataUrl)).blob();
+    const subido = await supabaseSubirArchivo('sembrado', new File([blob], 'sembrado.jpg', { type: 'image/jpeg' }));
+    const fotoFinal = { ...subido, ancho: foto.ancho, alto: foto.alto };
+    const anterior = proyectoActual.fotoSembrado;
+    proyectoActual.fotoSembrado = fotoFinal;
+    proyectoActual.sembradoFuente = 'manual';
     guardarProyecto(clienteActual, proyectoActual);
-    mostrarPreviaSembrado(foto);
-    if (ultimoResultado) { ultimoResultado.fotoSembrado = foto; renderSecciones(ultimoResultado); }
+    mostrarPreviaSembrado(fotoFinal);
+    if (ultimoResultado) { ultimoResultado.fotoSembrado = fotoFinal; renderSecciones(ultimoResultado); }
+    if (anterior && anterior.ruta) { try { await supabaseEliminarArchivo(anterior.ruta); } catch (err) { console.error(err); } }
   } catch (err) {
-    alert('No se pudo procesar la imagen: ' + err.message);
+    alert('No se pudo procesar/subir la imagen (revisa tu conexión a internet): ' + err.message);
     console.error(err);
   } finally {
     $('archivoSembrado').disabled = false;
@@ -2331,22 +2397,25 @@ $('archivoSembrado').addEventListener('change', async (e) => {
   }
 });
 
-$('btnQuitarSembrado').addEventListener('click', () => {
+$('btnQuitarSembrado').addEventListener('click', async () => {
+  const anterior = proyectoActual.fotoSembrado;
   proyectoActual.fotoSembrado = null;
   guardarProyecto(clienteActual, proyectoActual);
   mostrarPreviaSembrado(null);
   if (ultimoResultado) { ultimoResultado.fotoSembrado = null; renderSecciones(ultimoResultado); }
+  if (anterior && anterior.ruta) { try { await supabaseEliminarArchivo(anterior.ruta); } catch (err) { console.error(err); } }
 });
 
 // ---------------- Fotos de condiciones GENERALES del inmueble (seccion 5 del formulario,
 // se ven en la seccion 6 de la cotizacion/PDF) ----------------
 // Distinto de fotoSembrado (que es SOLO la distribucion de paneles sobre el techo):
 // aqui se guardan VARIAS fotos (sombras, cubierta, tablero, etc.), cada una con una
-// etiqueta corta opcional. Mismo mecanismo de compresion que fotoSembrado (ver
-// imagenes.js) pero mas agresivo (menor ancho/calidad) porque aqui puede haber varias
-// a la vez compartiendo la misma cuota de localStorage. Tope de 6 fotos por proyecto,
-// pedido explicito del usuario (hueco declarado desde 2026-10-29, "no hay captura de
-// fotografias en esta version").
+// etiqueta corta opcional. Se guardan como {nombre,tipo,url,ruta,ancho,alto,etiqueta} --
+// subidas a Supabase Storage, mismo motivo y mismo patron que fotoSembrado (ver ese
+// comentario mas arriba, 2026-11-17) -- antes de esto, 6 fotos comprimidas por estudio
+// seguian siendo suficiente para llenar la cuota de localStorage entre varios clientes.
+// Tope de 6 fotos por proyecto, pedido explicito del usuario (hueco declarado desde
+// 2026-10-29, "no hay captura de fotografias en esta version").
 const MAX_FOTOS_INMUEBLE = 6;
 
 function renderFotosInmueble() {
@@ -2358,7 +2427,7 @@ function renderFotosInmueble() {
     const item = document.createElement('div');
     item.className = 'foto-inmueble-item';
     const img = document.createElement('img');
-    img.src = foto.dataUrl;
+    img.src = foto.url || foto.dataUrl; // respaldo para fotos guardadas antes del 2026-11-17
     img.alt = foto.etiqueta || `Foto del inmueble ${i + 1}`;
     const etiqueta = document.createElement('input');
     etiqueta.type = 'text';
@@ -2378,10 +2447,13 @@ function renderFotosInmueble() {
 }
 
 async function quitarFotoInmueble(indice) {
-  proyectoActual.fotosInmueble = (proyectoActual.fotosInmueble || []).filter((_, i) => i !== indice);
+  const fotos = proyectoActual.fotosInmueble || [];
+  const foto = fotos[indice];
+  proyectoActual.fotosInmueble = fotos.filter((_, i) => i !== indice);
   guardarProyecto(clienteActual, proyectoActual);
   renderFotosInmueble();
   if (ultimoResultado) { ultimoResultado.fotosInmueble = proyectoActual.fotosInmueble; renderSecciones(ultimoResultado); }
+  if (foto && foto.ruta) { try { await supabaseEliminarArchivo(foto.ruta); } catch (err) { console.error(err); } }
 }
 
 $('archivoFotoInmueble').addEventListener('change', async (e) => {
@@ -2399,19 +2471,24 @@ $('archivoFotoInmueble').addEventListener('change', async (e) => {
     alert(`Solo se agregaron ${porProcesar.length} foto(s) -- el máximo son ${MAX_FOTOS_INMUEBLE} por estudio.`);
   }
   $('archivoFotoInmueble').disabled = true;
+  let fallas = 0;
   try {
     for (const file of porProcesar) {
       try {
         const foto = await archivoAImagenComprimida(file, { maxAncho: 900, calidad: 0.6 });
-        actuales.push({ ...foto, etiqueta: '' });
+        const blob = await (await fetch(foto.dataUrl)).blob();
+        const subido = await supabaseSubirArchivo('fotos-inmueble', new File([blob], 'foto-inmueble.jpg', { type: 'image/jpeg' }));
+        actuales.push({ ...subido, ancho: foto.ancho, alto: foto.alto, etiqueta: '' });
       } catch (err) {
-        console.error('No se pudo procesar una foto del inmueble:', err);
+        fallas++;
+        console.error('No se pudo procesar/subir una foto del inmueble:', err);
       }
     }
     proyectoActual.fotosInmueble = actuales;
     guardarProyecto(clienteActual, proyectoActual);
     renderFotosInmueble();
     if (ultimoResultado) { ultimoResultado.fotosInmueble = proyectoActual.fotosInmueble; renderSecciones(ultimoResultado); }
+    if (fallas) alert(`No se pudo subir ${fallas} foto(s) del inmueble -- revisa tu conexión a internet e intenta de nuevo.`);
   } finally {
     $('archivoFotoInmueble').disabled = false;
   }
@@ -2589,16 +2666,30 @@ $('btnSembrarAuto').addEventListener('click', () => {
     : `Aviso: el techo marcado solo alcanza para ${colocados} de ${ultimoResultado.n} paneles ${anguloTxt} -- agranda el techo marcado o ajusta a mano.`;
 });
 
-$('btnGuardarSembradoAuto').addEventListener('click', () => {
+$('btnGuardarSembradoAuto').addEventListener('click', async () => {
   const paneles = editorSembrador.obtener();
   if (!paneles.length) { alert('Todavía no hay paneles sembrados -- usa "③ Sembrar paneles" primero.'); return; }
-  const foto = hornearImagenSembrado($('imgSembradorAuto'), paneles);
-  proyectoActual.fotoSembrado = foto;
-  proyectoActual.sembradoFuente = 'auto';
-  guardarProyecto(clienteActual, proyectoActual);
-  mostrarPreviaSembrado(foto);
-  if (ultimoResultado) { ultimoResultado.fotoSembrado = foto; renderSecciones(ultimoResultado); }
-  alert('Guardado -- esta imagen es ahora la activa en la sección 6 y el PDF.');
+  const btn = $('btnGuardarSembradoAuto');
+  btn.disabled = true;
+  try {
+    const foto = hornearImagenSembrado($('imgSembradorAuto'), paneles);
+    const blob = await (await fetch(foto.dataUrl)).blob();
+    const subido = await supabaseSubirArchivo('sembrado', new File([blob], 'sembrado.jpg', { type: 'image/jpeg' }));
+    const fotoFinal = { ...subido, ancho: foto.ancho, alto: foto.alto };
+    const anterior = proyectoActual.fotoSembrado;
+    proyectoActual.fotoSembrado = fotoFinal;
+    proyectoActual.sembradoFuente = 'auto';
+    guardarProyecto(clienteActual, proyectoActual);
+    mostrarPreviaSembrado(fotoFinal);
+    if (ultimoResultado) { ultimoResultado.fotoSembrado = fotoFinal; renderSecciones(ultimoResultado); }
+    if (anterior && anterior.ruta) { try { await supabaseEliminarArchivo(anterior.ruta); } catch (err) { console.error(err); } }
+    alert('Guardado -- esta imagen es ahora la activa en la sección 6 y el PDF.');
+  } catch (err) {
+    alert('No se pudo subir la imagen del sembrado (revisa tu conexión a internet): ' + err.message);
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 $('btnQuitarSembradoAuto').addEventListener('click', () => {
@@ -4108,6 +4199,21 @@ async function prepararDocumentosAdjuntosParaPdf(r) {
   }
   r._archivosReciboImgs = await convertirTodos(proyectoActual.archivosRecibo);
   r._archivosVerificacionImgs = await convertirTodos(proyectoActual.archivosVerificacion);
+  // fotoSembrado/fotosInmueble viven en Supabase Storage desde el 2026-11-17 (ver
+  // imagenes.js) -- aqui se resuelven a dataUrl SOLO para este `r` transitorio (nunca
+  // se toca proyectoActual.fotoSembrado, que es la misma referencia que usa
+  // guardarProyecto) para que pagina06b/06c (propuesta.js, el generador viejo que
+  // todavia usa "Enviar por WhatsApp") sigan funcionando igual que antes.
+  try { r.fotoSembrado = await conDataUrlResuelto(r.fotoSembrado); }
+  catch (err) { console.error('No se pudo preparar la foto del sembrado para el PDF:', err); r.fotoSembrado = null; }
+  if (r.fotosInmueble && r.fotosInmueble.length) {
+    const out = [];
+    for (const foto of r.fotosInmueble) {
+      try { const f = await conDataUrlResuelto(foto); if (f) out.push(f); }
+      catch (err) { console.error('No se pudo preparar una foto del inmueble para el PDF:', err); }
+    }
+    r.fotosInmueble = out;
+  }
 }
 
 // Abre vista-previa.html en una ventana con nombre fijo -- pedido explicito del
@@ -4269,6 +4375,10 @@ $('btnGenerarPdf').addEventListener('click', async () => {
     // en #contenedorSecciones, con las ediciones de texto/tablas aplicadas. Pedido
     // explicito del usuario, 2026-11-07. generarPdf() (el generador de texto fijo de
     // siempre) se deja sin usar pero intacta en propuesta.js, por si hace falta volver.
+    // resolverImagenesRemotasEnDom() 2026-11-17: sin esto, cualquier <img> cuyo src ya
+    // sea una URL de Supabase Storage (fotoSembrado/fotosInmueble/archivosRecibo/
+    // archivosVerificacion) se perdia en silencio de este PDF -- ver imagenes.js.
+    await resolverImagenesRemotasEnDom();
     const doc = generarPdfCompletaDesdeVista(r);
     mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
   } finally {
@@ -4574,6 +4684,7 @@ $('btnEnviarWhatsapp').addEventListener('click', async () => {
     // `r` (capturado arriba, no `ultimoResultado` otra vez) en las dos llamadas -- misma
     // salvaguarda contra el estudio cambiando a medio vuelo que en btnGenerarPdf.
     await prepararDocumentosAdjuntosParaPdf(r);
+    await resolverImagenesRemotasEnDom();
     const doc = generarPdfCompletaDesdeVista(r);
     const blob = doc.output('blob');
     const archivo = new File([blob], nombreArchivoProyecto('Cotizacion'), { type: 'application/pdf' });
@@ -4723,6 +4834,7 @@ async function verificarEdicionesEnPdf() {
   // 1) Generar el PDF real (mismo camino que el boton "Cotizacion completa") y leer
   // su texto completo con pdf.js.
   await prepararDocumentosAdjuntosParaPdf(ultimoResultado);
+  await resolverImagenesRemotasEnDom();
   const doc = generarPdfCompletaDesdeVista(ultimoResultado);
   const buffer = doc.output('arraybuffer');
   const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
@@ -4884,6 +4996,9 @@ $('btnVerificarPdf').addEventListener('click', async () => {
 // Arranque
 // =====================================================================
 (function arrancar() {
+  // Migracion en segundo plano (no se espera, nunca retrasa el arranque) -- ver
+  // migrarFotosLocalesANube() arriba.
+  migrarFotosLocalesANube().catch((err) => console.error('Migración de fotos a la nube falló:', err));
   // Link directo "?cliente=ID&proyecto=ID" -- pedido explicito del usuario,
   // 2026-11-14: el visor "Estado del lote de 40 inmuebles" ahora vive en su propia
   // ventana (lote40.html) y su botón "Abrir" necesita poder entrar DIRECTO a una

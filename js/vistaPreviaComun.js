@@ -8,7 +8,7 @@
 // nunca se desincronicen.
 import { construirResultado } from './resultado.js';
 import { renderSeccion, ordenSeccionesEfectivo, seccionTieneDatos } from './secciones.js';
-import { archivoAImagenComprimida } from './imagenes.js';
+import { archivoAImagenComprimida, conDataUrlResuelto, resolverImagenesRemotasEnDom } from './imagenes.js';
 import { COSTOS_RESIDENCIAL, COSTOS_COMERCIAL } from './motor.js';
 
 // construirResultado() NO acepta proyecto.formulario tal cual -- espera el objeto
@@ -160,6 +160,23 @@ async function convertirArchivosParaPdf(archivos) {
 export async function generarYMostrarPdf(r, nombreArchivoBase, visorId = 'visorVistaPrevia') {
   r._archivosReciboImgs = await convertirArchivosParaPdf(r.archivosRecibo);
   r._archivosVerificacionImgs = await convertirArchivosParaPdf(r.archivosVerificacion);
+  // fotoSembrado/fotosInmueble viven en Supabase Storage desde el 2026-11-17 (ver
+  // imagenes.js) -- mismo motivo y mismo helper que ya usa app.js
+  // (prepararDocumentosAdjuntosParaPdf), para que esta vista previa no se desincronice.
+  try { r.fotoSembrado = await conDataUrlResuelto(r.fotoSembrado); }
+  catch (err) { console.error('No se pudo preparar la foto del sembrado para el PDF:', err); r.fotoSembrado = null; }
+  if (r.fotosInmueble && r.fotosInmueble.length) {
+    const out = [];
+    for (const foto of r.fotosInmueble) {
+      try { const f = await conDataUrlResuelto(foto); if (f) out.push(f); }
+      catch (err) { console.error('No se pudo preparar una foto del inmueble para el PDF:', err); }
+    }
+    r.fotosInmueble = out;
+  }
+  // resolverImagenesRemotasEnDom() -- esta pagina ya renderizo `r` en #contenedorSecciones
+  // (renderEnContenedor) antes de llamar esto; sin resolver aqui tambien, cualquier <img>
+  // con una URL de Supabase Storage se perderia en silencio del PDF (ver imagenes.js).
+  await resolverImagenesRemotasEnDom();
   const { generarPdfCompletaDesdeVista } = await import('./propuesta.js');
   const doc = generarPdfCompletaDesdeVista(r);
   const blobUrl = doc.output('bloburl');

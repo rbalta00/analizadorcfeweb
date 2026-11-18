@@ -206,9 +206,11 @@ export function crearProyecto(cliente, { nombre } = {}) {
     // pantalla (atenuado) para que Isaac pueda reactivarlo, el estado es lo que decide
     // si queda incluido.
     textosOcultos: {},
-    fotoSembrado: null, // data URL JPEG comprimido (ver imagenes.js) de la distribucion de paneles sobre el techo -- es
-    // la UNICA imagen activa que se muestra en la seccion 6/PDF, venga de la foto manual o de "Guardar" del sembrador
-    // automatico (ver abajo) -- siempre gana la ultima que se guarde, no hay bandera de cual fuente esta "prendida".
+    fotoSembrado: null, // {nombre,tipo,url,ruta,ancho,alto} -- subida a Supabase Storage (ver supabase.js/imagenes.js)
+    // desde el 2026-11-17 (antes era el data URL JPEG completo, llenaba la cuota de localStorage entre varios
+    // estudios -- ver "No se pudo guardar" en guardarTodos()). Es la UNICA imagen activa que se muestra en la
+    // seccion 6/PDF, venga de la foto manual o de "Guardar" del sembrador automatico (ver abajo) -- siempre gana
+    // la ultima que se guarde, no hay bandera de cual fuente esta "prendida".
     sembradoFuente: 'manual', // 'manual' | 'auto' -- solo recuerda que pestaña dejar abierta al reabrir, cosmetico
     // sembradorAuto: estado editable del sembrador automatico (pedido explicito del usuario, 2026-11-02 -- "sembrador
     // de paneles", portado de js/sembrador.js a partir del repo analizador-fv-cfe/sembrador_de_paneles). Independiente
@@ -224,12 +226,12 @@ export function crearProyecto(cliente, { nombre } = {}) {
     // final de una cotizacion de versiones de prueba/comparacion -- pedido explicito del usuario, 2026-11-05. Se
     // muestra como insignia "✅ Definitiva" en el historial de cotizaciones del cliente (tarjetaProyecto).
     definitiva: false,
-    fotosInmueble: [], // array de {dataUrl, ancho, alto, etiqueta} -- fotos de condiciones GENERALES del inmueble
-    // (sombras, estado de cubierta, tablero, etc., distinto de fotoSembrado que es solo la distribucion de
-    // paneles). Mismo patron de compresion que fotoSembrado (ver imagenes.js), pero en arreglo porque aqui si
-    // tiene sentido guardar varias -- pedido explicito del usuario, hueco declarado desde 2026-10-29 ("no se
-    // capturan fotografias en esta version"). Tope de 6 fotos y compresion mas agresiva que fotoSembrado (ver
-    // app.js) para no comerse la cuota de localStorage entre varias fotos + fotoSembrado del mismo proyecto.
+    fotosInmueble: [], // array de {nombre,tipo,url,ruta,ancho,alto,etiqueta} -- fotos de condiciones GENERALES
+    // del inmueble (sombras, estado de cubierta, tablero, etc., distinto de fotoSembrado que es solo la
+    // distribucion de paneles). Subidas a Supabase Storage igual que fotoSembrado desde el 2026-11-17 (antes
+    // cada una guardaba su data URL completo -- hasta 6 por estudio, el principal motivo real detras de "No se
+    // pudo guardar -- memoria del navegador llena"). Tope de 6 fotos por estudio, pedido explicito del usuario,
+    // hueco declarado desde 2026-10-29 ("no se capturan fotografias en esta version").
     // tablaColumnasOcultas / tablaFilasOcultas: { [tablaId]: [indices...] } -- pedido
     // explicito del usuario, 2026-11-05: "permite eliminar columnas o renglones de las
     // tablas". MISMO patron reversible que graficosExcluidos (secciones.js/app.js): nunca
