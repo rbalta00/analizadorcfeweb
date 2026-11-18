@@ -211,6 +211,17 @@ export function extraerCampos(texto, usoOcr = false) {
       break;
     }
   }
+  // Bug real encontrado en auditoria 2026-11-18: TARIFAS_CONOCIDAS nunca incluyo '01'
+  // (la tarifa domestica basica) -- un recibo real que imprime "TARIFA:1" (o "01", o con
+  // sufijo regional pre-2024 como "1B"/"1C"/"1F") nunca se detectaba por codigo, solo
+  // caia al respaldo debil de abajo (buscar la palabra "domestic[a]" en cualquier parte
+  // del texto, que NO es como CFE imprime la tarifa en el recibo real). Se ancla a
+  // "TARIFA" para no confundir un "1"/"01" cualquiera (fecha, pagina, digito de un RPU)
+  // en otra parte del recibo con el codigo de tarifa.
+  if (campos.tarifa === null) {
+    const m01 = norm.match(/TARIFA\s*:?\s*0?1([A-F])?\b/i);
+    if (m01) campos.tarifa = '01';
+  }
   if (campos.tarifa === null && /\bdomestic/i.test(norm)) campos.tarifa = '01';
 
   let m;

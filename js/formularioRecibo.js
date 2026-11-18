@@ -191,6 +191,15 @@ export function llenarFormularioDesdeReciboCampos(c) {
       if (c.energia_base != null) $('c_energia_base').value = c.energia_base;
       if (c.energia_intermedia != null) $('c_energia_intermedia').value = c.energia_intermedia;
       if (c.energia_punta != null) $('c_energia_punta').value = c.energia_punta;
+    } else {
+      // Este recibo NO viene partido en Base/Intermedia/Punta (no es GDMTH) -- limpia
+      // cualquier monto viejo de un recibo GDMTH anterior en estos 3 campos ocultos.
+      // leerInputCalculo() ya los ignora para cualquier tarifa que no sea GDMTH (los
+      // excluye del objeto `cargos` que recibe el motor), asi que hoy no corrompen un
+      // calculo que no sea GDMTH -- pero si quedaban con un monto viejo y luego alguien
+      // vuelve a elegir GDMTH a mano SIN subir un recibo nuevo, ese monto viejo (de un
+      // cliente distinto) reaparecia como si fuera real.
+      $('c_energia_base').value = 0; $('c_energia_intermedia').value = 0; $('c_energia_punta').value = 0;
     }
     if (c.rate_kw_detectado) {
       const rkDistEl = document.querySelector(`input[name="rkDist"][value="${c.rate_kw_detectado.distribucion > 0 ? 'demanda' : 'mercado'}"]`);
@@ -198,9 +207,19 @@ export function llenarFormularioDesdeReciboCampos(c) {
       const rkCapEl = document.querySelector(`input[name="rkCap"][value="${c.rate_kw_detectado.capacidad > 0 ? 'demanda' : 'mercado'}"]`);
       if (rkCapEl) rkCapEl.checked = true;
     }
+    // Bug real encontrado en auditoria 2026-11-18: estos 3 solo se ENCENDIAN cuando el
+    // recibo nuevo SI trae el cargo -- si el recibo nuevo NO lo trae (null), el checkbox
+    // y el monto se quedaban tal cual estaban (ej. "trae bonificacion" de un recibo
+    // ANTERIOR, ya reemplazado), cobrando/descontando un monto que no tiene nada que ver
+    // con este recibo. A diferencia de los campos numericos de arriba, estos 3 nunca
+    // tienen marca naranja ("campo-no-detectado") que bloquee el calculo -- sin un
+    // "else" explicito que los apague, no hay ninguna red de seguridad que lo atrape.
     if (c.bt_monto) { $('traeBt').checked = true; $('btMonto').disabled = false; $('btMonto').value = c.bt_monto; }
+    else { $('traeBt').checked = false; $('btMonto').disabled = true; $('btMonto').value = 0; }
     if (c.bonus_monto) { $('traeBonus').checked = true; $('bonusMonto').disabled = false; $('bonusMonto').value = Math.abs(c.bonus_monto); }
+    else { $('traeBonus').checked = false; $('bonusMonto').disabled = true; $('bonusMonto').value = 0; }
     if (c.recargo_fp_monto) { $('traeRecargoFp').checked = true; $('recargoFpMonto').disabled = false; $('recargoFpMonto').value = Math.abs(c.recargo_fp_monto); }
+    else { $('traeRecargoFp').checked = false; $('recargoFpMonto').disabled = true; $('recargoFpMonto').value = 0; }
   } else {
     if (c.periodo_dias != null) $('d_periodoDias').value = c.periodo_dias;
     if (c.periodo_kwh != null) $('d_periodoKwh').value = c.periodo_kwh;

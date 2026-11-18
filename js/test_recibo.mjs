@@ -38,5 +38,29 @@ for (const [caso, usoOcr] of Object.entries(CASOS)) {
   }
 }
 
+// Deteccion de tarifa '01' (domestica basica) -- texto sintetico, no un recibo real
+// completo: nunca hubo un recibo real de tarifa 01 en este repo para probar contra el
+// texto completo (ver auditoria 2026-11-18, TARIFAS_CONOCIDAS no incluia '01'). Cubre
+// solo el patron de deteccion en si -- si aparece un recibo real de tarifa 01, agregar
+// sus fixtures como los demas casos de arriba en vez de dejar esto como unica prueba.
+console.log('\n=== tarifa 01 (sintetico) ===');
+const CASOS_TARIFA_01 = [
+  ['TARIFA: 1\nNO. DE SERVICIO: 123456789012\n', '01'],
+  ['TARIFA:01\n', '01'],
+  ['TARIFA 1B\n', '01'], // sufijo regional pre-2024
+  ['TARIFA:PDBT\n', 'PDBT'], // no debe romper la deteccion de otras tarifas
+  ['TARIFA:GDMTH\n', 'GDMTH'],
+  ['algo con 01 cosas que no son tarifa, pagina 01 de 02\n', null], // sin "TARIFA" cerca, no debe detectar nada
+];
+for (const [texto, esperado] of CASOS_TARIFA_01) {
+  const real = extraerCampos(texto, false).tarifa;
+  if (real === esperado) {
+    console.log(`ok    "${texto.replace(/\n/g, ' ')}" -> ${JSON.stringify(real)}`);
+  } else {
+    fallosTotal++;
+    console.log(`FALLO "${texto.replace(/\n/g, ' ')}" -> real=${JSON.stringify(real)} esperado=${JSON.stringify(esperado)}`);
+  }
+}
+
 console.log('\n' + (fallosTotal === 0 ? 'TODO OK' : `${fallosTotal} FALLOS`));
 process.exit(fallosTotal === 0 ? 0 : 1);

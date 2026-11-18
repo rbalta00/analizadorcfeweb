@@ -2763,7 +2763,28 @@ const ETIQUETA_CAMPO = {
   c_energia_base: 'Energía Base', c_energia_intermedia: 'Energía Intermedia', c_energia_punta: 'Energía Punta',
   grupoRateKw: 'Columna "$/kW" (Distribución/Capacidad)',
   titular: 'Titular / inmueble', domicilio: 'Domicilio',
+  d_periodoDias: 'Días del período', d_periodoKwh: 'kWh del período', d_dap: 'DAP del período',
 };
+// Bug real encontrado en auditoria 2026-11-18: para una tarifa DOMESTICA (01/DAC),
+// CAMPO_A_INPUT mapeaba periodo_dias/periodo_kwh/dap a 'periodoDias'/'periodoKwh'/'dap'
+// -- los inputs de la seccion NO domestica, que para una tarifa domestica estan
+// OCULTOS (#bloqueNoDomestica.hidden). Si el recibo domestico no traia alguno de esos
+// 3 datos, se marcaba en naranja un campo que el usuario nunca ve, y
+// faltantesVisiblesParaCalcular() (que solo cuenta elementos con offsetParent !== null,
+// es decir VISIBLES) nunca lo contaba como pendiente -- el calculo NUNCA se bloqueaba
+// para estos 3 datos en una tarifa domestica, aunque no se hubieran detectado, y el
+// valor viejo que quedara en el input domestico real (d_periodoDias/d_periodoKwh/d_dap)
+// se usaba sin ningun aviso. Esta funcion redirige al input domestico real segun la
+// tarifa ACTUAL en pantalla -- se usa en vez de CAMPO_A_INPUT[campo] en todos los
+// lugares que deciden que input marcar/revisar para estos 3 campos.
+function inputIdPara(campo) {
+  if (esDomestica($('tarifa').value)) {
+    if (campo === 'periodo_dias') return 'd_periodoDias';
+    if (campo === 'periodo_kwh') return 'd_periodoKwh';
+    if (campo === 'dap') return 'd_dap';
+  }
+  return CAMPO_A_INPUT[campo];
+}
 
 // Marca en naranja los campos del formulario que el recibo NO trajo solos -- pedido
 // explicito del usuario: "me marcas los datos que no se leyeron" en vez de solo un
@@ -2776,7 +2797,7 @@ const ETIQUETA_CAMPO = {
 function marcarCamposNoDetectados(campos) {
   document.querySelectorAll('#tabCaptura .campo-no-detectado').forEach(el2 => el2.classList.remove('campo-no-detectado'));
   for (const campo of campos.campos_no_encontrados || []) {
-    const inputId = CAMPO_A_INPUT[campo];
+    const inputId = inputIdPara(campo);
     const el2 = inputId && $(inputId);
     if (el2) el2.classList.add('campo-no-detectado');
   }
@@ -2804,7 +2825,7 @@ function sincronizarCamposConfirmados(leido) {
   const actualizado = { ...leido };
   if (Array.isArray(actualizado.campos_no_encontrados)) {
     actualizado.campos_no_encontrados = actualizado.campos_no_encontrados.filter((campo) => {
-      const inputId = CAMPO_A_INPUT[campo];
+      const inputId = inputIdPara(campo);
       const el2 = inputId && $(inputId);
       return el2 && el2.classList.contains('campo-no-detectado');
     });
@@ -2888,12 +2909,12 @@ function mostrarEstadoLecturaRecibo(campos) {
   // demanda_contratada_kw, historial_anual_kwh/meses_cubiertos) que antes se colaban
   // en este mensaje diciendo "quedaron marcados en naranja" sin que nada se marcara
   // de verdad. Bug real encontrado por el usuario probando un recibo real.
-  const faltantes = campos.campos_no_encontrados.filter(k => CAMPO_A_INPUT[k]);
+  const faltantes = campos.campos_no_encontrados.filter(k => inputIdPara(k));
   estadoEl.className = campos.uso_ocr ? 'nota' : 'nota ok';
   estadoEl.textContent = (campos.uso_ocr
     ? 'Se usó OCR (el PDF no traía texto aprovechable, o era una foto/escaneo). Revisa con más cuidado los datos.'
     : 'Se leyó el texto del recibo directamente.')
-    + (faltantes.length ? ` No se encontraron solos (quedaron marcados en naranja abajo): ${faltantes.map(k => ETIQUETA_CAMPO[CAMPO_A_INPUT[k]] || k).join(', ')}.` : '');
+    + (faltantes.length ? ` No se encontraron solos (quedaron marcados en naranja abajo): ${faltantes.map(k => ETIQUETA_CAMPO[inputIdPara(k)] || k).join(', ')}.` : '');
   // Dos fuentes de aviso independientes (reconciliación aritmética de los $ y
   // plausibilidad de titular/domicilio) -- se muestran juntas si ambas aplican, en
   // vez de que la segunda pise a la primera.
@@ -2962,22 +2983,34 @@ function llenarFormularioDesdeRecibo(c) {
 }
 
 // ---------------- Calcular ----------------
-$('btnCalcular').addEventListener('click', () => {
+// Extraido a funcion compartida (2026-11-18) para que el boton "Calcular" Y el cambio
+// manual de tarifa (mas abajo, $('tarifa').addEventListener('change', ...)) usen
+// EXACTAMENTE la misma logica de bloqueo/traduccion de errores -- antes solo el boton
+// la tenia, y cambiar la tarifa a mano no recalculaba nada hasta volver a pulsar
+// "Calcular" (pedido explicito del usuario: "la tarifa del recibo manda en los
+// cálculos... si el usuario cambia la tarifa manualmente, el programa debe RECALCULAR
+// TODO automáticamente"). `prefijoAviso`, si se da, se antepone a cualquier mensaje
+// (listo o con error) -- usado para avisar que la tarifa elegida ya no es la del
+// recibo leido, sin duplicar ese aviso en dos lugares distintos.
+function ejecutarCalculo({ prefijoAviso = '', desplazar = true } = {}) {
   const faltan = faltantesVisiblesParaCalcular();
   if (faltan.length) {
     $('estadoCalculo').className = 'nota aviso';
-    $('estadoCalculo').textContent = 'Faltan datos para calcular (marcados en naranja arriba): ' +
+    $('estadoCalculo').textContent = prefijoAviso + 'Faltan datos para calcular (marcados en naranja arriba): ' +
       faltan.map(f => f.label).join(', ') + '. Complétalos antes de calcular -- si se calcula con un dato ' +
       'que falta, el resultado sale mal.';
-    const primero = document.getElementById(faltan[0].id);
-    if (primero) primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    return;
+    if (desplazar) {
+      const primero = document.getElementById(faltan[0].id);
+      if (primero) primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    return false;
   }
   try {
     calcularYRenderizar();
-    $('estadoCalculo').className = 'nota ok';
-    $('estadoCalculo').textContent = 'Calculado. Desplázate hacia abajo para ver las secciones, o usa el índice.';
-    $('contenedorSecciones').scrollIntoView({ behavior: 'smooth' });
+    $('estadoCalculo').className = prefijoAviso ? 'nota aviso' : 'nota ok';
+    $('estadoCalculo').textContent = prefijoAviso + 'Calculado. Desplázate hacia abajo para ver las secciones, o usa el índice.';
+    if (desplazar) $('contenedorSecciones').scrollIntoView({ behavior: 'smooth' });
+    return true;
   } catch (e) {
     $('estadoCalculo').className = 'nota aviso';
     // Bug real: motor.js truena con el nombre de la VARIABLE interna ("periodoKwh debe
@@ -2990,13 +3023,34 @@ $('btnCalcular').addEventListener('click', () => {
     // usado para esos avisos, y se reusa el mismo desplazamiento a la vista.
     const faltante = !(e instanceof ErrorDeClasificacion) && e.message.match(/^(\w+) debe ser/);
     const campoId = faltante && ETIQUETA_CAMPO[faltante[1]] ? faltante[1] : null;
-    $('estadoCalculo').textContent = campoId
+    $('estadoCalculo').textContent = prefijoAviso + (campoId
       ? `Falta un dato para calcular: "${ETIQUETA_CAMPO[campoId]}" debe ser mayor que 0. Complétalo antes de calcular.`
-      : (e instanceof ErrorDeClasificacion ? 'No se puede calcular con estos datos: ' : 'Error al calcular: ') + e.message;
-    const campoEl = campoId && document.getElementById(campoId);
-    if (campoEl) campoEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      : (e instanceof ErrorDeClasificacion ? 'No se puede calcular con estos datos: ' : 'Error al calcular: ') + e.message);
+    if (desplazar) {
+      const campoEl = campoId && document.getElementById(campoId);
+      if (campoEl) campoEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
     console.error(e);
+    return false;
   }
+}
+$('btnCalcular').addEventListener('click', () => ejecutarCalculo());
+
+// Cambiar la tarifa A MANO (clic real, e.isTrusted -- no un dispatchEvent programatico
+// de aplicar un recibo/abrir un proyecto, que ya dispara su propio recalculo en el
+// momento correcto con todos los campos ya llenos) recalcula TODO automaticamente con
+// la estructura de costos de la nueva tarifa, y avisa si esa tarifa ya no es la que
+// trajo el ultimo recibo leido para este estudio -- pedido explicito del usuario,
+// 2026-11-18. Si el estudio todavia no existe (pantalla de creacion) no hay nada que
+// recalcular.
+$('tarifa').addEventListener('change', (e) => {
+  if (!e.isTrusted || !proyectoActual) return;
+  const nueva = $('tarifa').value;
+  const difiere = ultimoLeido && ultimoLeido.tarifa && ultimoLeido.tarifa !== nueva;
+  const prefijoAviso = difiere
+    ? `⚠️ Elegiste la tarifa ${nueva}, distinta de la detectada en el último recibo leído (${ultimoLeido.tarifa}). `
+    : '';
+  ejecutarCalculo({ prefijoAviso, desplazar: false });
 });
 
 // Proyectos guardados ANTES de que existieran los bloques 'documentos' y
