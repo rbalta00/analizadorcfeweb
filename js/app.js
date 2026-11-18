@@ -2196,6 +2196,60 @@ function renderArchivosRecibo() {
     fila.append(link, btn);
     cont.append(fila);
   });
+  // Pedido explicito del usuario, 2026-11-18: poder releer un recibo YA subido sin
+  // tener que volver a subirlo -- util cada vez que se corrige algo en el lector
+  // (recibo.js) y ya hay estudios guardadas con el archivo adjunto pero con campos que
+  // el lector viejo nunca detecto (ej. titular/domicilio/historial de un formato de
+  // recibo que antes no se reconocia).
+  if (archivos.length) {
+    const filaBtn = document.createElement('div');
+    filaBtn.className = 'fila-archivo-recibo';
+    const btnRescan = document.createElement('button');
+    btnRescan.type = 'button';
+    btnRescan.id = 'btnReescanearRecibo';
+    btnRescan.className = 'btn-link';
+    btnRescan.textContent = '🔄 Volver a leer este recibo';
+    btnRescan.title = 'Vuelve a extraer los datos del recibo con el lector actual, usando el/los archivo(s) ' +
+      'ya subido(s) -- sin tener que volver a subirlos. Útil si se corrigió algo en el lector después de que ' +
+      'este recibo ya se había subido.';
+    btnRescan.addEventListener('click', reescanearArchivosRecibo);
+    filaBtn.append(btnRescan);
+    cont.append(filaBtn);
+  }
+}
+
+async function reescanearArchivosRecibo() {
+  const archivos = (proyectoActual && proyectoActual.archivosRecibo) || [];
+  if (!archivos.length) return;
+  const estadoEl = $('estadoRecibo');
+  $('avisoReconciliacion').hidden = true;
+  estadoEl.className = 'nota';
+  estadoEl.textContent = (archivos.length > 1
+    ? `Releyendo los ${archivos.length} archivos ya subidos`
+    : 'Releyendo el archivo ya subido') + ' (puede tardar hasta 1 minuto si usa OCR)...';
+  const btn = $('btnReescanearRecibo');
+  if (btn) btn.disabled = true;
+  try {
+    const files = [];
+    for (const a of archivos) {
+      const resp = await fetch(a.url);
+      if (!resp.ok) throw new Error(`No se pudo descargar "${a.nombre}" para releerlo (${resp.status}).`);
+      const blob = await resp.blob();
+      files.push(new File([blob], a.nombre, { type: blob.type || a.tipo || '' }));
+    }
+    const campos = await leerReciboMultiple(files);
+    ultimoLeido = campos;
+    llenarFormularioDesdeRecibo(campos);
+    mostrarEstadoLecturaRecibo(campos);
+    intentarAutoCalcular(campos);
+  } catch (err) {
+    estadoEl.className = 'nota';
+    estadoEl.textContent = 'Error al releer el recibo: ' + err.message;
+    console.error(err);
+  } finally {
+    const btnDeNuevo = $('btnReescanearRecibo');
+    if (btnDeNuevo) btnDeNuevo.disabled = false;
+  }
 }
 
 async function agregarArchivosReciboAProyecto(files) {
