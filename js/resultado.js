@@ -17,8 +17,21 @@ export function construirResultado(input) {
     periodoDias, periodoKwh, dap, cargos, rateKw, btPct, fpBonusPct, recargoFpPct,
     moduloWp, cobertura, horasUtiles, costos, escalamientoPct,
     escalones, dapDomestica, cargoFijoDomestica,
-    leido, inmueble, aplicaIsr, tasaIsrPct, historialManual, vigenciaDias,
+    leido, inmueble, aplicaIsr, tasaIsrPct, historialManual, vigenciaDias, fechaBaseVigencia,
   } = input;
+
+  // Hallazgo real, reportado por el usuario 2026-11-18 ("este dato sigue saliendo
+  // mal"): tanto "Estudio del [fecha]" como "válida hasta el [fecha] (N días)" se
+  // calculaban con `new Date()` -- HOY, el momento exacto de este calculo -- sin
+  // importar cuándo se creó realmente la estudio. Cada vez que se reabría/recalculaba
+  // un proyecto viejo (otro día), ambas fechas se recorrían solas hacia adelante,
+  // nunca expiraban de verdad y "Estudio del..." mentía diciendo que se había hecho
+  // hoy mismo. Ahora se ancla a la fecha real de creación de la estudio
+  // (proyecto.creadoEn, o proyecto.entregadaEn si ya se congeló/entregó -- ver
+  // app.js/vistaPreviaComun.js), con `new Date()` solo como respaldo si no se tiene
+  // esa fecha (compatibilidad con llamadas/pruebas que no la pasan).
+  const fechaBaseParsed = fechaBaseVigencia ? new Date(fechaBaseVigencia) : null;
+  const fechaBase = (fechaBaseParsed && !isNaN(fechaBaseParsed.getTime())) ? fechaBaseParsed : new Date();
 
   let invoice, meta, pagoRecurrentePeriodo, piso, ahorroMax, pctMax, cargosFinal, facturaDetalle;
   if (!esDomestica) {
@@ -210,8 +223,8 @@ export function construirResultado(input) {
 
   const r = {
     titular: titular || 'Cliente', tituloRecibo: leido ? leido.titular : null, domicilio,
-    noServicio, tarifa, fechaEstudio: fechaEstudioEs(),
-    vigenciaDias: vigenciaDias || 15, fechaVigencia: fechaVigenciaEs(vigenciaDias || 15),
+    noServicio, tarifa, fechaEstudio: fechaEstudioEs(fechaBase),
+    vigenciaDias: vigenciaDias || 15, fechaVigencia: fechaVigenciaEs(vigenciaDias || 15, fechaBase),
     periodoDias, periodoKwh, dap: esDomestica ? (dapDomestica || 0) : dap, cargos: cargosFinal, meta,
     btPct: btPct || 0, fpBonusPct: fpBonusPct || 0, recargoFpPct: recargoFpPct || 0, esDomestica: !!esDomestica,
     escalones: esDomestica ? escalones : null, cargoFijoDomestica: esDomestica ? (cargoFijoDomestica || 0) : null,

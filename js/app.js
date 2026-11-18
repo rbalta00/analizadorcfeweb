@@ -3215,6 +3215,9 @@ function leerInputCalculo() {
   const aplicaIsr = $('aplicaIsr').checked;
   const tasaIsrPct = Number($('tasaIsr').value);
   const vigenciaDias = Number($('vigenciaDias').value) || 15;
+  // Ancla "Estudio del..."/"válida hasta..." a la fecha REAL de creación de esta
+  // estudio (o de entrega, si ya se congeló) -- ver resultado.js, nunca a "hoy".
+  const fechaBaseVigencia = proyectoActual ? (proyectoActual.entregadaEn || proyectoActual.creadoEn) : undefined;
   const historialCrudo = esDom ? leerFormularioRecibo().historialDom : leerFormularioRecibo().historialNoDom;
   const historialManual = historialCrudo.filter(v => v != null).map(Number);
 
@@ -3254,7 +3257,7 @@ function leerInputCalculo() {
     const recargoFpPct = traeRecargoFp ? recargoFpMonto / (baseAprox + btMonto) : 0.0;
     input = { titular, domicilio, noServicio, tarifa, esDomestica: false, periodoDias, periodoKwh, dap, cargos,
       rateKw, btPct, fpBonusPct, recargoFpPct, moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
-      aplicaIsr, tasaIsrPct, historialManual, vigenciaDias };
+      aplicaIsr, tasaIsrPct, historialManual, vigenciaDias, fechaBaseVigencia };
   } else {
     const periodoDias = Number($('d_periodoDias').value);
     const periodoKwh = Number($('d_periodoKwh').value);
@@ -3266,7 +3269,7 @@ function leerInputCalculo() {
     input = { titular, domicilio, noServicio, tarifa, esDomestica: true, periodoDias, periodoKwh, escalones,
       dapDomestica: Number($('d_dap').value), cargoFijoDomestica: Number($('d_cargoFijo').value),
       moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
-      aplicaIsr, tasaIsrPct, historialManual, vigenciaDias };
+      aplicaIsr, tasaIsrPct, historialManual, vigenciaDias, fechaBaseVigencia };
   }
   return input;
 }
