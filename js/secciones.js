@@ -9,7 +9,20 @@ import { bloqueDeSeccion, seccionesDelBloque } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
 import { leerPlantillaTarifa } from './textosGlobales.js';
-import { beneficioCosto, R } from './motor.js';
+import { beneficioCosto, R, DIAS_MES_REF } from './motor.js';
+
+// Texto de cadencia de facturación, derivado del período REAL de este recibo (r.periodoDias)
+// -- nunca asumir "mensual" a fuerza. Hallazgo real, auditoria 2026-11-18: la seccion 1
+// (S1.5/S1.6) decia "cada mes"/"mensual" de forma fija para CUALQUIER tarifa, aunque el
+// propio periodoDias de PDBT (y 01/DAC) puede ser bimestral -- la seccion 4 ya usaba
+// "por periodo" de forma generica, la seccion 1 no seguia el mismo criterio.
+function cadenciaPeriodo(periodoDias) {
+  const periodosPorAnio = periodoDias > 0 ? Math.round(365 / periodoDias) : 12;
+  if (periodosPorAnio >= 11) return { adjetivo: 'mensual', frase: 'cada mes', periodosPorAnio: 12 };
+  if (periodosPorAnio >= 5 && periodosPorAnio <= 7) return { adjetivo: 'bimestral', frase: 'cada período (bimestral, cada 2 meses)', periodosPorAnio: 6 };
+  const mesesAprox = Math.round(periodoDias / DIAS_MES_REF);
+  return { adjetivo: 'del período', frase: `cada período (cada ${mesesAprox} meses aprox.)`, periodosPorAnio: periodosPorAnio || 12 };
+}
 
 // Razon real por la que un concepto NO reducible no baja con paneles solares -- NO es la
 // misma razon para todos. 'suministro' es un cargo fijo por tener contrato (no depende de
@@ -951,7 +964,7 @@ function s01(r, _leido, onToggle) {
   // seccion 1 con verificacion en sitio) va con el MISMO tamaño y tipo de letra que el
   // titulo de la seccion (№1) -- clase 'letra-titulo' (styles.css + propuestaDom.js).
   art.append(textoEditable('div', 'aviso-cream letra-titulo', `Esta estudio es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días). Los ` +
-    'precios de materiales son una provisión de mercado, no una estudio fija de proveedor -- después de esa ' +
+    'precios de materiales son una provisión de mercado, no una cotización fija de proveedor -- después de esa ' +
     'fecha hay que revisarlos antes de confirmar.'));
   art.append(graficoToggle('g01-tarjetas-principales', 'Tarjetas: inversión, recuperación y ahorro año 1', tarjetas([
     [M(r.investment), 'Lo que cuesta el sistema, IVA incluido'],
@@ -981,12 +994,13 @@ function s01(r, _leido, onToggle) {
   art.append(subtitulo(1, 'cuanto-cuesta', 'Cuánto cuesta y en cuánto se paga solo'));
   const flujoTxt = r.recuperacionAcumulada
     ? ` (o ${r.recuperacionAcumulada.toFixed(1)} años si se cuenta el mantenimiento y el cambio de inversor)` : '';
-  art.append(p(`El sistema completo cuesta ${M(r.investment)} (ya con IVA). Con el ahorro que generaría cada mes, ` +
+  const cad = cadenciaPeriodo(r.periodoDias);
+  art.append(p(`El sistema completo cuesta ${M(r.investment)} (ya con IVA). Con el ahorro que generaría, ` +
     `esa inversión se recupera en aproximadamente ${r.payback ? r.payback.toFixed(1) + ' años' : 'un tiempo no calculable con el ahorro estimado actual'}${flujoTxt}. ` +
-    'Después de ese tiempo, el ahorro mensual es ganancia, no recuperación de lo invertido.'));
+    `Después de ese tiempo, el ahorro de ${cad.frase} es ganancia, no recuperación de lo invertido.`));
   art.append(p(`En el año de referencia se estima pasar de pagar ${M(r.annualbefore)} a ${M(r.annualafter)} al año. ` +
-    `El promedio mensual sería ${M(r.annualafter / 12)} en vez de ${M(r.annualbefore / 12)}. Son promedios de un ` +
-    'modelo, no pagos mensuales fijos.'));
+    `El promedio ${cad.adjetivo} sería ${M(r.annualafter / cad.periodosPorAnio)} en vez de ${M(r.annualbefore / cad.periodosPorAnio)} -- ` +
+    `facturado ${cad.frase}, no cada mes, para este recibo. Son promedios de un modelo, no pagos fijos.`));
   art.append(avisoCream('El recibo permite comprobar el gasto actual; el ahorro futuro es una estimación ' +
     `condicionada. Se conserva el gasto observado de ${listaConceptos(r.meta.noReducibles)} sin anticipar ahorro ` +
     'adicional. Los precios deberán actualizarse antes de contratar.'));
