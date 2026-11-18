@@ -3,8 +3,8 @@
   "no_servicio": "217991104461",
   "no_medidor": "Y623LH",
   "multiplicador": 1,
-  "titular": null,
-  "domicilio": null,
+  "titular": "COLEGIO BACHILLERES EDO DE PUE",
+  "domicilio": "CALLE DE LOS PINOS S N, PV DE LOS PINOS Y EL ARENAL, EL ARENAL AMOZOC 08JC.P.72992, CHACHAPA,PUE.",
   "demanda_contratada_kw": null,
   "periodo_dias": 62,
   "periodo_kwh": 12441,
@@ -24,25 +24,33 @@
     "distribucion": 0,
     "capacidad": 0
   },
-  "historial": null,
+  "historial": [
+    { "mes": "DIC", "anio": 24, "kwh": 13513 },
+    { "mes": "FEB", "anio": 25, "kwh": 10473 },
+    { "mes": "ABR", "anio": 25, "kwh": 12943 },
+    { "mes": "JUN", "anio": 25, "kwh": 11656 },
+    { "mes": "AGO", "anio": 25, "kwh": 8987 },
+    { "mes": "OCT", "anio": 25, "kwh": 13095 },
+    { "mes": "DIC", "anio": 25, "kwh": 12747 },
+    { "mes": "FEB", "anio": 26, "kwh": 10740 },
+    { "mes": "ABR", "anio": 26, "kwh": 11239 },
+    { "mes": "JUN", "anio": 26, "kwh": 11933 },
+    { "mes": "AGO", "anio": 26, "kwh": 8078 }
+  ],
   "rate_kw_via_ocr": false,
   "subtotal_resumen": 44523.74,
   "iva_resumen": 7123.8,
   "total_resumen": 52207.57,
-  "historial_anual_kwh": null,
-  "historial_meses_cubiertos": null,
+  "historial_anual_kwh": 68402.18181818181,
+  "historial_meses_cubiertos": 22,
   "historial_advertencia_huecos": null,
   "rate_kw_advertencia": null,
   "reconciliacion_diff": 0,
   "reconciliacion_advertencia": null,
   "razon_social_cfdi": "COLEGIO DE BACHILLERES DEL ESTADO DE PUEBLA",
-  "titular_domicilio_advertencia": "No se detectó el titular, pero el comprobante CFDI trae impresa la Razón Social \"COLEGIO DE BACHILLERES DEL ESTADO DE PUEBLA\" -- usar ese nombre si corresponde a este mismo inmueble, o corregir a mano si no. No se detectó el domicilio -- revisar a mano contra el recibo antes de continuar (hace falta para ubicar el inmueble).",
+  "titular_domicilio_advertencia": null,
   "uso_ocr": false,
   "campos_no_encontrados": [
-    "titular",
-    "domicilio",
-    "demanda_contratada_kw",
-    "historial_anual_kwh",
-    "historial_meses_cubiertos"
+    "demanda_contratada_kw"
   ]
 }

@@ -15,6 +15,18 @@ import { extraerCampos } from './recibo.js';
 // Potencia((3))" usa un sinonimo ("Cargo" en vez de "Recargo") para el mismo concepto
 // -- ambos hallazgos reales de esa misma auditoria sobre los 40 recibos reales del
 // lote de gobierno, no sinteticos.
+//
+// cobaeb, 3 hallazgos reales MAS (auditoria 2026-11-18, reportados directo por el
+// usuario sobre este mismo cliente ya guardado -- no sinteticos): (1) titular/domicilio
+// nunca se detectaban porque el patron exigia el anclaje "Ciudad de Mexico" antes del
+// bloque, pero este recibo no trae ese preambulo -- el nombre/domicilio son literalmente
+// las primeras lineas del texto; (2) el historial de consumo se imprime como "del DD MES
+// AA al DD MES AA  kWh  $  $" (rango de fechas), un formato que el patron de historial
+// de arriba (pensado para "MES AA  N  kWh...") nunca reconocia -- historial salia null
+// pese a que el recibo SI trae las 11 filas completas; (3) una vez agregado el soporte
+// para ese formato, historial_anual_kwh/meses_cubiertos asumian "cada periodo = 1 mes"
+// (arrastrado del formato mensual) y sobreestimaban el consumo anual casi al doble para
+// un historial bimestral, ademas de marcar cada periodo consecutivo como un "hueco" falso.
 const CASOS = { abue: false, museo: false, pdbt: false, secfinanzas: true, cobaeb: false }; // valor = uso_ocr real de ese caso
 let fallosTotal = 0;
 

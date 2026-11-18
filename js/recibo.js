@@ -128,7 +128,12 @@ function leerRazonSocial(textoNorm) {
 }
 
 const PALABRAS_DIRECCION = /^(CALLE|AV\.?|AVENIDA|BLVD\.?|BOULEVARD|PRIV\.?|PRIVADA|CALZ\.?|CALZADA|ANDADOR|PROL\.?|PROLONGACI[O0]N|CARRETERA|KM\.?|CIRCUITO|RETORNO|CERRADA)\b/i;
-const PATRON_DOMICILIO_TOKENS = /\b(C\.?P\.?\s*\d{3,5}|COL(ONIA)?\.?\b|SUR|NORTE|ORIENTE|PONIENTE|FRACC|BLVD|CALZ|AV\.?\b|NUM\.?\b|KM\.?\b)/i;
+// "C.P." sin \b al inicio -- hallazgo real, auditoria 2026-11-18: el recibo COBAEB trae
+// "...AMOZOC 08JC.P.72992..." (el extractor de PDF a veces pega sin espacio un codigo de
+// edificio/piso justo antes de "C.P.", ej. "08J" + "C.P.72992") -- el \b exigido antes
+// nunca empataba porque "J" y "C" son ambos caracteres de palabra (sin frontera entre
+// ellos), aunque el C.P. SI estaba impreso y era perfectamente legible.
+const PATRON_DOMICILIO_TOKENS = /(C\.?P\.?\s*\d{3,5}|\b(COL(ONIA)?\.?|SUR|NORTE|ORIENTE|PONIENTE|FRACC|BLVD|CALZ|AV\.?|NUM\.?|KM\.?)\b)/i;
 
 // Verificacion de "¿lo que se leyo como titular/domicilio tiene sentido?" -- pedido
 // explicito del usuario (2026-11-05: "cuando capturas los datos revisa bien... las
@@ -178,19 +183,43 @@ function leerHistorialConsumo(textoNorm) {
   return orden.length ? orden.map(c => filas[c]) : null;
 }
 
+// Formato alterno de historial: algunos recibos (confirmado real, COBAEB Plantel 26, PDBT
+// bimestral, auditoria 2026-11-18) imprimen la tabla de historial como "del DD MES AA al DD
+// MES AA  kWh  $monto  $monto" (rango de fechas de cada periodo) en vez de "MES AA  N  kWh
+// ..." (el formato que leerHistorialConsumo ya reconoce). El patron de arriba nunca empata
+// este formato -- el historial salia null aunque el recibo SI trae la tabla completa
+// impresa. Se etiqueta cada periodo con el mes/anio de la fecha FINAL del rango (cuando se
+// factura/cierra ese periodo). La tabla imprime del mas reciente al mas viejo -- se invierte
+// para quedar cronologico, igual que espera el resto del codigo (formularioRecibo.js hace
+// historial.slice(-n) para tomar los ultimos N = los mas recientes).
+function leerHistorialConsumoPorRango(textoNorm) {
+  const re = /del\s+\d{1,2}\s+[A-Z]{3}\s+\d{2}\s+al\s+\d{1,2}\s+([A-Z]{3})\s+(\d{2})\s+([\d,]+)/g;
+  const filas = [];
+  for (const m of textoNorm.matchAll(re)) {
+    const mesTxt = m[1].toUpperCase(), anioTxt = m[2], kwhTxt = m[3];
+    if (!(mesTxt in MESES)) continue;
+    filas.push({ mes: mesTxt, anio: Number(anioTxt), kwh: num(kwhTxt) });
+  }
+  return filas.length ? filas.reverse() : null;
+}
+
 // Hallazgo 13, auditoria 2026-11-06: el historial se promediaba tal cual sin verificar
 // que los periodos fueran consecutivos -- un hueco real (ej. el propio fixture
 // secfinanzas, que salta de SEP25 a NOV25 sin OCT25) se contaba igual como "historial
 // real de N periodos" sin ningun aviso. Esto NO bloquea el calculo (el promedio sigue
 // siendo razonable), solo avisa para que se revise contra el recibo si el hueco
 // importa (ej. un mes de consumo muy distinto a los demas).
-function detectarHuecosHistorial(historial) {
+function detectarHuecosHistorial(historial, mesesPorPeriodo = 1) {
   if (!historial || historial.length < 2) return null;
   const indice = (h) => h.anio * 12 + MESES[h.mes];
   const huecos = [];
   for (let i = 1; i < historial.length; i++) {
     const diff = indice(historial[i]) - indice(historial[i - 1]);
-    if (diff > 1) {
+    // Antes: "diff > 1" asumia siempre periodos mensuales -- en un historial BIMESTRAL
+    // (PDBT/01/DAC con periodo_dias ~60-62), periodos consecutivos ~2 meses aparte son
+    // normales, no un hueco. Hallazgo real, auditoria 2026-11-18: con ese supuesto fijo,
+    // CUALQUIER historial bimestral disparaba un falso "hueco" entre cada par de periodos.
+    if (diff > mesesPorPeriodo) {
       huecos.push(`entre ${historial[i - 1].mes}${String(historial[i - 1].anio).padStart(2, '0')} y ${historial[i].mes}${String(historial[i].anio).padStart(2, '0')}`);
     }
   }
@@ -215,8 +244,17 @@ export function extraerCampos(texto, usoOcr = false) {
     rate_kw_detectado: null, historial: null, texto_crudo: texto,
   };
 
-  // Titular + domicilio: entre "Ciudad de Mexico." y "NO. DE SERVICIO".
-  const mTit = texto.match(/Ciudad de M[eé0]xico\.?[\s\S]*?\n([\s\S]*?)NO\.?\s*DE SERVICIO/i);
+  // Titular + domicilio: entre "Ciudad de Mexico." y "NO. DE SERVICIO". No todos los
+  // recibos traen ese preambulo -- hallazgo real, auditoria 2026-11-18, recibo COBAEB
+  // Plantel 26 (PDBT): el titular/domicilio son literalmente las primeras lineas del
+  // texto, sin "Ciudad de Mexico" en ningun lado, así que este patron nunca encontraba
+  // nada aunque el dato SI estaba impreso con toda claridad. Respaldo: si el anclaje de
+  // "Ciudad de Mexico" no aparece, usar el bloque desde el INICIO del texto hasta "NO. DE
+  // SERVICIO" -- acotado a 400 caracteres para no arrastrar basura si el recibo real no
+  // tiene el titular/domicilio ahi (en ese caso simplemente no hace match y se queda null,
+  // igual que antes).
+  const mTit = texto.match(/Ciudad de M[eé0]xico\.?[\s\S]*?\n([\s\S]*?)NO\.?\s*DE SERVICIO/i)
+    || texto.match(/^([\s\S]{0,400}?)\n\s*NO\.?\s*DE SERVICIO/i);
   if (mTit) {
     const lineas = mTit[1].split('\n').map(l => l.trim().replace(/\s{2,}/g, ' ')).filter(l => l);
     if (lineas.length) {
@@ -351,15 +389,22 @@ export function extraerCampos(texto, usoOcr = false) {
     }
   }
 
-  campos.historial = leerHistorialConsumo(norm);
+  campos.historial = leerHistorialConsumo(norm) || leerHistorialConsumoPorRango(norm);
   campos.historial_anual_kwh = null;
   campos.historial_meses_cubiertos = null;
   campos.historial_advertencia_huecos = null;
   if (campos.historial) {
     const ultimos = campos.historial.slice(-12);
-    campos.historial_meses_cubiertos = ultimos.length;
-    campos.historial_anual_kwh = ultimos.reduce((s, x) => s + x.kwh, 0) * (12 / ultimos.length);
-    campos.historial_advertencia_huecos = detectarHuecosHistorial(campos.historial);
+    // Cuantos meses representa CADA periodo del historial -- antes se asumia siempre 1 mes
+    // por periodo ("N periodos -> N meses"). Hallazgo real, auditoria 2026-11-18: para un
+    // historial BIMESTRAL (periodo_dias ~60-62, DIAS_MES_REF=30.5 igual que motor.js) eso
+    // sobreestimaba historial_anual_kwh casi al doble (11 periodos bimestrales SI cubren
+    // ~22 meses de datos, no 11) y marcaba cada periodo consecutivo como un "hueco" falso.
+    const DIAS_MES_REF_LOCAL = 30.5;
+    const mesesPorPeriodo = campos.periodo_dias > 0 ? Math.max(1, Math.round(campos.periodo_dias / DIAS_MES_REF_LOCAL)) : 1;
+    campos.historial_meses_cubiertos = ultimos.length * mesesPorPeriodo;
+    campos.historial_anual_kwh = ultimos.reduce((s, x) => s + x.kwh, 0) * (12 / campos.historial_meses_cubiertos);
+    campos.historial_advertencia_huecos = detectarHuecosHistorial(campos.historial, mesesPorPeriodo);
   }
 
   campos.rate_kw_advertencia = null;
