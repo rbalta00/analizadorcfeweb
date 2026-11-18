@@ -964,7 +964,7 @@ function s01(r, _leido, onToggle) {
   // seccion 1 con verificacion en sitio) va con el MISMO tamaño y tipo de letra que el
   // titulo de la seccion (№1) -- clase 'letra-titulo' (styles.css + propuestaDom.js).
   art.append(textoEditable('div', 'aviso-cream letra-titulo', `Esta estudio es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días). Los ` +
-    'precios de materiales son una provisión de mercado, no una cotización fija de proveedor -- después de esa ' +
+    'precios de materiales son una provisión de mercado, no un precio fijo garantizado por el proveedor -- después de esa ' +
     'fecha hay que revisarlos antes de confirmar.'));
   art.append(graficoToggle('g01-tarjetas-principales', 'Tarjetas: inversión, recuperación y ahorro año 1', tarjetas([
     [M(r.investment), 'Lo que cuesta el sistema, IVA incluido'],
