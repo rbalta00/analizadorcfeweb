@@ -44,6 +44,15 @@ const $ = (id) => document.getElementById(id);
 // Mexico; WhatsApp no permite adjuntar archivos desde un enlace wa.me, solo texto.
 const WHATSAPP_NUMERO = '522218367792';
 
+// Pedido explicito del usuario, 2026-11-18: el <title> de la pagina (lo que se ve en
+// la pestaña del navegador) siempre decía "Analizador FV CFE" fijo, sin importar en
+// qué pantalla estuviera -- con varias pestañas abiertas a la vez (ej. una en
+// "Clientes" y otra dentro de una estudio) no había forma de distinguirlas desde la
+// barra de pestañas de Chrome. Cada pantalla ahora fija su propio título al mostrarse.
+function fijarTitulo(texto) {
+  document.title = texto ? `${texto} · Analizador FV CFE` : 'Analizador FV CFE';
+}
+
 // Mismas 6 tarifas/etiquetas que ya se repiten en los 3 <select> de index.html
 // (selectTarifaDefinitivas/selectTarifaNuevoProyecto/filtroTarifaMachote) -- viven en
 // tarifas.js (extraidas de aqui, 2026-11-14) para que lote40Vista.js (pagina aparte)
@@ -265,6 +274,7 @@ function mostrarPantallaClientes() {
   clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
   ocultarAvisoCambiosSinCalcular();
   renderListaClientes();
+  fijarTitulo('Clientes');
 }
 
 // ---------------- Respaldo manual en la nube (subir/bajar, NO sincronizacion
@@ -478,6 +488,7 @@ function mostrarPantallaEnvios() {
   $('pantallaCliente').hidden = true;
   $('pantallaEnvios').hidden = false;
   renderListaEnvios();
+  fijarTitulo('Envíos de clientes');
 }
 $('btnAbrirEnvios').addEventListener('click', mostrarPantallaEnvios);
 $('btnVolverClientesDesdeEnvios').addEventListener('click', mostrarPantallaClientes);
@@ -630,6 +641,7 @@ function mostrarPantallaDashboard() {
   $('pantallaCliente').hidden = true;
   $('pantallaDashboard').hidden = false;
   renderDashboard();
+  fijarTitulo('Historial / Dashboard');
 }
 $('btnAbrirDashboard').addEventListener('click', mostrarPantallaDashboard);
 $('btnVolverClientesDesdeDashboard').addEventListener('click', mostrarPantallaClientes);
@@ -684,6 +696,7 @@ function mostrarPantallaDefinitivasPorTarifa() {
   $('pantallaCotizadorMachote').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = false;
   renderDefinitivasPorTarifa();
+  fijarTitulo('Definitivas por tarifa');
 }
 $('btnAbrirDefinitivasPorTarifa').addEventListener('click', mostrarPantallaDefinitivasPorTarifa);
 $('btnVolverClientesDesdeDefinitivas').addEventListener('click', mostrarPantallaClientes);
@@ -1002,6 +1015,7 @@ function mostrarPantallaProyectos(clienteId) {
   $('clienteNombreBarraProyectos').value = clienteActual.nombre;
   $('clienteTipoBarraProyectos').textContent = etiquetaTipo(clienteActual.tipo);
   $('clienteTipoBarraProyectos').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
+  fijarTitulo(clienteActual.nombre);
   $('estadoReciboNuevoProyecto').textContent = '';
   $('selectTarifaNuevoProyecto').value = '';
   $('listaMuestrasNuevoProyecto').innerHTML = '';
@@ -1682,6 +1696,7 @@ function mostrarPantallaCotizadorMachote() {
   $('archivoReciboCotizadorMachote').value = '';
   $('panelTarifaMachoteSeleccionada').innerHTML = '';
   renderBotonesTarifaMachote();
+  fijarTitulo('Cotizador por machote');
 }
 $('btnAbrirCotizadorMachote').addEventListener('click', mostrarPantallaCotizadorMachote);
 $('btnVolverClientesDesdeCotizadorMachote').addEventListener('click', mostrarPantallaClientes);
@@ -2027,6 +2042,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('pantallaCliente').hidden = false;
   $('clienteNombreBarra').value = clienteActual.nombre;
   $('clienteTipoBarra').textContent = etiquetaTipo(clienteActual.tipo);
+  fijarTitulo(`${proyectoActual.nombre} — ${clienteActual.nombre}`);
   $('clienteTipoBarra').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
   sincronizarInputsNombreProyecto();
   renderAvisoPlantillaOrigen();
@@ -4646,6 +4662,7 @@ function sincronizarInputsNombreProyecto() {
   if (!proyectoActual) return;
   $('inputNombreProyecto').value = proyectoActual.nombre || '';
   $('proyectoNombreBarraInput').value = proyectoActual.nombre || '';
+  fijarTitulo(`${proyectoActual.nombre} — ${clienteActual ? clienteActual.nombre : ''}`);
 }
 function renombrarProyectoActual(nuevoNombreCrudo) {
   if (!proyectoActual) return;
