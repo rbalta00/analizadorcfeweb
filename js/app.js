@@ -3357,8 +3357,19 @@ function calcularYRenderizar() {
 // nunca una cotizacion real con numeros de inversion/financiamiento propios de un
 // cliente. Se ocultan por completo (el panel entero, no solo su contenido) mientras la
 // estudio abierta este marcada como machote (`propositoDefinitiva === 'muestra'`).
+// Bug real reportado por el usuario, 2026-11-18: estos paneles SI se ocultaban para un
+// machote ya VERIFICADO/congelado (propositoDefinitiva === 'muestra'), pero no mientras
+// se estaba armando el BORRADOR de un machote nuevo (crearBorradorMachote, js/clientes.js)
+// -- ese borrador nace con propositoDefinitiva sin fijar (solo tarifaMachote), asi que
+// durante toda la fase de armado los 3 paneles seguian visibles. Se detecta tambien por
+// `tarifaMachote` -- pero OJO: clonarProyectoCongelado() tambien fija tarifaMachote como
+// efecto secundario en una definitiva NORMAL "para el cliente" (propositoDefinitiva ===
+// 'cliente', una entrega real, no un machote) -- se excluye ese caso explicitamente para
+// no ocultar estas herramientas en una entrega real.
 function esMachoteActual() {
-  return !!(proyectoActual && proyectoActual.propositoDefinitiva === 'muestra');
+  if (!proyectoActual) return false;
+  if (proyectoActual.propositoDefinitiva === 'muestra') return true;
+  return !!proyectoActual.tarifaMachote && proyectoActual.propositoDefinitiva !== 'cliente';
 }
 function aplicarVisibilidadPanelesMachote() {
   const ocultar = esMachoteActual();
