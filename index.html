@@ -34,13 +34,18 @@
            esos 2 valores -- son solo sugerencias del datalist, se puede escribir
            cualquier otro termino. -->
       <datalist id="listaTiposCliente"></datalist>
+      <h4>Cliente nuevo</h4>
+      <p class="nota">Adjunta el recibo primero -- se lee solo y autollena el nombre con el titular
+        detectado (tú lo puedes corregir). Si el recibo llega en varias fotos (ej. anverso y reverso),
+        selecciónalas todas juntas. Opcional: también puedes escribir el nombre tú mismo sin subir nada.</p>
+      <input type="file" id="archivoReciboClienteNuevo" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple />
+      <p class="nota" id="estadoReciboClienteNuevo"></p>
       <div class="fila">
         <label>Nombre o inmueble<input id="nuevoClienteNombre" type="text" placeholder="Ej. Casa del Abue Sur SEDIF" /></label>
         <label>Tipo de cliente
           <input id="nuevoClienteTipo" type="text" list="listaTiposCliente" placeholder="Gobierno, Particular, u otro...">
         </label>
       </div>
-      <h4>Cliente nuevo</h4>
       <div class="acciones">
         <button id="btnCrearCliente" class="btn-primario">+ Nuevo cliente</button>
       </div>

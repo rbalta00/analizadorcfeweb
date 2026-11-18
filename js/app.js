@@ -131,6 +131,46 @@ let seccionObserver = null;
 // un proyecto distinto (abrirProyecto) o uno en blanco -- ver mas abajo.
 let archivosReciboAcumulados = [];
 
+// Pedido explicito del usuario, 2026-11-18: "en vez de que pidas nombre primero pide
+// adjuntar el recibo para que lo leas" -- en la pantalla de Clientes, antes había que
+// escribir el nombre y crear el cliente primero, y solo DESPUÉS (ya en la pantalla de
+// "Cotizaciones de este cliente") se podía subir un recibo para crear la primera
+// estudio. Mismo patrón que archivoReciboNuevoProyecto (más abajo), un nivel arriba:
+// se lee el recibo de una vez aquí, se autollena el nombre con el titular detectado
+// (sin pisar lo que el usuario ya haya escrito a mano), y al crear el cliente se crea
+// también su primera estudio, ya con los datos leídos.
+let archivosReciboClienteNuevoAcumulados = [];
+let camposReciboClienteNuevo = null;
+$('archivoReciboClienteNuevo').addEventListener('change', async (e) => {
+  const nuevos = Array.from(e.target.files || []);
+  if (!nuevos.length) return;
+  e.target.value = '';
+  archivosReciboClienteNuevoAcumulados = archivosReciboClienteNuevoAcumulados.concat(nuevos);
+  const files = archivosReciboClienteNuevoAcumulados;
+  const estadoEl = $('estadoReciboClienteNuevo');
+  estadoEl.className = 'nota';
+  estadoEl.textContent = files.length > 1
+    ? `Leyendo ${files.length} archivos del recibo (puede tardar hasta 1 minuto por foto si usa OCR)... Si te falta otra foto del mismo recibo, puedes seguir agregándolas con este mismo botón.`
+    : 'Leyendo el recibo (puede tardar hasta 1 minuto si usa OCR)... Si el recibo llega en más fotos, agrégalas con este mismo botón antes de seguir.';
+  $('archivoReciboClienteNuevo').disabled = true;
+  try {
+    const campos = await leerReciboMultiple(files);
+    camposReciboClienteNuevo = campos;
+    if (!$('nuevoClienteNombre').value.trim()) {
+      $('nuevoClienteNombre').value = campos.titular || campos.razon_social_cfdi || '';
+    }
+    estadoEl.className = 'nota ok';
+    estadoEl.textContent = `✓ Recibo leído (tarifa ${campos.tarifa || 'no detectada'}). Revisa/corrige el nombre y pulsa ` +
+      '"+ Nuevo cliente" -- la primera estudio de este cliente nace ya con estos datos.';
+  } catch (err) {
+    estadoEl.className = 'nota';
+    estadoEl.textContent = 'Error al leer el recibo: ' + err.message;
+    console.error(err);
+  } finally {
+    $('archivoReciboClienteNuevo').disabled = false;
+  }
+});
+
 // Normaliza para comparar texto de búsqueda sin importar acentos/mayúsculas/espacios
 // extra -- hallazgo real, auditoría "gestión y revisión de estudios" 2026-11-14: la
 // búsqueda de "Cotizaciones de este cliente" solo hacía .toLowerCase(), así que
@@ -236,10 +276,25 @@ function renderListaClientes() {
 
 $('btnCrearCliente').addEventListener('click', () => {
   const nombre = $('nuevoClienteNombre').value.trim();
-  if (!nombre) { alert('Escribe un nombre o inmueble para el cliente.'); return; }
+  if (!nombre) { alert('Escribe un nombre o inmueble para el cliente (o adjunta su recibo arriba -- autollena el nombre solo).'); return; }
   const tipo = $('nuevoClienteTipo').value;
   const c = crearCliente({ nombre, tipo });
   $('nuevoClienteNombre').value = '';
+  // Si ya se leyó un recibo (ver archivoReciboClienteNuevo arriba), la primera estudio
+  // de este cliente nace de una vez con esos datos, en vez de llegar a "Cotizaciones de
+  // este cliente" vacío y tener que volver a subir el mismo recibo ahí.
+  if (camposReciboClienteNuevo) {
+    const campos = camposReciboClienteNuevo;
+    const archivos = archivosReciboClienteNuevoAcumulados;
+    camposReciboClienteNuevo = null;
+    archivosReciboClienteNuevoAcumulados = [];
+    $('archivoReciboClienteNuevo').value = '';
+    $('estadoReciboClienteNuevo').textContent = '';
+    const proyecto = crearProyecto(c, { nombre: campos.titular || undefined });
+    abrirProyecto(c.id, proyecto.id, { camposIniciales: campos });
+    agregarArchivosReciboAProyecto(archivos);
+    return;
+  }
   mostrarPantallaProyectos(c.id);
 });
 
