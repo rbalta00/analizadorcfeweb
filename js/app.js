@@ -5216,4 +5216,5 @@ $('btnVerificarPdf').addEventListener('click', async () => {
     if (cliente) { mostrarPantallaProyectos(reanudar.clienteId); return; }
   }
   renderListaClientes();
+  fijarTitulo('Clientes');
 })();
