@@ -29,6 +29,13 @@ export function textoPareceLegible(textoNormMayus) {
   return ANCLAS_TEXTO_VALIDO.some(a => textoNormMayus.includes(a));
 }
 
+// Marcador de nota al pie junto a un concepto -- CFE lo imprime como "(3)" (parentesis
+// con digito normal) en la mayoria de los recibos, pero al menos un recibo real
+// (auditoria 2026-11-18, 40 recibos reales de gobierno) lo imprime con el DIGITO EN
+// SUPERINDICE unicode ((³), U+00B3) en vez de un "3" normal -- \d nunca lo reconoce.
+// Se usa en cualquier patron de este archivo que antes solo aceptaba \(\d\) literal.
+const NOTA_PIE = '\\(*[\\d¹²³⁴-⁹⁰]?\\)*';
+
 const CONCEPTOS_TABLA = [
   ['suministro', 'Suministro'],
   ['distribucion', 'Distribuci[o0]n'],
@@ -41,7 +48,7 @@ const CONCEPTOS_TABLA = [
   ['capacidad', 'Capacidad'],
   ['scnmem', 'SCnMEM'],
 ];
-const PAT_FILA = '(\\(\\d\\))?\\s*([\\d,]+\\.\\d{2})\\s+([\\d,]+\\.\\d{2})\\s+([\\d,]+\\.\\d{2})\\s+([\\d,]+\\.\\d{2})';
+const PAT_FILA = NOTA_PIE + '\\s*([\\d,]+\\.\\d{2})\\s+([\\d,]+\\.\\d{2})\\s+([\\d,]+\\.\\d{2})\\s+([\\d,]+\\.\\d{2})';
 
 function leerTablaDesglose(textoNorm) {
   const cargos = {}, columna = {};
@@ -49,7 +56,7 @@ function leerTablaDesglose(textoNorm) {
     const re = new RegExp(patronLabel + '\\s*' + PAT_FILA, 'i');
     const m = textoNorm.match(re);
     if (!m) continue;
-    const colFijo = num(m[2]), colDemanda = num(m[3]), colMercado = num(m[4]), total = num(m[5]);
+    const colFijo = num(m[1]), colDemanda = num(m[2]), colMercado = num(m[3]), total = num(m[4]);
     cargos[concepto] = total;
     if (colDemanda > 0.005) columna[concepto] = 'demanda';
     else if (colMercado > 0.005) columna[concepto] = 'mercado';
@@ -60,32 +67,46 @@ function leerTablaDesglose(textoNorm) {
 
 function leerResumen(textoNorm) {
   const out = {};
+  // Hallazgo real, auditoria 2026-11-18 (40 recibos reales de gobierno, no solo los 4
+  // fixtures de antes): dos clases de error encontradas en varios de esos recibos,
+  // ambas con el mismo sintoma (la reconciliacion aritmetica no cuadraba por el monto
+  // exacto del concepto mal leido):
+  // 1) Estas etiquetas son de VARIAS palabras, y antes se buscaban con un espacio
+  //    LITERAL entre palabras -- cuando el PDF las imprime partidas en 2 lineas (ej.
+  //    "Bonificación Factor de\nPotencia((3))", visto en un recibo real), el espacio
+  //    literal nunca empata con un salto de linea. Cambiado a \s+ en todos los
+  //    patrones de varias palabras, igual que ya se hacia en otras partes de este
+  //    archivo (ej. el patron de TARIFA).
+  // 2) "Recargo Factor de Potencia" es solo UNA de las dos formas reales en que CFE
+  //    imprime este concepto -- otro recibo real lo imprime como "Cargo Factor de
+  //    Potencia" (sin el prefijo "Re"), mismo concepto, mismo lugar en el recibo.
   const patrones = {
-    cargo_fijo: /Cargo Fijo\(*\d?\)*\s+([\d,]+\.\d{2})/i,
-    bt: /2%\s*Baja Tensi[o0]n\(*\d?\)*\s+([\d,]+\.\d{2})/i,
-    bonus: /Bonificaci[o0]n Factor de Potencia\(*\d?\)*\s+(-?[\d,]+\.\d{2})/i,
+    cargo_fijo: new RegExp('Cargo\\s+Fijo' + NOTA_PIE + '\\s+([\\d,]+\\.\\d{2})', 'i'),
+    bt: new RegExp('2%\\s*Baja\\s+Tensi[o0]n' + NOTA_PIE + '\\s+([\\d,]+\\.\\d{2})', 'i'),
+    bonus: new RegExp('Bonificaci[o0]n\\s+Factor\\s+de\\s+Potencia' + NOTA_PIE + '\\s+(-?[\\d,]+\\.\\d{2})', 'i'),
     // Hallazgo 6, auditoria 2026-11-06: antes solo se buscaba "Bonificacion Factor de
     // Potencia" -- si el recibo trae un RECARGO (FP < 90%, Acuerdo SHCP 2000) en vez de
     // una bonificacion (FP >= 90%), no habia ningun patron que lo reconociera. Campo
     // separado a proposito (no reusar "bonus" con signo invertido): un recibo nunca
     // trae los dos a la vez, pero mezclarlos en un solo campo obligaria a adivinar cual
-    // de los dos es segun el signo que haya capturado el OCR.
-    recargo_fp: /Recargo Factor de Potencia\(*\d?\)*\s+(-?[\d,]+\.\d{2})/i,
+    // de los dos es segun el signo que haya capturado el OCR. "(Re)?cargo" cubre las 2
+    // formas reales encontradas en el recibo (ver auditoria 2026-11-18 arriba).
+    recargo_fp: new RegExp('(?:Re)?cargo\\s+Factor\\s+de\\s+Potencia' + NOTA_PIE + '\\s+(-?[\\d,]+\\.\\d{2})', 'i'),
     subtotal: /(?<!\w)Subtotal\s+([\d,]+\.\d{2})/i,
     iva: /IVA\s*16%\s+([\d,]+\.\d{2})/i,
-    facturacion_periodo: /Facturaci[o0]n del Periodo\s+([\d,]+\.\d{2})/i,
-    dap: /(?:Derecho de Alumbrado P[u0]blico|(?<!\w)DAP)\s*\(*\d?\)*\s+([\d,]+\.\d{2})/i,
-    adeudo_anterior: /Adeudo Anterior\s+([\d,]+\.\d{2})/i,
+    facturacion_periodo: /Facturaci[o0]n\s+del\s+Periodo\s+([\d,]+\.\d{2})/i,
+    dap: new RegExp('(?:Derecho\\s+de\\s+Alumbrado\\s+P[u0]blico|(?<!\\w)DAP)\\s*' + NOTA_PIE + '\\s+([\\d,]+\\.\\d{2})', 'i'),
+    adeudo_anterior: /Adeudo\s+Anterior\s+([\d,]+\.\d{2})/i,
   };
   for (const [campo, pat] of Object.entries(patrones)) {
     const m = textoNorm.match(pat);
     if (m) out[campo] = num(m[1]);
   }
   if (out.dap === undefined) {
-    const mDap = textoNorm.match(/Derecho de Alumbrado P[u0]blico/i);
+    const mDap = textoNorm.match(/Derecho\s+de\s+Alumbrado\s+P[u0]blico/i);
     if (mDap) {
       const resto = textoNorm.slice(mDap.index + mDap[0].length, mDap.index + mDap[0].length + 400);
-      const mFin = resto.match(/Adeudo Anterior|(?<!\w)Total\s/i);
+      const mFin = resto.match(/Adeudo\s+Anterior|(?<!\w)Total\s/i);
       const tramo = mFin ? resto.slice(0, mFin.index) : resto.slice(0, 80);
       const cifras = [...tramo.matchAll(/([\d,]+\.\d{2})/g)];
       if (cifras.length) out.dap = num(cifras[cifras.length - 1][1]);
@@ -303,6 +324,30 @@ export function extraerCampos(texto, usoOcr = false) {
     if (mm) {
       const valor = Math.abs(num(mm[1]) - num(mm[2]));
       if (kwhPlausible(valor)) campos.periodo_kwh = valor;
+    }
+  }
+  // 4o respaldo, hallazgo real 2026-11-18 (recibo real de COBAEB Plantel 26, PDBT): el
+  // bloque "Energía (kWh)" de este formato de recibo en particular trae pegados del
+  // otro lado de la pagina (pie de pagina/domicilio de la oficina/numero de cuenta)
+  // ANTES de llegar a los numeros de lectura -- ninguno de los 3 respaldos de arriba
+  // los encuentra (el primero busca "kWh base/intermedia/punta", que esto no tiene; el
+  // segundo busca la palabra "kWh" pegada a un codigo de medidor, que esto tampoco
+  // tiene; el tercero busca "Energia (kWh)" seguida de 2 numeros, pero aqui hay
+  // cientos de caracteres de texto no numerico en medio). Este formato en particular
+  // imprime, justo despues del marcador de pagina "-1-", 3 numeros seguidos: lectura
+  // anterior, lectura actual (o viceversa), y el consumo YA calculado por CFE -- se usa
+  // DIRECTO el tercer numero (no se resta a mano, evita adivinar el orden de lectura
+  // anterior/actual) solo si coincide con la diferencia absoluta de los otros 2 (misma
+  // verificacion cruzada que ya usa el resto de este archivo para no aceptar
+  // coincidencias casuales de numeros sin relacion).
+  if (campos.periodo_kwh === null) {
+    const mm = norm.match(/-1-\s*([\d,]+)\s+([\d,]+)\s+([\d,]+)(?!\s*[\d,])/);
+    if (mm) {
+      const [lectA, lectB, consumoImpreso] = [num(mm[1]), num(mm[2]), num(mm[3])];
+      const diff = Math.abs(lectA - lectB);
+      if (Math.abs(diff - consumoImpreso) < 1 && kwhPlausible(consumoImpreso)) {
+        campos.periodo_kwh = consumoImpreso;
+      }
     }
   }
 

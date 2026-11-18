@@ -1860,10 +1860,12 @@ function s07(r, _leido, onToggle) {
   if (r.historial && r.historial.length >= 2) {
     const genMensualEstimada = r.gen / 12;
     // Bug real reportado por el usuario, 2026-11-01: esta grafica comparaba generacion
-    // MENSUAL contra el kWh CRUDO de cada periodo de historial -- para tarifas domesticas
-    // (01/DAC, periodos BIMESTRALES) eso compara un numero mensual contra uno bimestral (el
-    // doble), haciendo ver que el sistema genera mucho menos de lo que realmente consume
-    // cada mes. Se usa r.consumosMensualesUsados (ya normalizado a kWh/mes, mismo orden que
+    // MENSUAL contra el kWh CRUDO de cada periodo de historial -- para periodos
+    // BIMESTRALES (domesticas 01/DAC siempre, y PDBT a veces -- ver resultado.js,
+    // hallazgo 2026-11-18: PDBT no siempre se factura mensual) eso compara un numero
+    // mensual contra uno bimestral (el doble), haciendo ver que el sistema genera mucho
+    // menos de lo que realmente consume cada mes. Se usa r.consumosMensualesUsados (ya
+    // normalizado a kWh/mes con los DIAS REALES de cada periodo, mismo orden que
     // r.historial) para que ambas barras esten en la misma unidad -- mismo fix que en la
     // seccion 5.
     art.append(grupoGraficosAlternativos('Elige cuál gráfica de generación vs. consumo dejar visible aquí -- las ' +

@@ -254,10 +254,17 @@ const HORAS_UTILES_REF = 4.5;
 // Promedia varios periodos reales de historial (kWh por periodo, el mismo numero que
 // aparece en la grafica "Historial de consumo" del recibo) a un consumo mensual
 // normalizado -- mas representativo que extrapolar un solo periodo porque promedia
-// variacion estacional. `diasPorPeriodo` depende de la tarifa: ~30.5 para tarifas que
-// se facturan mensual (GDMTO/GDMTH/GDBT/PDBT), ~61 para domesticas/01/DAC que se
-// facturan bimestral -- SIN esto, promediar kWh/periodo directo subestimaria a la
-// mitad el consumo mensual real de un cliente domestico (cada periodo cubre 2 meses).
+// variacion estacional. `diasPorPeriodo` NO se debe adivinar por tarifa -- corregido
+// 2026-11-18 (reportado por el usuario): la version anterior de este comentario decia
+// "~30.5 para GDMTO/GDMTH/GDBT/PDBT, ~61 para domestica/01/DAC", pero PDBT en la
+// practica puede facturarse mensual O bimestral segun el cliente/medidor (2 recibos
+// reales de PDBT en este proyecto lo confirman, con periodos de 32 y 62 dias) -- quien
+// llame esta funcion debe pasar el periodoDias REAL del recibo que esta procesando
+// (ver resultado.js), nunca un valor fijo supuesto por el nombre de la tarifa. Esta
+// funcion en si no asume nada -- el riesgo esta solo en el valor que se le pase.
+// (Nota: esta funcion no se usa en el calculo en vivo hoy -- resultado.js reimplementa
+// la misma formula inline con el fix de arriba ya aplicado; se deja exportada y
+// corregida por si algo la vuelve a usar.)
 export function consumoMensualDesdeHistorial(valoresKwh, diasPorPeriodo, diasMes = DIAS_MES_REF) {
   const vals = (valoresKwh || []).filter(v => v != null && !Number.isNaN(Number(v)) && Number(v) > 0).map(Number);
   if (!vals.length) return null;

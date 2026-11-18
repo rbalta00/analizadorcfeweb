@@ -51,8 +51,22 @@ export function construirResultado(input) {
   // capturados (a mano o detectados del recibo), normalizados a kWh/mes antes de
   // promediar -- asi ningun periodo pesa mas que otro solo por tener mas o menos dias.
   // Sin historial capturado, se usa el periodo que se esta facturando ahora (el unico
-  // dato real disponible). diasPorPeriodoHistorial distingue tarifas que se facturan
-  // mensual (~30.5 dias) de las domesticas/01/DAC, que se facturan bimestral (~61 dias).
+  // dato real disponible).
+  //
+  // diasPorPeriodoHistorial -- CORREGIDO 2026-11-18, reportado por el usuario ("la
+  // facturacion de PDBT no es mensual, revisala"): esto asumia que CUALQUIER tarifa no
+  // domestica se factura mensual (~30.5 dias) y solo domestica/01/DAC es bimestral
+  // (~61 dias) -- PDBT resulto ser el caso real que rompe ese supuesto. Dos recibos
+  // reales de PDBT en este proyecto traen periodos MUY distintos: uno de ~32 dias
+  // (mensual) y otro (COBAEB Plantel 26) de 62 dias (bimestral) -- confirmado tambien
+  // por fuentes externas, que no coinciden entre si sobre si PDBT es mensual o
+  // bimestral en general (aparentemente varia por cliente/medidor, no es fijo por
+  // tarifa). En vez de adivinar una regla fija por tarifa que ya se demostro
+  // incorrecta para PDBT, se usa el periodo REAL de ESTE mismo recibo (`periodoDias`,
+  // que ya refleja la cadencia real de facturacion de este cliente en particular, sea
+  // cual sea) como base para normalizar cada entrada del historial -- mas preciso que
+  // cualquier regla fija, y no depende de acertarle a la cadencia "tipica" de una
+  // tarifa que en la practica puede variar.
   //
   // Diseño corregido 2026-11-01, dos veces, a pedido explicito del usuario: un primer
   // intento exigia un minimo de 3 periodos de historial antes de confiar en su promedio; un
@@ -66,7 +80,7 @@ export function construirResultado(input) {
   // la seccion 7, que solo usa el historial). Diseño final: el historial, cuando existe, ES
   // la fuente completa (incluye el periodo actual si el recibo lo imprime asi); el periodo
   // facturado por separado solo se usa cuando NO hay ningun historial capturado.
-  const diasPorPeriodoHistorial = esDomestica ? DIAS_MES_REF * 2 : DIAS_MES_REF;
+  const diasPorPeriodoHistorial = periodoDias > 0 ? periodoDias : (esDomestica ? DIAS_MES_REF * 2 : DIAS_MES_REF);
   const historialOcr = (leido && leido.historial) ? leido.historial.map(h => h.kwh) : null;
   const historialUsadoCrudo = (historialManual && historialManual.length) ? historialManual : historialOcr;
   // El ULTIMO periodo del historial (impreso en el recibo, o copiado a las casillas al

@@ -49,9 +49,15 @@ function gridHistorial(prefijo, n) {
   return cont;
 }
 
-// GDMTO / GDMTH / GDBT / PDBT -- todas se facturan mensual (12 periodos de historial) y
-// comparten el mismo desglose de cargos; solo difiere si la Energia viene partida
-// (GDMTH) y si la columna "$/kW" trae demanda por defecto (PDBT normalmente no).
+// GDMTO / GDMTH / GDBT se facturan mensual -- PDBT NO siempre (hallazgo real, auditoria
+// 2026-11-18: de 5 recibos reales de PDBT en este proyecto, algunos se facturan mensual
+// y otros bimestral, varia por cliente/medidor, no es fijo por tarifa) -- las 4
+// comparten el mismo desglose de cargos de todos modos; solo difiere si la Energia
+// viene partida (GDMTH) y si la columna "$/kW" trae demanda por defecto (PDBT
+// normalmente no). El grid de historial se deja en 12 casillas para las 4 (mas que
+// suficiente incluso si PDBT resulta bimestral -- sobran casillas, nunca faltan) --
+// el calculo ya usa los dias REALES de cada periodo (ver resultado.js), no asume
+// mensual ni bimestral por el numero de casillas llenas.
 function crearSeccionConDemanda(prefijo, { energiaDividida, demandaPorDefecto }) {
   const p = `${prefijo}_`;
   const sec = el('section', { id: `tarjeta_${prefijo}`, class: 'tarjeta', hidden: 'true' });
@@ -63,7 +69,7 @@ function crearSeccionConDemanda(prefijo, { energiaDividida, demandaPorDefecto })
   ]));
 
   sec.append(el('h4', { text: 'Historial de consumo (opcional, nos ayuda a calcular mejor)' }));
-  sec.append(el('p', { class: 'nota', text: 'Si tu recibo trae una gráfica o tabla de "Historial de consumo" (normalmente los últimos 12 meses), copia el kWh de cada uno abajo -- así calculamos tu sistema con tu consumo real promedio en vez de un solo mes. Si no la tienes, déjala en blanco, no es obligatoria.' }));
+  sec.append(el('p', { class: 'nota', text: 'Si tu recibo trae una gráfica o tabla de "Historial de consumo" (normalmente los últimos periodos facturados -- si tu recibo llega cada mes, serán meses; si llega cada 2 meses, serán bimestres), copia el kWh de cada uno abajo -- así calculamos tu sistema con tu consumo real promedio en vez de un solo período. Si no la tienes, déjala en blanco, no es obligatoria.' }));
   sec.append(gridHistorial(p, 12));
 
   sec.append(el('h4', { text: 'Desglose de cargos del período (MXN)' }));

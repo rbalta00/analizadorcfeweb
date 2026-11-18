@@ -496,9 +496,10 @@
           <label class="campo-usado-calculo" title="Se usa para calcular el ahorro: se suma al pago, no baja con los paneles.">DAP (alumbrado público), por período<input id="dap" type="number" value="197" min="0" step="0.01" /></label>
         </div>
         <h4 class="campo-usado-calculo" title="Se usa para calcular el sistema: si se captura, el consumo mensual se promedia con estos datos reales en vez de extrapolar un solo período.">Historial de consumo (opcional, mejora la precisión del dimensionamiento)</h4>
-        <p class="nota">Si tu recibo trae la gráfica/tabla de "Historial de consumo" (normalmente los últimos 12
-          meses), captura el kWh de cada uno -- el sistema se dimensiona con el promedio real en vez de
-          extrapolar un solo período. Llena los que tengas, los demás déjalos en blanco.</p>
+        <p class="nota">Si tu recibo trae la gráfica/tabla de "Historial de consumo" (normalmente los últimos periodos
+          facturados -- 12 meses si tu tarifa se factura mensual; si es PDBT y tu recibo se factura cada 2 meses,
+          serán bimestres, no meses), captura el kWh de cada uno -- el sistema ya usa los DÍAS reales de cada
+          período, no adivina si es mensual o bimestral. Llena los que tengas, los demás déjalos en blanco.</p>
         <div class="fila historial" id="gridHistorialNoDom"></div>
         <h4 class="campo-usado-calculo" title="Se usan para calcular el ahorro: cada cargo se clasifica como reducible (baja con los paneles) o no, según la columna &quot;$/kW&quot;.">Desglose de cargos del período (MXN)</h4>
         <div class="fila cargos">
