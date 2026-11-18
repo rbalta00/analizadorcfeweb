@@ -1191,11 +1191,16 @@ function renderListaMachotes() {
       // falta volver a aplicar el formulario: como el machote no lo modifica, lo que
       // esta en pantalla ahora mismo sigue siendo exactamente lo correcto.
       aplicarMachoteAProyecto(proyectoActual, { cliente, proyecto });
+      // Pedido explicito del usuario, 2026-11-18: "Ajustar precios de materiales" /
+      // "Comparar escenarios" / "Financiamiento" no deben volver a aparecer para esta
+      // estudio una vez que se le aplicó un machote -- ver esMachoteActual() arriba.
+      proyectoActual.panelesOcultosPorMachote = true;
       guardarProyecto(clienteActual, proyectoActual);
       ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
       $('contenedorSecciones').innerHTML = '';
       $('tabEditorPrecios').hidden = true;
       $('tabFinanciamiento').hidden = true;
+      $('tabComparacion').hidden = true;
       $('estadoCalculo').className = 'nota aviso';
       $('estadoCalculo').textContent = 'Machote aplicado -- pulsa "Calcular" para ver la estudio con los textos del machote y los datos de este cliente.';
       $('tabPdf').hidden = true;
@@ -3366,9 +3371,21 @@ function calcularYRenderizar() {
 // efecto secundario en una definitiva NORMAL "para el cliente" (propositoDefinitiva ===
 // 'cliente', una entrega real, no un machote) -- se excluye ese caso explicitamente para
 // no ocultar estas herramientas en una entrega real.
+// `panelesOcultosPorMachote`: pedido explicito del usuario, 2026-11-18 -- al "jalar"
+// (aplicar) un machote YA VERIFICADO sobre una estudio real de un cliente (ver
+// tarjetaMachote mas abajo), ese cliente/estudio destino NUNCA se vuelve el un machote
+// en si (sigue siendo la entrega real de ESE cliente, con su propia tarifa/cargos) --
+// asi que esMachoteActual() seguia dando false ahi, y estos 3 paneles volvian a
+// aparecer en cuanto se volvia a pulsar "Calcular" (aplicarVisibilidadPanelesMachote ya
+// los habia ocultado al momento de aplicar el machote, pero renderEditorPrecios/
+// renderFinanciamiento los desocultaban de nuevo sin condicion en cada calculo
+// siguiente). Esta bandera, fijada una sola vez justo al aplicar el machote, hace que
+// se queden ocultos de forma permanente para esa estudio -- igual de persistente que
+// para un machote real, sin necesitar que el proyecto ademas se comporte como uno.
 function esMachoteActual() {
   if (!proyectoActual) return false;
   if (proyectoActual.propositoDefinitiva === 'muestra') return true;
+  if (proyectoActual.panelesOcultosPorMachote) return true;
   return !!proyectoActual.tarifaMachote && proyectoActual.propositoDefinitiva !== 'cliente';
 }
 function aplicarVisibilidadPanelesMachote() {
