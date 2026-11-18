@@ -2061,6 +2061,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   renderFotosInmueble();
   renderIndice(null);
   renderComparacion();
+  aplicarVisibilidadPanelesMachote();
   aplicarEstadoPanel('chkPanelSeguimiento', 'contenidoSeguimiento', 'seguimiento');
   $('etapaProyecto').value = proyectoActual.etapa || 'cotizado';
   renderNotasSeguimiento();
@@ -3209,6 +3210,7 @@ function calcularYRenderizar() {
   renderEditorPrecios(r);
   renderFinanciamiento(r);
   renderComparacion();
+  aplicarVisibilidadPanelesMachote();
   $('tabPdf').hidden = false;
   // El sembrador automatico siembra exactamente r.n (el mismo numero ya calculado,
   // nunca un segundo criterio de dimensionamiento aparte) -- se actualiza aqui para que
@@ -3225,6 +3227,21 @@ function calcularYRenderizar() {
 // son parte del PDF (son herramientas de pantalla), asi que "apagar" aqui es solo
 // ocultarlas de la vista si no se necesitan -- se guarda por PROYECTO, igual que
 // seccionesActivas.
+// Pedido explicito del usuario, 2026-11-17: "Ajustar precios de materiales"/
+// "Comparar escenarios de este cliente"/"Financiamiento (opcional)" no aplican a un
+// MACHOTE -- es una plantilla de estructura/estilo (ver MACHOTE_ENTRE_TARIFAS.md),
+// nunca una cotizacion real con numeros de inversion/financiamiento propios de un
+// cliente. Se ocultan por completo (el panel entero, no solo su contenido) mientras la
+// estudio abierta este marcada como machote (`propositoDefinitiva === 'muestra'`).
+function esMachoteActual() {
+  return !!(proyectoActual && proyectoActual.propositoDefinitiva === 'muestra');
+}
+function aplicarVisibilidadPanelesMachote() {
+  const ocultar = esMachoteActual();
+  $('tabComparacion').hidden = ocultar;
+  if (ocultar) { $('tabEditorPrecios').hidden = true; $('tabFinanciamiento').hidden = true; }
+}
+
 function panelActivo(nombre) {
   if (!proyectoActual) return true;
   proyectoActual.panelesActivos = proyectoActual.panelesActivos || {};
