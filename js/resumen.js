@@ -8,7 +8,7 @@ import {
   CONTENT_TOP, CONTENT_W, MARGIN_L, headX, subX, bodyX, spacer, cardsRow, notice, table, buildPdf,
   NAVY, TEAL, WHITE, LINE,
 } from './pdfComponents.js';
-import { M, PCT, listaConceptos } from './util.js';
+import { M, PCT, listaConceptos, cadenciaPeriodo } from './util.js';
 import { beneficioCosto } from './propuesta.js';
 
 export function generarResumenEjecutivo(r) {
@@ -43,10 +43,11 @@ export function generarResumenEjecutivo(r) {
     ]);
     y = spacer(y, 12);
 
+    const cad = cadenciaPeriodo(r.periodoDias);
     y = subX(doc, y, 'Antes vs. después');
     y = table(doc, y, ['Concepto', 'Hoy (sin paneles)', 'Con el sistema propuesto'], [
       ['Pago anual estimado', M(r.annualbefore), M(r.annualafter)],
-      ['Pago mensual promedio', M(r.annualbefore / 12), M(r.annualafter / 12)],
+      [`Pago ${cad.adjetivo} promedio`, M(r.annualbefore / cad.periodosPorAnio), M(r.annualafter / cad.periodosPorAnio)],
     ], { widths: [CONTENT_W * 0.4, CONTENT_W * 0.3, CONTENT_W * 0.3] });
     y = spacer(y, 10);
 

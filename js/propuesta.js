@@ -16,7 +16,7 @@ import {
   notice, table, curve, groupedBarChart, horizontalBarChart, gauge, buildPdf, GREY,
   crearDoc, dibujarHeaderFooter,
 } from './pdfComponents.js';
-import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, recuperacionDiferencia } from './util.js';
+import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, recuperacionDiferencia, cadenciaPeriodo } from './util.js';
 import { BLOQUES_COTIZACION } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { dibujarSeccionGenerica, textoVisibleDe } from './propuestaDom.js';
@@ -102,19 +102,21 @@ function pagina01(doc, r, numero) {
   const recupTxt = r.payback ? `${r.payback.toFixed(1)} años` : 'un tiempo no calculable con el ahorro estimado actual';
   const flujoTxt = r.recuperacionAcumulada
     ? ` (o ${r.recuperacionAcumulada.toFixed(1)} años si se cuenta el mantenimiento y el cambio de inversor)` : '';
-  y = bodyX(doc, y, `El sistema completo cuesta ${M(r.investment)} (ya con IVA). Con el ahorro que generaría cada ` +
-    `mes, esa inversión se recupera en aproximadamente ${recupTxt}${flujoTxt}. Después de ese tiempo, el ahorro ` +
-    'mensual es ganancia, no recuperación de lo invertido.');
+  const cad = cadenciaPeriodo(r.periodoDias);
+  y = bodyX(doc, y, `El sistema completo cuesta ${M(r.investment)} (ya con IVA). Con el ahorro que generaría, ` +
+    `esa inversión se recupera en aproximadamente ${recupTxt}${flujoTxt}. Después de ese tiempo, el ahorro de ` +
+    `${cad.frase} es ganancia, no recuperación de lo invertido.`);
   y = bodyX(doc, y, `En el año de referencia se estima pasar de pagar ${M(r.annualbefore)} a ${M(r.annualafter)} ` +
-    `al año. El promedio mensual sería ${M(r.annualafter / 12)} en vez de ${M(r.annualbefore / 12)}. Son ` +
-    'promedios de un modelo, no pagos mensuales fijos.');
+    `al año. El promedio ${cad.adjetivo} sería ${M(r.annualafter / cad.periodosPorAnio)} en vez de ` +
+    `${M(r.annualbefore / cad.periodosPorAnio)} -- facturado ${cad.frase}, no cada mes, para este recibo. Son ` +
+    'promedios de un modelo, no pagos fijos.');
   y = spacer(y, 4);
   y = notice(doc, y, 'El recibo permite comprobar el gasto actual; el ahorro futuro es una estimación condicionada. ' +
     `Se conserva el gasto observado de ${listaConceptos(r.meta.noReducibles)} sin anticipar ahorro adicional. ` +
     'Los precios deberán actualizarse antes de contratar.');
   y = spacer(y, 4);
   notice(doc, y, `Esta estudio es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días desde el estudio). ` +
-    'Los precios de materiales son una provisión de mercado, no una estudio fija de proveedor.');
+    'Los precios de materiales son una provisión de mercado, no un precio fijo garantizado por el proveedor.');
 }
 
 // ---------- Pagina 2: recibo ----------

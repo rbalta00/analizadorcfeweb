@@ -3,26 +3,13 @@
 // aqui en HTML navegable en vez de PDF estatico. Cada seccion pertenece a un bloque de
 // bloques.js (para el boton de apagado) y recibe el mismo objeto `r` que arma
 // construirResultado() en app.js.
-import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, recuperacionDiferencia } from './util.js';
+import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, recuperacionDiferencia, cadenciaPeriodo } from './util.js';
 import { barraHorizontal, barraAgrupada, gauge, curvaFlujo } from './charts.js';
 import { bloqueDeSeccion, seccionesDelBloque } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
 import { leerPlantillaTarifa } from './textosGlobales.js';
-import { beneficioCosto, R, DIAS_MES_REF } from './motor.js';
-
-// Texto de cadencia de facturación, derivado del período REAL de este recibo (r.periodoDias)
-// -- nunca asumir "mensual" a fuerza. Hallazgo real, auditoria 2026-11-18: la seccion 1
-// (S1.5/S1.6) decia "cada mes"/"mensual" de forma fija para CUALQUIER tarifa, aunque el
-// propio periodoDias de PDBT (y 01/DAC) puede ser bimestral -- la seccion 4 ya usaba
-// "por periodo" de forma generica, la seccion 1 no seguia el mismo criterio.
-function cadenciaPeriodo(periodoDias) {
-  const periodosPorAnio = periodoDias > 0 ? Math.round(365 / periodoDias) : 12;
-  if (periodosPorAnio >= 11) return { adjetivo: 'mensual', frase: 'cada mes', periodosPorAnio: 12 };
-  if (periodosPorAnio >= 5 && periodosPorAnio <= 7) return { adjetivo: 'bimestral', frase: 'cada período (bimestral, cada 2 meses)', periodosPorAnio: 6 };
-  const mesesAprox = Math.round(periodoDias / DIAS_MES_REF);
-  return { adjetivo: 'del período', frase: `cada período (cada ${mesesAprox} meses aprox.)`, periodosPorAnio: periodosPorAnio || 12 };
-}
+import { beneficioCosto, R } from './motor.js';
 
 // Razon real por la que un concepto NO reducible no baja con paneles solares -- NO es la
 // misma razon para todos. 'suministro' es un cargo fijo por tener contrato (no depende de

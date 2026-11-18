@@ -33,6 +33,22 @@ export function fechaVigenciaEs(diasVigencia, base = new Date()) {
   return fechaEstudioEs(d);
 }
 
+// Texto de cadencia de facturación, derivado del período REAL de este recibo
+// (periodoDias) -- nunca asumir "mensual" a fuerza. Hallazgo real, auditoria
+// 2026-11-18: el texto de "cuánto se paga solo"/"promedio mensual" decía "cada
+// mes"/"mensual" de forma fija para CUALQUIER tarifa, aunque un recibo PDBT (o
+// 01/DAC) puede ser bimestral. Compartida entre secciones.js (pantalla) y
+// propuesta.js (PDF viejo) para que nunca se desincronicen -- antes vivía
+// duplicada/sin arreglar en cada archivo por separado.
+export function cadenciaPeriodo(periodoDias) {
+  const DIAS_MES_REF_LOCAL = 30.5;
+  const periodosPorAnio = periodoDias > 0 ? Math.round(365 / periodoDias) : 12;
+  if (periodosPorAnio >= 11) return { adjetivo: 'mensual', frase: 'cada mes', periodosPorAnio: 12 };
+  if (periodosPorAnio >= 5 && periodosPorAnio <= 7) return { adjetivo: 'bimestral', frase: 'cada período (bimestral, cada 2 meses)', periodosPorAnio: 6 };
+  const mesesAprox = Math.round(periodoDias / DIAS_MES_REF_LOCAL);
+  return { adjetivo: 'del período', frase: `cada período (cada ${mesesAprox} meses aprox.)`, periodosPorAnio: periodosPorAnio || 12 };
+}
+
 export const NOMBRES_CONCEPTO = {
   energia: 'Energía', energia_base: 'Energía base', energia_intermedia: 'Energía intermedia',
   energia_punta: 'Energía punta', transmision: 'Transmisión', cenace: 'CENACE', scnmem: 'SCnMEM',
