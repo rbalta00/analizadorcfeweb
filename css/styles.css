@@ -59,6 +59,10 @@ body {
   border-radius: 8px; padding: 7px 12px; font-size: 0.85rem; font-weight: 600; cursor: pointer;
 }
 .btn-refrescar:hover { background: rgba(255,255,255,0.12); }
+/* .btn-refrescar reusado como enlace "volver" en paginas aparte (lote40.html,
+   vista-previa.html, vista-previa-compartida.html) -- <a> necesita estas 2 reglas que
+   <button> ya trae por defecto, para verse igual. */
+a.btn-refrescar { display: inline-block; text-decoration: none; }
 .btn-whatsapp {
   background: #25d366; color: #063d1e; border: none; border-radius: 8px;
   padding: 11px 20px; font-size: 0.92rem; font-weight: 700; cursor: pointer;
