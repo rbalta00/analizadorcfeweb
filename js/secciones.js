@@ -947,12 +947,14 @@ function s01(r, _leido, onToggle) {
         'referencias antes de decidir el tamaño final. Ambos escenarios se calcularon con el mismo motor (mismo recibo, misma tarifa, ' +
         'mismos costos) -- no implica que ambos tamaños quepan físicamente en el espacio disponible.', 's1-verif-aviso'));
   }
-  // Pedido explicito del usuario, 2026-11-10: este aviso (el №13 del editor en la
-  // seccion 1 con verificacion en sitio) va con el MISMO tamaño y tipo de letra que el
-  // titulo de la seccion (№1) -- clase 'letra-titulo' (styles.css + propuestaDom.js).
-  art.append(textoEditable('div', 'aviso-cream letra-titulo', `Este estudio es válido hasta el ${r.fechaVigencia} (${r.vigenciaDias} días). Los ` +
-    'precios de materiales son una provisión de mercado, no un precio fijo garantizado por el proveedor -- después de esa ' +
-    'fecha hay que revisarlos antes de confirmar.'));
+  // Quitado por completo, pedido explicito del usuario 2026-11-18: "no quiero una
+  // fecha ni que ahi hable de los precios ni del provedor ni de revisar" -- este aviso
+  // (vigencia + precios de materiales como provision de mercado) generaba confusion
+  // repetida, el usuario lo probo varias veces y lo sigue rechazando aunque se
+  // corrigiera la redaccion/gramatica/fecha -- la decision final es que no debe
+  // aparecer en absoluto, ni en pantalla ni en el PDF (ver mismo cambio en
+  // propuesta.js). r.fechaVigencia/r.vigenciaDias se quedan calculados en resultado.js
+  // por si se usan en otro lado, solo se quito este parrafo que los mostraba.
   art.append(graficoToggle('g01-tarjetas-principales', 'Tarjetas: inversión, recuperación y ahorro año 1', tarjetas([
     [M(r.investment), 'Lo que cuesta el sistema, IVA incluido'],
     [r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se paga solo'],

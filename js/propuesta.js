@@ -111,12 +111,12 @@ function pagina01(doc, r, numero) {
     `${M(r.annualbefore / cad.periodosPorAnio)} -- facturado ${cad.frase}, no cada mes, para este recibo. Son ` +
     'promedios de un modelo, no pagos fijos.');
   y = spacer(y, 4);
-  y = notice(doc, y, 'El recibo permite comprobar el gasto actual; el ahorro futuro es una estimación condicionada. ' +
+  // Quitado por completo, pedido explicito del usuario 2026-11-18 (mismo cambio que
+  // secciones.js, ver ese comentario): el aviso de vigencia/precios de materiales como
+  // provision de mercado/proveedor ya no debe aparecer en ningun lado.
+  notice(doc, y, 'El recibo permite comprobar el gasto actual; el ahorro futuro es una estimación condicionada. ' +
     `Se conserva el gasto observado de ${listaConceptos(r.meta.noReducibles)} sin anticipar ahorro adicional. ` +
     'Los precios deberán actualizarse antes de contratar.');
-  y = spacer(y, 4);
-  notice(doc, y, `Este estudio es válido hasta el ${r.fechaVigencia} (${r.vigenciaDias} días desde su creación). ` +
-    'Los precios de materiales son una provisión de mercado, no un precio fijo garantizado por el proveedor.');
 }
 
 // ---------- Pagina 2: recibo ----------
