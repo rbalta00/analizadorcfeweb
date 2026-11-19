@@ -95,8 +95,13 @@ export const CO2_KG_POR_ARBOL_ANIO = 21.0;
 export const EXPLICACION_TARIFA = {
   GDMTO: 'tarifa de media tensión para negocios y gobierno, con un cargo fijo mensual por la potencia ' +
     'contratada (la "demanda"), sin importar el horario del día.',
-  GDMTH: 'tarifa de media tensión para negocios y gobierno, igual que GDMTO pero además cobra la ' +
-    'energía distinto según el horario del día (más cara en punta, la franja de mayor demanda nacional).',
+  // Texto literal pedido por el dueño, encargo 2026-11-19 (machote GDMTH, caso Antiguo
+  // Edificio de la Secretaría de Finanzas) -- antes decia "igual que GDMTO pero..."
+  // (correcto pero mencionaba el nombre de otra tarifa; la verificacion de ese encargo
+  // pide cero apariciones de "GDMTO" en textos de tarifa de un documento GDMTH).
+  GDMTH: 'Gran Demanda en Media Tensión Horaria. Además del cargo por la demanda contratada, el costo de ' +
+    'la energía depende del horario en que se consume: base, intermedia y punta, cada franja con su ' +
+    'propio precio.',
   GDBT: 'tarifa de baja tensión para negocios y gobierno con consumo grande, con un cargo fijo mensual ' +
     'por la potencia contratada, igual que GDMTO pero sin necesitar media tensión.',
   PDBT: 'tarifa de baja tensión para negocios pequeños, sin cargo fijo por potencia: casi todo lo que ' +

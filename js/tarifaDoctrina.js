@@ -68,7 +68,6 @@ export function razonCargosPuedenDisminuirCorta(r) {
 // NOMBRE de una de ellas cuando la tarifa real del estudio es otra. Se excluye '01'
 // a proposito: es un codigo demasiado generico (coincide con cualquier numeracion,
 // "Paso 01", "01 de 25", etc.) para buscarlo como token sin producir falsos positivos.
-const TARIFAS_CON_DEMANDA_CONOCIDAS = ['GDMTO', 'GDMTH', 'GDBT'];
 const TARIFAS_CONOCIDAS_PARA_CANDADO = ['GDMTO', 'GDMTH', 'GDBT', 'PDBT', 'DAC'];
 
 // Frases que solo tienen sentido en una tarifa CON demanda contratada -- si aparecen
@@ -76,6 +75,17 @@ const TARIFAS_CONOCIDAS_PARA_CANDADO = ['GDMTO', 'GDMTH', 'GDBT', 'PDBT', 'DAC']
 // texto editado a mano o heredado de un machote de otra tarifa, nunca del texto
 // generico de hoy (que ya evita estas frases para tarifas sin demanda).
 const FRASES_DOCTRINA_DEMANDA = ['demanda contratada', 'por kw, no por kwh', 'por kw y no por kwh', 'se factura por kw'];
+
+// Simetrico al de arriba: frases que solo tienen sentido en una tarifa SIN demanda
+// contratada (PDBT, 01, DAC) -- si aparecen en un estudio que SI tiene demanda
+// contratada (GDMTO/GDMTH/GDBT), es el mismo defecto al reves (ej. un machote de PDBT
+// aplicado sobre un estudio GDMTH). Encargo 2026-11-19 (GDMTH, caso Antiguo Edificio de
+// la Secretaria de Finanzas), Parte B.3: "un estudio GDMTH no puede ... contener
+// doctrina de otra tarifa (<<no tiene cargos por demanda>>, textos de GDMTO/PDBT)".
+const FRASES_DOCTRINA_SIN_DEMANDA = [
+  'no tiene cargo fijo por potencia contratada', 'no tiene cargos por demanda',
+  'sin cargo fijo por potencia', 'no tiene demanda contratada',
+];
 
 function mencionaOtraTarifa(texto, tarifaActual) {
   const up = texto.toUpperCase();
@@ -89,14 +99,16 @@ function mencionaOtraTarifa(texto, tarifaActual) {
   });
 }
 
-function usaDoctrinaDeDemanda(texto) {
+function contieneAlguna(texto, frases) {
   const bajo = texto.toLowerCase();
-  return FRASES_DOCTRINA_DEMANDA.some((f) => bajo.includes(f));
+  return frases.some((f) => bajo.includes(f));
 }
 
-// Candado de consistencia (Parte A.4 del encargo): revisa el texto EDITADO a mano de
+// Candado de consistencia (Parte A.4/B del encargo): revisa el texto EDITADO a mano de
 // un estudio (textosEditados -- parrafos, titulos, celdas de tabla) contra la tarifa Y
-// la clasificacion real de ESTE estudio (r.tarifa / r.meta.tieneDemandaContratada).
+// la clasificacion real de ESTE estudio (r.tarifa / r.meta.tieneDemandaContratada), en
+// AMBAS direcciones (doctrina de demanda en un estudio sin demanda, o doctrina de "sin
+// demanda" en un estudio con demanda -- ej. machote de PDBT aplicado sobre GDMTH).
 // Regresa la lista de conflictos encontrados, vacia si no hay ninguno. NO revisa el
 // texto generico/por-defecto (ese ya se corrigio en el propio codigo, Parte A/C de
 // este mismo archivo) -- solo lo que alguien escribio a mano o llego copiado de un
@@ -109,14 +121,16 @@ export function detectarTextosTarifaCruzada(r, textosEditados) {
   for (const [id, texto] of Object.entries(textosEditados || {})) {
     if (typeof texto !== 'string' || !texto.trim()) continue;
     const otraTarifa = mencionaOtraTarifa(texto, r.tarifa);
-    // Solo es un conflicto real si la doctrina de demanda aparece en un estudio que NO
-    // tiene demanda contratada -- en GDMTO/GDMTH/GDBT esas frases son correctas y no
-    // se marcan.
-    const doctrinaIndebida = !tieneDemanda && usaDoctrinaDeDemanda(texto);
-    if (!otraTarifa && !doctrinaIndebida) continue;
+    // Solo es un conflicto real si la doctrina NO corresponde a la clasificacion REAL
+    // de este recibo -- en GDMTO/GDMTH/GDBT la doctrina de demanda es correcta (no se
+    // marca), y en PDBT/01/DAC la doctrina de "sin demanda" es correcta (no se marca).
+    const doctrinaDemandaIndebida = !tieneDemanda && contieneAlguna(texto, FRASES_DOCTRINA_DEMANDA);
+    const doctrinaSinDemandaIndebida = tieneDemanda && contieneAlguna(texto, FRASES_DOCTRINA_SIN_DEMANDA);
+    if (!otraTarifa && !doctrinaDemandaIndebida && !doctrinaSinDemandaIndebida) continue;
     const motivos = [];
     if (otraTarifa) motivos.push(`menciona el nombre de otra tarifa distinta a ${r.tarifa}`);
-    if (doctrinaIndebida) motivos.push('describe "demanda contratada" / facturación por kW, pero este recibo no tiene demanda contratada');
+    if (doctrinaDemandaIndebida) motivos.push('describe "demanda contratada" / facturación por kW, pero este recibo no tiene demanda contratada');
+    if (doctrinaSinDemandaIndebida) motivos.push('describe una tarifa sin cargo fijo por potencia, pero este recibo SÍ tiene demanda contratada');
     conflictos.push({ id, texto, motivo: motivos.join(' y ') });
   }
   return conflictos;

@@ -154,3 +154,51 @@ el `localStorage` del navegador real del dueño, no en este repo). Para dejarlo 
 5. Vuelve a "🧭 Cotizador por machote" → PDBT → en "Verificar una cotización ya
    trabajada con esta tarifa", elige este borrador y pulsa "✅ Verificar como machote
    de PDBT". Al ser el primero de esa tarifa, queda automáticamente como predeterminado.
+
+## Defecto real encontrado y corregido — 2026-11-19, continuación (machote GDMTH,
+## caso Antiguo Edificio de la Secretaría de Finanzas, servicio 220890101496)
+
+Mismo encargo que arriba, ahora para GDMTH: el texto de tarifa de `EXPLICACION_TARIFA.GDMTH`
+(`js/util.js`) decía **"igual que GDMTO pero además cobra la energía distinto según el
+horario..."** -- correcto en sustancia, pero mencionaba literalmente el nombre de otra
+tarifa (GDMTO) dentro del propio documento GDMTH, justo lo que la verificación de este
+encargo pide evitar ("cero apariciones de GDMTO en textos de tarifa"). Se reescribió con
+el texto literal exacto pedido por el dueño, autocontenido, sin comparar contra GDMTO:
+
+> «Tarifa GDMTH: Gran Demanda en Media Tensión Horaria. Además del cargo por la demanda
+> contratada, el costo de la energía depende del horario en que se consume: base,
+> intermedia y punta, cada franja con su propio precio.»
+
+**El candado (`detectarTextosTarifaCruzada`, `js/tarifaDoctrina.js`) se reforzó para
+revisar las dos direcciones, no solo una**: antes solo detectaba doctrina de demanda
+("demanda contratada", "por kW, no por kWh") filtrada hacia un estudio SIN demanda
+(el caso PDBT de la entrada de arriba). Ahora también detecta el caso inverso -- doctrina
+de "sin demanda" ("no tiene cargo fijo por potencia contratada", "no tiene cargos por
+demanda", etc.) filtrada hacia un estudio CON demanda (ej. un machote de PDBT aplicado
+sobre un estudio GDMTH/GDMTO/GDBT) -- exactamente lo que pide la Parte B.3 de este
+encargo.
+
+**Verificado en vivo, 2 recibos GDMTH distintos + el caso de control del Excel del
+dueño** (servidor local efímero, datos borrados al terminar):
+- Caso de calibración (Antiguo Edificio de Finanzas): identidad $126,770.77/$143,574.74
+  exacta, piso $58,342.75, 588 paneles/$5,533,123.43 de inversión, ahorro año 1
+  $957,296.71, VAN $4,971,968.64 -- todos exactos contra la calibración del dueño. La
+  tabla de franjas (sección 4) marca Punta como "No baja" con la explicación correcta.
+- Caso de control del Excel del dueño (3,000 kWh/30 días, cargos chicos de prueba):
+  total $8,132.08, 37 paneles, piso $5,072.00, ahorro año 1 37.2% -- los 4 exactos.
+- Segundo recibo GDMTH (otros montos de prueba): piso $16,042.00 exacto
+  ((suministro+distribución+capacidad+energía punta) × 1.16 + DAP).
+- Las 3 pruebas: cero apariciones de "GDMTO"/"PDBT"/doctrina de "sin demanda" en el
+  texto renderizado, tanto en pantalla como en el PDF real exportado ("Cotización
+  completa", leído con pdf.js).
+- No se tocó `js/motor.js` ni `js/resultado.js` -- las 4 suites de prueba siguen en
+  verde sin cambios.
+
+**Machote GDMTH verificado: mismos 5 pasos que el de PDBT arriba**, cambiando "PDBT" por
+"GDMTH" y usando el recibo de calibración del Antiguo Edificio de la Secretaría de
+Finanzas (servicio 220890101496) para probarlo antes de verificarlo. Igual que con PDBT,
+este fix fue de código -- el machote en sí (el "📋 Definitiva para MUESTRA" + "✅
+Verificar como machote de GDMTH") hay que crearlo desde la app real del dueño; un intento
+de hacerlo yo mismo contra el servidor de prueba local fue bloqueado por el clasificador
+de seguridad de auto mode al pulsar "Definitiva para MUESTRA" (mismo bloqueo que con
+PDBT), así que no se forzó.
