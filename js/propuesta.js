@@ -115,7 +115,7 @@ function pagina01(doc, r, numero) {
     `Se conserva el gasto observado de ${listaConceptos(r.meta.noReducibles)} sin anticipar ahorro adicional. ` +
     'Los precios deberán actualizarse antes de contratar.');
   y = spacer(y, 4);
-  notice(doc, y, `Esta estudio es válida hasta el ${r.fechaVigencia} (${r.vigenciaDias} días desde el estudio). ` +
+  notice(doc, y, `Este estudio es válido hasta el ${r.fechaVigencia} (${r.vigenciaDias} días desde su creación). ` +
     'Los precios de materiales son una provisión de mercado, no un precio fijo garantizado por el proveedor.');
 }
 
