@@ -25,6 +25,7 @@ import { archivoAImagenComprimida, conDataUrlResuelto, resolverImagenesRemotasEn
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, escalaCostosParaTarifa, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion, seccionesDelBloque, BLOQUES_COTIZACION } from './bloques.js';
 import { M, PCT } from './util.js';
+import { detectarTextosTarifaCruzada } from './tarifaDoctrina.js';
 import {
   TARIFAS_SOPORTADAS, esDomestica, conectarEventosFormularioRecibo,
   leerFormularioRecibo, aplicarFormularioRecibo, llenarFormularioDesdeReciboCampos,
@@ -1843,8 +1844,17 @@ function renderAvisoPlantillaOrigen() {
   // pego un numero sin querer) para no perder esa red de seguridad.
   const pendientes = (proyectoActual.textosRevisionMachote || []).filter((h) => !h.resuelto);
   const autoCorregidos = (proyectoActual.textosRevisionMachote || []).filter((h) => h.resuelto);
-  const sospechosos = detectarTextosConNumerosSospechosos(proyectoActual.textosEditados)
-    .filter((s) => !pendientes.some((h) => h.id === s.id)); // evitar duplicar el mismo id
+  // Candado de tarifa cruzada (Parte A.1/D del encargo 2026-11-19, "Cotización 40"
+  // COBAEB Plantel 26/PDBT): aplicarMachoteAProyecto() (clientes.js) solo filtra
+  // identidad/cifras/conclusiones al copiar textosEditados del machote -- nunca
+  // detectó que un párrafo mencionara la doctrina o el nombre de OTRA tarifa. Se
+  // revisa aquí, contra la tarifa/clasificación REAL de este servicio (ultimoResultado,
+  // ya calculado con el recibo de este cliente, nunca con el del machote), para
+  // ofrecer la misma corrección de un clic que ya existe para los otros 2 casos.
+  const tarifaCruzada = ultimoResultado ? detectarTextosTarifaCruzada(ultimoResultado, proyectoActual.textosEditados) : [];
+  const sospechosos = [...detectarTextosConNumerosSospechosos(proyectoActual.textosEditados), ...tarifaCruzada]
+    .filter((s) => !pendientes.some((h) => h.id === s.id)) // evitar duplicar el mismo id
+    .filter((s, i, arr) => arr.findIndex((x) => x.id === s.id) === i); // ni duplicar entre si mismos (cifra + tarifa cruzada en el mismo id)
   const cajaEl = $('listaTextosSospechososMachote');
   cajaEl.innerHTML = '';
   if (pendientes.length || autoCorregidos.length || sospechosos.length) {
@@ -3386,6 +3396,12 @@ function calcularYRenderizar() {
 
   proyectoActual.formulario = leerFormulario();
   renderAvisoMachoteTarifaDistinta();
+  // Refresca el panel de "plantilla sin verificar" con la tarifa/clasificación REAL
+  // que acaba de calcularse -- antes solo se renderizaba al abrir el proyecto, así que
+  // el candado de tarifa cruzada (ver renderAvisoPlantillaOrigen) no se evaluaba sino
+  // hasta volver a entrar al proyecto. Ahora se evalúa cada vez que se (re)calcula, que
+  // es justo el momento en que "se cargó un recibo" (Parte A.1 del encargo 2026-11-19).
+  renderAvisoPlantillaOrigen();
   // Una vez que se logra calcular, los campos que seguian marcados "no detectado" ya
   // fueron confirmados por Isaac (si no, faltantesVisiblesParaCalcular() habria
   // bloqueado este calculo) -- hay que quitarlos de campos_no_encontrados de forma
@@ -4596,8 +4612,29 @@ function confirmarEdicionEnCursoAntesDeExportar() {
   }
 }
 
+// Candado de consistencia antes de exportar (Parte A.4 del encargo 2026-11-19,
+// "Cotización 40" COBAEB Plantel 26/PDBT): bloquea la exportación -- SIN excepciones
+// silenciosas, sin importar si el estudio nació de un machote, se marcó verificado, o
+// es un estudio viejo creado antes de este fix -- si algún texto editado a mano
+// menciona el nombre de otra tarifa o la doctrina de demanda contratada que no le
+// corresponde a la tarifa/clasificación real de este recibo. Se revisa aquí (no solo
+// en el panel "plantilla sin verificar", que se oculta en cuanto se marca verificado)
+// para que NINGÚN camino de exportación pueda saltárselo.
+function confirmarSinTextoTarifaCruzadaAntesDeExportar(r) {
+  const conflictos = detectarTextosTarifaCruzada(r, proyectoActual?.textosEditados);
+  if (!conflictos.length) return true;
+  const detalle = conflictos.map((c) => `• ${c.id}: "${c.texto}" (${c.motivo})`).join('\n');
+  alert(
+    `⛔ Exportación bloqueada: este estudio es de tarifa ${r.tarifa}, pero ${conflictos.length} texto(s) editado(s) ` +
+    `a mano traen la doctrina o el nombre de otra tarifa -- revísalos o restáuralos (panel "Plantilla aplicada desde ` +
+    `un machote", si viene de ahí, o editando el párrafo directo) antes de entregar este documento:\n\n${detalle}`
+  );
+  return false;
+}
+
 $('btnGenerarPdf').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return;
   confirmarEdicionEnCursoAntesDeExportar();
   if (!confirmarAntesDeGenerarDocumento(true)) return;
   const boton = $('btnGenerarPdf');
@@ -4637,6 +4674,7 @@ $('btnGenerarPdf').addEventListener('click', async () => {
 // js/excel.js.
 $('btnGenerarExcel').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return;
   confirmarEdicionEnCursoAntesDeExportar();
   const boton = $('btnGenerarExcel');
   boton.disabled = true;
@@ -4905,6 +4943,7 @@ $('btnCrearClienteGuardar').addEventListener('click', () => {
 // (abre el chat de un numero fijo con el texto, el PDF se adjunta a mano).
 $('btnEnviarWhatsapp').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return;
   confirmarEdicionEnCursoAntesDeExportar();
   if (!confirmarSiHayCambiosSinCalcular()) return;
   const r = ultimoResultado;

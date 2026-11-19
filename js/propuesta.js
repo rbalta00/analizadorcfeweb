@@ -20,6 +20,7 @@ import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_P
 import { BLOQUES_COTIZACION } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { dibujarSeccionGenerica, textoVisibleDe } from './propuestaDom.js';
+import { razonCargosPuedenDisminuir } from './tarifaDoctrina.js';
 // beneficioCosto importado desde motor.js (auditoria 2026-11-06, hallazgo 1): antes
 // esta copia local omitia la reposicion del inversor del costo descontado, mientras
 // que secciones.js (pantalla) SI la incluia -- el PDF mostraba un indicador mas
@@ -179,9 +180,9 @@ function pagina03(doc, r, numero) {
 // ---------- Pagina 4: que cargos pueden disminuir ----------
 function pagina04(doc, r, numero) {
   let y = encabezado(doc, numero, 'Qué cargos pueden disminuir', r.titular);
-  const razon = r.meta.tieneDemandaContratada
-    ? 'Tiene demanda contratada: Distribución y Capacidad se facturan por kW, no por kWh, y no bajan aunque la energía neta llegue a cero.'
-    : 'No tiene demanda contratada: casi toda la factura se factura por kWh, por lo que casi todo baja con la energía solar.';
+  // razon: misma fuente que secciones.js/resumen.js (tarifaDoctrina.js) -- nunca un
+  // texto propio que pueda desincronizarse y describir la doctrina de otra tarifa.
+  const razon = razonCargosPuedenDisminuir(r);
   y = bodyX(doc, y, `Tarifa ${r.tarifa}. ${razon}`);
   y = spacer(y, 8);
   const montoReduc = r.meta.reducibles.reduce((s, k) => s + (r.cargos[k] || 0), 0);

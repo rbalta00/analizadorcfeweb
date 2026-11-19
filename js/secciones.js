@@ -10,6 +10,7 @@ import { COMERCIAL } from './comercial.js';
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
 import { leerPlantillaTarifa } from './textosGlobales.js';
 import { beneficioCosto, R } from './motor.js';
+import { razonCargosPuedenDisminuir } from './tarifaDoctrina.js';
 
 // Razon real por la que un concepto NO reducible no baja con paneles solares -- NO es la
 // misma razon para todos. 'suministro' es un cargo fijo por tener contrato (no depende de
@@ -51,11 +52,14 @@ function razonSiReducible(concepto, r) {
       'sustituye esos kWh, sin ningún mecanismo adicional.';
   }
   if (concepto === 'distribucion' || concepto === 'capacidad') {
-    // Solo llega aqui cuando !tieneDemandaContratada (PDBT sin demanda, columna "$/kW" en $0.00) --
-    // si hubiera demanda contratada, estos dos conceptos estarian en noReducibles, no aqui.
-    return 'En este recibo específico NO hay demanda contratada en kW (columna "$/kW" en $0.00) -- Distribución y ' +
-      'Capacidad se facturan por kWh igual que Energía, así que sí bajan con el SFV propuesto. (En una tarifa con ' +
-      'demanda contratada, como GDMTO/GDMTH, estos mismos conceptos NO bajarían -- ver criterio de clasificación arriba.)';
+    // Solo llega aqui cuando !tieneDemandaContratada (tarifa sin demanda, columna "$/kW"
+    // en $0.00) -- si hubiera demanda contratada, estos dos conceptos estarian en
+    // noReducibles, no aqui. A PROPOSITO este texto nunca menciona "demanda contratada"
+    // ni el nombre de otra tarifa (GDMTO/GDMTH) -- ese fue exactamente el defecto real
+    // reportado en la Cotizacion 40 (COBAEB Plantel 26, PDBT): el documento de un recibo
+    // SIN demanda terminaba citando la doctrina de GDMTO como contraste.
+    return 'En este recibo específico, la columna "$/kW" de Distribución y Capacidad aparece en $0.00 -- se ' +
+      'facturan por kWh igual que Energía, así que sí bajan con el sistema solar propuesto.';
   }
   return 'Se factura por kWh consumidos -- la energía solar sustituye kWh comprados a CFE a esta tarifa, 1 a 1.';
 }
@@ -111,7 +115,7 @@ function mapaCamposCalculo(r) {
       ? `Esta tarifa factura la Energía en 3 franjas (Base/Intermedia/Punta) con su propio precio cada una -- clasifica qué baja con los paneles y qué no (ver sección ${refSeccion(4, r)})`
       : `Un solo renglón de Energía -- clasifica qué conceptos bajan con los paneles y cuáles no (ver sección ${refSeccion(4, r)})`,
       `${Object.keys(r.cargos).length} conceptos capturados`]);
-    filas.push(['Columna "$/kW" (Distribución/Capacidad)', 'Decide si esos dos cargos son por demanda contratada (no bajan con los paneles) o por consumo (sí bajan)', r.meta.tieneDemandaContratada ? 'Por demanda -- no bajan' : 'Por consumo -- sí bajan']);
+    filas.push(['Columna "$/kW" (Distribución/Capacidad)', 'Decide si esos dos cargos se facturan por potencia (no bajan con los paneles) o por consumo (sí bajan)', r.meta.tieneDemandaContratada ? 'Por potencia -- no bajan' : 'Por consumo -- sí bajan']);
     filas.push(['2% de baja tensión / bonificación por factor de potencia', 'Ajustan el cargo base de este período antes de IVA y DAP', r.btPct || r.fpBonusPct ? `BT ${PCT(r.btPct || 0)} / bonificación ${PCT(r.fpBonusPct || 0)}` : 'No capturados en este recibo']);
   }
   filas.push(['DAP (alumbrado público)', 'Se suma al pago de cada período; nunca baja con los paneles -- lo cobra el municipio, no CFE', M(r.dap || 0) + '/período']);
@@ -1054,7 +1058,7 @@ function s02(r, leido, onToggle) {
         ['Titular, domicilio, tarifa, No. de servicio', 'Se identifican con patrones de texto que buscan las etiquetas exactas que imprime CFE en ese recibo (p. ej. "NO. DE SERVICIO", "TARIFA:", el bloque entre "Ciudad de México" y "NO. DE SERVICIO" para nombre/domicilio).'],
         ['Período, días, kWh del período', 'Se lee la etiqueta "PERIODO FACTURADO" (par de fechas impresas) para calcular los días exactos, y el consumo en kWh impreso en el mismo recibo -- no se asume un período de 30 días fijo.'],
         ['Cargos (Suministro, Distribución, Energía, Capacidad, etc.)', `Se lee la tabla de desglose de cargos del recibo, identificando cada concepto por su nombre impreso y tomando el importe de la columna de total de esa fila (ver sección ${refSeccion(3, r)} para la fórmula que arma el pago con estos mismos importes).`],
-        ['Columna "$/kW" (decide si hay demanda contratada)', leido.rate_kw_via_ocr != null
+        ['Columna "$/kW" (decide si estos cargos se facturan por potencia o por consumo)', leido.rate_kw_via_ocr != null
           ? (leido.rate_kw_via_ocr ? 'Detectada por OCR -- se recomienda confirmarla a simple vista contra el PDF antes de ofertar en firme.' : 'Detectada leyendo el texto nativo del PDF directamente.')
           : 'Capturada a mano por quien armó la estudio, revisando el recibo impreso.'],
         ['Historial de consumo (si el recibo lo trae)', `Se lee la tabla de histórico de consumo que algunos recibos de CFE traen impresa, mes por mes -- se usa para promediar el consumo base en vez de extrapolar un solo período (ver sección ${refSeccion(5, r)}).`],
@@ -1511,11 +1515,12 @@ function calculoReciboDomestico(r) {
 // ---------- 04: que cargos pueden disminuir ----------
 function s04(r, _leido, onToggle) {
   const art = crearSeccion(4, 'Qué cargos pueden disminuir', '¿Cuánto de la factura SÍ baja con paneles solares, y cuánto no?', r, onToggle);
-  const razon = r.tarifa === 'GDMTH'
-    ? `Tiene demanda contratada: Distribución y Capacidad se facturan por kW y no bajan aunque la energía neta llegue a cero. Además, la Energía Punta tampoco baja (motivo distinto -- ver sección ${refSeccion(3, r)}).`
-    : r.meta.tieneDemandaContratada
-    ? 'Tiene demanda contratada: Distribución y Capacidad se facturan por kW, no por kWh, y no bajan aunque la energía neta llegue a cero.'
-    : 'No tiene demanda contratada: casi toda la factura se factura por kWh, por lo que casi todo baja con la energía solar.';
+  // razon: SIEMPRE calculado desde r.tarifa/r.meta de ESTE estudio (razonCargosPuedenDisminuir,
+  // tarifaDoctrina.js) -- nunca un texto heredado de un machote o de otra tarifa. Fuente
+  // compartida con propuesta.js/resumen.js (Parte C.1 del encargo 2026-11-19: el documento
+  // de la Cotización 40, COBAEB Plantel 26/PDBT, decía "Tarifa GDMTO" con doctrina de
+  // demanda que no le correspondía a ese recibo).
+  const razon = razonCargosPuedenDisminuir(r);
   art.append(badgeEstado('comprobado'));
   art.append(p(`Tarifa ${r.tarifa}. ${razon}`));
   const montoReduc = r.meta.reducibles.reduce((s, k) => s + (r.cargos[k] || 0), 0);
@@ -1547,16 +1552,28 @@ function s04(r, _leido, onToggle) {
     avisoCream('El único piso que queda es el IVA y el DAP, que no dependen del consumo -- por eso el % máximo de ' +
       'ahorro de una tarifa doméstica suele ser más alto que el de una tarifa con demanda contratada.'),
   ] : [
-    p('Criterio de clasificación usado (freno de clasificación del motor de cálculo): se revisa la columna ' +
-      '"$/kW" del propio recibo para Distribución y Capacidad -- si trae un importe mayor a $0.00, esos dos ' +
-      'conceptos se facturan por demanda contratada (kW), no por consumo (kWh), y se marcan como "no reducibles". ' +
-      `En este recibo: ${r.meta.tieneDemandaContratada ? 'SÍ' : 'NO'} hay importe en esa columna, por eso ` +
-      `${r.meta.tieneDemandaContratada ? 'Distribución y Capacidad quedan fuera del cálculo de ahorro' : 'prácticamente todo el recibo entra al cálculo de ahorro'}.`),
-    p('Por qué no se acredita ahorro en los cargos de demanda aunque se instalen paneles: la medición neta ' +
-      '(Metodología para la medición neta, Resolución RES/142/2017 de la CRE, Anexo I) compensa kWh de energía ' +
-      'contra kWh consumidos, pero no modifica por sí sola el cargo por demanda contratada -- ese cargo depende ' +
-      'de la potencia máxima que el inmueble le exige a la red, no de cuánta energía neta se le compra a CFE en ' +
-      'el mes. Sin una medición de la demanda real después de instalar, no hay base para prometer que ese cargo baje.'),
+    // Criterio de clasificación: separado en 2 ramas EXCLUYENTES (tieneDemandaContratada
+    // true/false) -- antes era un solo párrafo que SIEMPRE mencionaba "demanda contratada
+    // (kW)" aunque este recibo no tuviera demanda, el defecto real de la Cotización 40.
+    ...(r.meta.tieneDemandaContratada ? [
+      p('Criterio de clasificación usado (freno de clasificación del motor de cálculo): se revisa la columna ' +
+        '"$/kW" del propio recibo para Distribución y Capacidad -- como trae un importe mayor a $0.00, esos dos ' +
+        'conceptos se facturan por demanda contratada (kW), no por consumo (kWh), y se marcan como "no reducibles": ' +
+        'quedan fuera del cálculo de ahorro.'),
+      p('Por qué no se acredita ahorro en los cargos de demanda aunque se instalen paneles: la medición neta ' +
+        '(Metodología para la medición neta, Resolución RES/142/2017 de la CRE, Anexo I) compensa kWh de energía ' +
+        'contra kWh consumidos, pero no modifica por sí sola el cargo por demanda contratada -- ese cargo depende ' +
+        'de la potencia máxima que el inmueble le exige a la red, no de cuánta energía neta se le compra a CFE en ' +
+        'el mes. Sin una medición de la demanda real después de instalar, no hay base para prometer que ese cargo baje.'),
+    ] : [
+      p('Criterio de clasificación usado (freno de clasificación del motor de cálculo): se revisa la columna ' +
+        '"$/kW" del propio recibo para Distribución y Capacidad -- en este recibo aparece en $0.00, así que esos ' +
+        'dos conceptos se facturan por consumo (kWh), no por potencia, y se marcan como "reducibles": entran al ' +
+        'cálculo de ahorro igual que Energía.'),
+      p('Por eso, en este recibo prácticamente todo el gasto depende del consumo -- el único cargo que se ' +
+        'mantiene fijo sin importar cuántos paneles se instalen es el Suministro (y el DAP, que lo cobra el ' +
+        'municipio, no CFE).'),
+    ]),
     // Mismos 2 fixes que la rama domestica de arriba: col1 ("Clasificación") editable
     // siempre, col4 ("Ahorro máximo") editable solo cuando coberturaCompleta.
     graficoToggle('g04-calc-clasificacion', 'Tabla de clasificación de conceptos', tabla(['Concepto', 'Clasificación', 'Cómo se abate (o por qué no) con el SFV propuesto', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'], [

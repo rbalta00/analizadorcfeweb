@@ -8,21 +8,20 @@ import {
   CONTENT_TOP, CONTENT_W, MARGIN_L, headX, subX, bodyX, spacer, cardsRow, notice, table, buildPdf,
   NAVY, TEAL, WHITE, LINE,
 } from './pdfComponents.js';
-import { M, PCT, listaConceptos, cadenciaPeriodo } from './util.js';
+import { M, PCT, cadenciaPeriodo } from './util.js';
 import { beneficioCosto } from './propuesta.js';
+import { razonCargosPuedenDisminuirCorta } from './tarifaDoctrina.js';
 
 export function generarResumenEjecutivo(r) {
   const bc = beneficioCosto(r);
   const reposicionAnio = (r.flujo25Rows || []).find(x => x.reposicionMxn)?.anio;
-  const tieneDemanda = r.meta?.tieneDemandaContratada || false;
-  const noReducibles = r.meta?.noReducibles || [];
   const escPct = r.escalamientoTarifaPct || 0;
 
-  const clasif = tieneDemanda
-    ? `Clasificación ${r.tarifa}: tiene demanda contratada, así que ${listaConceptos(noReducibles)} se ` +
-      `mantienen aunque se cubra el 100% del consumo con paneles — el ${PCT(r.pctAhorro)} de ahorro ya lo refleja.`
-    : `Clasificación ${r.tarifa}: no tiene demanda contratada, casi todo el recibo es reducible con paneles — ` +
-      `el ${PCT(r.pctAhorro)} de ahorro ya lo refleja.`;
+  // Misma fuente que secciones.js/propuesta.js (tarifaDoctrina.js) -- nunca un texto
+  // propio que pueda describir la doctrina de otra tarifa (Parte C.1 del encargo
+  // 2026-11-19: Cotización 40, COBAEB Plantel 26/PDBT, decía "demanda contratada"
+  // aunque este recibo no la tiene).
+  const clasif = `Clasificación ${r.tarifa}: ${razonCargosPuedenDisminuirCorta(r)} — el ${PCT(r.pctAhorro)} de ahorro ya lo refleja.`;
   const escTxt = escPct
     ? ` Supone que la tarifa de CFE sube ${escPct.toFixed(1)}% anual (criterio del estudio, no oficial de CFE).`
     : ' No se supone incremento de tarifa (precios constantes).';

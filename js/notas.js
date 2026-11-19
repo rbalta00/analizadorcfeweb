@@ -6,7 +6,7 @@ const ETIQUETAS_CAMPOS = {
   tarifa: 'tarifa', no_servicio: 'número de servicio', periodo_dias: 'fechas del período',
   periodo_kwh: 'kWh del período', suministro: 'Suministro', distribucion: 'Distribución',
   transmision: 'Transmisión', cenace: 'CENACE', energia: 'Energía', capacidad: 'Capacidad',
-  scnmem: 'SCnMEM', dap: 'DAP/alumbrado público', demanda_contratada_kw: 'demanda contratada',
+  scnmem: 'SCnMEM', dap: 'DAP/alumbrado público', demanda_contratada_kw: 'potencia contratada (demanda)',
   no_medidor: 'número de medidor', multiplicador: 'multiplicador',
 };
 
@@ -57,7 +57,7 @@ export function generarNotas(leido, r, esDomestica) {
       'la persona indicó a mano en el formulario. Si hay cualquier duda de la tarifa real, pedir al ' +
       'cliente una foto clara de esa columna del recibo.');
   } else if (leido.rate_kw_advertencia) {
-    notas.push('Posible contradicción en la detección automática de demanda contratada: ' + leido.rate_kw_advertencia);
+    notas.push('Posible contradicción en la detección automática de la columna "$/kW" (potencia contratada): ' + leido.rate_kw_advertencia);
   } else if (leido.rate_kw_via_ocr) {
     notas.push('La columna "$/kW" de Distribución/Capacidad se detectó vía OCR (no del texto nativo del ' +
       'PDF). Es el dato más importante del cálculo -- conviene confirmarlo viendo el recibo antes de ' +
@@ -132,7 +132,7 @@ export const REQUISITOS_PRESUPUESTO_REAL = [
   'Distancia real de cableado entre el inversor/paneles y el punto de conexión -- afecta el costo de cable AC/DC presupuestado, que aquí es una provisión genérica.',
   'Confirmación de precios vigentes con el proveedor para módulo, inversor y estructura -- los precios usados aquí son de lista y pueden estar vencidos.',
   'Historial real de consumo de los últimos 12 meses, si este cálculo se basó en un solo período extrapolado.',
-  'Confirmar con CFE la tarifa, la demanda contratada y la clasificación de cargos si hay cualquier duda sobre lo leído del recibo.',
+  'Confirmar con CFE la tarifa, la potencia contratada (si aplica) y la clasificación de cargos si hay cualquier duda sobre lo leído del recibo.',
   'Trámite y tiempos reales de interconexión (medición neta) con CFE para este servicio específico.',
   'Verificar que el titular y el domicilio del recibo correspondan exactamente al inmueble que se va a intervenir.',
   'Cualquier obra adicional no incluida en este presupuesto (refuerzo estructural, cambio de transformador, impermeabilización, rehabilitación eléctrica ajena al sistema).',
