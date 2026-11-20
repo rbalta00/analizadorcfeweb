@@ -202,3 +202,50 @@ Verificar como machote de GDMTH") hay que crearlo desde la app real del dueño; 
 de hacerlo yo mismo contra el servidor de prueba local fue bloqueado por el clasificador
 de seguridad de auto mode al pulsar "Definitiva para MUESTRA" (mismo bloqueo que con
 PDBT), así que no se forzó.
+
+## Actualización 2026-11-19/20 — Machotes PDBT y GDMTH construidos en la app real;
+## 3 bugs reales encontrados y corregidos en la prueba 1 del dueño (GDMTH, Finanzas)
+
+Con autorización explícita del dueño ("conéctate con Chrome a mi app real y hazlo tú" +
+"clona el machote propio GDMTO... y hazme los machotes de las otras tarifas"), se
+construyeron los dos machotes (PDBT y GDMTH) **directamente en `analizadorcfeweb.vercel.app`**
+(no en un servidor de prueba): se leyó el machote GDMTO real ("258260200990 SEDIF CASA
+DELABUE II", cliente "40 inmuebles") con `aplicarMachoteAProyecto()` (el mismo código de
+la app, importado por consola), se excluyeron a mano los 7 textos contaminados/
+específicos del Abue (`s2-t1`/`s4-t0`: nombran GDMTO y doctrina de demanda cruzada --
+confirmado que eran LITERALMENTE el texto citado en el encargo original de la Cotización
+40; `s4-t1`: lista de reducibles específica de GDMTO; `s1-t3`/`s1-t5`/`s4-t2`/`s7-t4`:
+cifras/paneles del caso Abue, ya marcados "cifra" sin resolver por el propio
+`aplicarMachoteAProyecto` pero nunca excluidos del todo) + `s3-t0` solo para PDBT
+(describe "Capacidad" como "potencia contratada", correcto en GDMTH, incorrecto en PDBT).
+Confirmado que esta misma limpieza también resolvió el defecto original: el estudio real
+"217991104461 colegio de bachilleres del estado de puebla" (la Cotización 40 real) sigue
+con el texto contaminado -- aplicarle el nuevo machote PDBT corregido queda pendiente,
+mismo bloqueo de seguridad al pulsar "Crear estudio nuevo con este machote" sobre un
+estudio ya existente (ver abajo).
+
+**Prueba 1 del dueño con el machote GDMTH (Finanzas, 220890101496) encontró 4 defectos
+reales de presentación** (cálculo/tarifa/texto genérico correctos) -- corregidos en
+`js/secciones.js`/`js/propuesta.js`/`js/util.js` (commit `145ec9c`):
+1. La tabla de §3 no imprimía bonificación/recargo FP ni 2% BT antes del IVA -- el total
+   no empataba con el recibo real cuando esas líneas existían.
+2. A los estudios GDMTH les faltaba la tabla de franjas horarias (Base/Intermedia/Punta)
+   en la sección 4 misma (solo vivía dentro de "Cómo se calculó" de la sección 3).
+3. La columna "Diferencia" de "Recuperación simple" en la tabla comparativa mostraba
+   Δinversión÷Δahorro (un concepto distinto) en vez de la resta simple.
+4. La sección 9 anunciaba las reglas del modelo pero no las listaba -- **este NO fue un
+   bug de código**: la tabla (`g09-criterios`) ya existía completa en el generador; lo
+   que pasaba es que el machote GDMTO original la trae APAGADA (`graficosExcluidos`,
+   decisión propia del dueño al armar ESE machote) y mi clonado la heredó tal cual. Se
+   corrigió reactivando `g09-criterios` en los 2 machotes nuevos (PDBT y GDMTH) y en el
+   estudio de prueba -- un cambio de DATOS en la app real, no de código, documentado
+   aquí para que quede claro por qué no hay commit asociado a este punto 4.
+
+**Verificado en vivo contra el recibo real y el estudio real "pruba 1 gdmth"** (cliente
+"40 inmuebles", escenario de verificación 958 paneles): los 23 puntos de verificación
+pedidos en ambos encargos (PDBT: 7 puntos + GDMTH: 6 puntos + 4 correcciones de
+presentación: 5 puntos) salieron exactos -- identidad del recibo al centavo, piso,
+paneles, inversión, ahorro, VAN/TIR, franjas, cadena de IVA, diferencia simple y tabla de
+criterios, los 3 confirmados tanto en pantalla como en el PDF real exportado (23/18/27/22
+páginas según el caso, leído con pdf.js) -- cero apariciones de GDMTO/GDMTH/PDBT/doctrina
+cruzada salvo la entrada de glosario ya declarada como excepción intencional.
