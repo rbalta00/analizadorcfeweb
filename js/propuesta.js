@@ -16,7 +16,7 @@ import {
   notice, table, curve, groupedBarChart, horizontalBarChart, gauge, buildPdf, GREY,
   crearDoc, dibujarHeaderFooter,
 } from './pdfComponents.js';
-import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, recuperacionDiferencia, cadenciaPeriodo } from './util.js';
+import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, cadenciaPeriodo } from './util.js';
 import { BLOQUES_COTIZACION } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { dibujarSeccionGenerica, textoVisibleDe } from './propuestaDom.js';
@@ -156,8 +156,19 @@ function pagina03(doc, r, numero) {
                     'energia_intermedia', 'energia_punta', 'capacidad', 'scnmem']) {
     if (k in r.cargos) filasCargos.push([listaConceptos([k]), M(r.cargos[k])]);
   }
-  const suma = Object.values(r.cargos).reduce((a, b) => a + b, 0);
-  filasCargos.push(['Suma de componentes', M(suma)]);
+  // Mismo fix que secciones.js (bug real reportado 2026-11-19, prueba 1 del machote
+  // GDMTH): usar r.facturaDetalle (ya calculado por el motor) en vez de reconstruir la
+  // suma/IVA aqui, e imprimir BT/bonificacion/recargo cuando existan, para que esta
+  // tabla empate con el total real del recibo.
+  const fd = r.facturaDetalle;
+  filasCargos.push(['Suma de componentes', M(fd.base)]);
+  const huboAjustePrevioIva = !!(r.btPct || r.fpBonusPct || r.recargoFpPct);
+  if (r.btPct) filasCargos.push(['+ 2% de baja tensión', M(fd.bt)]);
+  if (r.fpBonusPct) filasCargos.push(['− Bonificación por factor de potencia', '−' + M(fd.bonus)]);
+  if (r.recargoFpPct) filasCargos.push(['+ Recargo por factor de potencia', '+' + M(fd.recargo)]);
+  if (huboAjustePrevioIva) filasCargos.push(['Subtotal', M(fd.subtotal)]);
+  filasCargos.push(['+ IVA (16%)', M(fd.iva)]);
+  filasCargos.push(['Suma de componentes con IVA', M(fd.subtotal + fd.iva)]);
   if (graficoIncluido(r, 'g03-cargos')) {
     y = tablaF(doc, y, 'g03-cargos', r, ['Componente del recibo', 'Importe'], filasCargos, { widths: [CONTENT_W * 0.6, CONTENT_W * 0.4] });
     y = spacer(y, 10);
@@ -445,7 +456,12 @@ export function paginaComparativoVerificacion(doc, r, numero) {
     ['Potencia', `${r.kwp.toFixed(2)} kWp`, `${ev.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
     ['Inversión, IVA incluido', M(r.investment), M(ev.investment), M(ev.investment - r.investment)],
     ['Ahorro anual', M(r.ahorroAnual), M(ev.ahorroAnual), M(ev.diferenciaAhorro)],
-    ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', recuperacionDiferencia(ev.investment - r.investment, ev.diferenciaAhorro)],
+    // Mismo fix que secciones.js (bug real 2026-11-19, prueba 1 machote GDMTH): resta
+    // simple, igual que el resto de la columna -- no el Δinversión÷Δahorro de "en
+    // cuántos años se pagan solos los paneles extra" (otro concepto, solo vive como
+    // texto en la conclusión).
+    ['Recuperación simple', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D',
+      (ev.payback != null && r.payback != null) ? `${(ev.payback - r.payback).toFixed(1)} años` : '—'],
     ['% de ahorro de factura', PCT(r.pctAhorro), PCT(ev.pctAhorro), '—'],
   ], { widths: [CONTENT_W * 0.3, CONTENT_W * 0.25, CONTENT_W * 0.25, CONTENT_W * 0.2], small: true });
   y = spacer(y, 8);

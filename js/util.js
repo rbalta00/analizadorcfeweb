@@ -4,19 +4,6 @@
 export const M = (x) => `$${Number(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export const PCT = (x) => `${(100 * Number(x)).toFixed(1)}%`;
 
-// Celda "recuperación de la diferencia" de la tabla comparativa calculado-vs-verificado
-// (secciones.js/propuesta.js, sección 1/20) -- antes esa columna quedaba fija en "—"
-// aunque la propia sección 20 SÍ calculaba este número en prosa (años_extra =
-// diferencia de inversión / diferencia de ahorro, solo cuando ambas son positivas).
-// Hallazgo de auditoría 2026-11-13: se expone aquí para que la tabla muestre el mismo
-// número que la conclusión en prosa, en vez de dejarlo sin calcular.
-export function recuperacionDiferencia(difInversion, difAhorro) {
-  if (difInversion === 0) return 'Sin diferencia';
-  if (difInversion > 0) return difAhorro > 0 ? `${(difInversion / difAhorro).toFixed(1)} años` : 'No se recupera';
-  // difInversion < 0: el otro escenario cuesta MENOS.
-  return difAhorro <= 0 ? 'Ahorra más gastando menos' : `${(Math.abs(difInversion) / difAhorro).toFixed(1)} años (en sentido inverso)`;
-}
-
 const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
                    'septiembre', 'octubre', 'noviembre', 'diciembre'];
 

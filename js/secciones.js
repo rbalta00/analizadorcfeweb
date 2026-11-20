@@ -3,7 +3,7 @@
 // aqui en HTML navegable en vez de PDF estatico. Cada seccion pertenece a un bloque de
 // bloques.js (para el boton de apagado) y recibe el mismo objeto `r` que arma
 // construirResultado() en app.js.
-import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, recuperacionDiferencia, cadenciaPeriodo } from './util.js';
+import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, cadenciaPeriodo } from './util.js';
 import { barraHorizontal, barraAgrupada, gauge, curvaFlujo } from './charts.js';
 import { bloqueDeSeccion, seccionesDelBloque } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
@@ -940,7 +940,18 @@ function s01(r, _leido, onToggle) {
       ['Potencia', `${ev.kwp.toFixed(2)} kWp`, `${r.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
       ['Inversión, IVA incluido', M(ev.investment), M(r.investment), M(ev.investment - r.investment)],
       ['Ahorro anual', M(ev.ahorroAnual), M(r.ahorroAnual), M(ev.diferenciaAhorro)],
-      ['Recuperación simple', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', recuperacionDiferencia(ev.investment - r.investment, ev.diferenciaAhorro)],
+      // BUG REAL encontrado por el usuario, 2026-11-19 (prueba 1 del machote GDMTH,
+      // caso Antiguo Edificio de Finanzas): esta celda mostraba recuperacionDiferencia()
+      // (inversion extra ÷ ahorro extra -- "en cuántos años se pagarían solos los
+      // paneles de más", un concepto DISTINTO) en vez de la resta simple que usa el
+      // resto de la columna "Diferencia" -- con Finanzas salian 211.4 años ahí, cuando
+      // la diferencia real es 8.9 − 5.8 = 3.1 años. Ese otro dato (Δinversión ÷
+      // Δahorro) se queda SOLO como texto explicativo en la conclusión de la sección
+      // "Comparativo: calculado vs. verificación en sitio" (s25 más abajo, variable
+      // `anosExtra`), que ya lo explica bien -- aquí la columna vuelve a ser una resta
+      // simple, igual que Paneles/Potencia/Inversión/Ahorro de las filas de arriba.
+      ['Recuperación simple', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D',
+        (ev.payback != null && r.payback != null) ? `${(ev.payback - r.payback).toFixed(1)} años` : '—'],
       ['% de ahorro de factura', PCT(ev.pctAhorro), PCT(r.pctAhorro), '—'],
     ], { small: true, id: 'g01-comparativo-verificacion' })));
     // Mismo fix de id FIJO que el parrafo de arriba -- ver ese comentario.
@@ -1347,19 +1358,30 @@ function s03(r, _leido, onToggle) {
                     'energia_intermedia', 'energia_punta', 'capacidad', 'scnmem']) {
     if (k in r.cargos) filas.push([listaConceptos([k]), M(r.cargos[k])]);
   }
-  const suma = Object.values(r.cargos).reduce((a, b) => a + b, 0);
-  filas.push(['Suma de componentes', M(suma)]);
+  const fd = r.facturaDetalle;
+  filas.push(['Suma de componentes', M(fd.base)]);
   // Pedido explicito del usuario, 2026-11-10: "agregale el iva a la suma de
   // componentes" -- esta tabla solo mostraba el desglose crudo del recibo (sin BT/
   // bonificacion/DAP/IVA, eso vive en el paso a paso de bloqueCalculo mas abajo), asi
   // que la "Suma de componentes" se veia mas chica que el total real que paga el
-  // cliente, sin explicar por que. Se agrega el 16% de IVA sobre esa misma suma como
-  // referencia rapida en esta tabla -- el total exacto con BT/bonificacion/DAP sigue
-  // viviendo en la tabla de pasos de abajo ("Como se calculo"), que es la fuente
-  // garantizada igual al recibo real.
-  const ivaSuma = R(suma * 0.16);
-  filas.push(['+ IVA (16%)', M(ivaSuma)]);
-  filas.push(['Suma de componentes con IVA', M(suma + ivaSuma)]);
+  // cliente, sin explicar por que.
+  // BUG REAL encontrado por el usuario, 2026-11-19 (prueba 1 del machote GDMTH, caso
+  // Antiguo Edificio de Finanzas): el IVA se calculaba directo sobre la suma cruda
+  // (`suma * 0.16`), ignorando que el recibo real aplica bonificacion/recargo por
+  // factor de potencia y el 2% de baja tension ANTES del IVA -- la tabla no empataba
+  // con "Servicio con IVA" de la seccion 2 cuando el recibo trae cualquiera de esas 3
+  // lineas ($147,054.09 calculado aqui vs $143,377.74 real del recibo, una diferencia
+  // de $3,676.35 a la vista del cliente). Ahora se imprimen las mismas lineas que ya
+  // calcula el motor (r.facturaDetalle.bt/bonus/recargo, ver construirInvoice en
+  // motor.js) antes del IVA, y el IVA se calcula sobre fd.subtotal (el mismo numero
+  // que ya usa el recibo real) en vez de reconstruir la aritmetica aqui.
+  const huboAjustePrevioIva = !!(r.btPct || r.fpBonusPct || r.recargoFpPct);
+  if (r.btPct) filas.push(['+ 2% de baja tensión', M(fd.bt)]);
+  if (r.fpBonusPct) filas.push(['− Bonificación por factor de potencia', '−' + M(fd.bonus)]);
+  if (r.recargoFpPct) filas.push(['+ Recargo por factor de potencia', '+' + M(fd.recargo)]);
+  if (huboAjustePrevioIva) filas.push(['Subtotal', M(fd.subtotal)]);
+  filas.push(['+ IVA (16%)', M(fd.iva)]);
+  filas.push(['Suma de componentes con IVA', M(fd.subtotal + fd.iva)]);
   art.append(graficoToggle('g03-cargos', 'Tabla de componentes del recibo', tabla(['Componente del recibo', 'Importe'], filas, { id: 'g03-cargos' })));
   art.append(p('En palabras simples: "Suministro" es lo que cuesta que CFE le dé servicio, sin importar cuánto ' +
     'consuma. "Distribución" y "Transmisión" son el costo de llevar la electricidad desde la planta hasta su ' +
@@ -1536,6 +1558,28 @@ function s04(r, _leido, onToggle) {
     `por período — un ${PCT(r.pctMaxPeriodo)}.`));
   art.append(avisoCream('No se prometen ahorros de demanda sin conocer la energía importada y la demanda después ' +
     'de instalar. Conservar su importe en el presupuesto es un criterio prudente, no afirmar que esos cargos sean fijos.'));
+  // Tabla de franjas horarias, SOLO GDMTH -- bug real reportado por el usuario,
+  // 2026-11-19 (prueba 1 del machote GDMTH, caso Antiguo Edificio de Finanzas): la
+  // sección 4 explicaba la doctrina en texto pero le faltaba la tabla de franjas del
+  // estudio-modelo del dueño (Base/Intermedia/Punta, con su ahorro por franja) --
+  // visible siempre, no escondida dentro de "Cómo se calculó". Reusa exactamente las
+  // mismas funciones (razonSiReducible/razonNoReducible/filaAhorroConcepto) que ya
+  // arma la tabla equivalente de la sección 3 (g03-calc-franjas) -- mismo criterio,
+  // id distinto porque son dos tablas separadas en el mismo documento.
+  if (r.tarifa === 'GDMTH') {
+    art.append(graficoToggle('g04-calc-franjas', 'Tabla de franjas horarias (GDMTH)', tabla(
+      ['Franja', 'Importe en este recibo', '¿Baja con los paneles? ¿Cómo/por qué?', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'],
+      [
+        ['Base', M(r.cargos.energia_base || 0), `Sí — ${razonSiReducible('energia_base', r)}`,
+          ...filaAhorroConcepto(true, r.cargos.energia_base || 0, r)],
+        ['Intermedia', M(r.cargos.energia_intermedia || 0), `Sí — ${razonSiReducible('energia_intermedia', r)}`,
+          ...filaAhorroConcepto(true, r.cargos.energia_intermedia || 0, r)],
+        ['Punta', M(r.cargos.energia_punta || 0), `No — ${razonNoReducible('energia_punta')}`,
+          ...filaAhorroConcepto(false, r.cargos.energia_punta || 0, r)],
+      ],
+      { small: true, textCols: coberturaRealizadaPct(r) >= 1 ? [2, 4] : [2], id: 'g04-calc-franjas' }
+    )));
+  }
   art.append(bloqueCalculo(4, r.esDomestica ? [
     p(`Esta tarifa (${r.tarifa}) es 100% volumétrica: no tiene cargo de demanda contratada ni ningún concepto ` +
       'que se facture por kW. Todo el cargo de energía se factura por kWh consumido (por tramos en la tarifa 01, ' +
