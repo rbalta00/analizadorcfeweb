@@ -263,13 +263,35 @@ function dibujarTablaPaginada(doc, y, headers, rows, widths, small) {
     });
     return yActual + lineH;
   }
-  if (y + lineH > CONTENT_BOTTOM) { doc.addPage(); y = CONTENT_TOP; }
-  y = dibujarEncabezado(y);
-  for (const fila of rows) {
-    doc.setFontSize(sizeB);
+  // Precalculo de cada fila (mismo splitTextToSize que se usa para dibujarla mas abajo)
+  // -- hace falta saber el alto de la tabla COMPLETA antes de dibujar nada, para decidir
+  // si se trata como bloque indivisible (ver mas abajo).
+  doc.setFontSize(sizeB);
+  const filasPrecalc = rows.map((fila) => {
     const celdasLineas = fila.map((c, i) => doc.splitTextToSize(String(c), widths[i] - padX * 2));
     const nLineas = Math.max(...celdasLineas.map((l) => l.length), 1);
-    const alturaFila = nLineas * (small ? 10 : 11.5) + padY * 2;
+    return { celdasLineas, alturaFila: nLineas * lineHUnidad + padY * 2 };
+  });
+  const alturaTablaCompleta = lineH + filasPrecalc.reduce((s, f) => s + f.alturaFila, 0);
+  const altoPaginaUtil = CONTENT_BOTTOM - CONTENT_TOP;
+  // Tabla tratada como bloque indivisible cuando cabe ENTERA en una pagina propia --
+  // pedido explicito del usuario, 2026-11-20: bug real donde el encabezado se quedaba
+  // huerfano al pie de una pagina (solo el encabezado alcanzaba a caber ahi) y la tabla
+  // completa, con el encabezado repetido, se dibujaba de nuevo en la siguiente. Si no
+  // cabe entera donde esta ahora, se mueve ENTERA a la pagina siguiente en vez de partir
+  // apenas el encabezado. Las tablas que de verdad NO caben en una sola pagina (ej. la
+  // mensual de la seccion 10 o el flujo de la seccion 14) nunca cumplen esta condicion
+  // (alturaTablaCompleta > altoPaginaUtil) -- siguen partiendose como siempre, con su
+  // encabezado repetido en cada pagina nueva (logica sin cambios, mas abajo).
+  if (alturaTablaCompleta <= altoPaginaUtil && y + alturaTablaCompleta > CONTENT_BOTTOM) {
+    doc.addPage();
+    y = CONTENT_TOP;
+  } else if (y + lineH > CONTENT_BOTTOM) {
+    doc.addPage();
+    y = CONTENT_TOP;
+  }
+  y = dibujarEncabezado(y);
+  for (const { celdasLineas, alturaFila } of filasPrecalc) {
     if (y + alturaFila > CONTENT_BOTTOM) {
       doc.addPage();
       y = CONTENT_TOP;
@@ -277,10 +299,10 @@ function dibujarTablaPaginada(doc, y, headers, rows, widths, small) {
     }
     doc.setFont('helvetica', 'normal'); doc.setFontSize(sizeB); doc.setTextColor(BLACK);
     let x = MARGIN_L;
-    fila.forEach((c, i) => {
+    celdasLineas.forEach((lineas, i) => {
       const alinDer = i > 0;
-      celdasLineas[i].forEach((linea, li) => {
-        const ly = y + padY + (small ? 8 : 9) + li * (small ? 10 : 11.5);
+      lineas.forEach((linea, li) => {
+        const ly = y + padY + (small ? 8 : 9) + li * lineHUnidad;
         if (alinDer) doc.text(linea, x + widths[i] - padX, ly, { align: 'right' });
         else doc.text(linea, x + padX, ly);
       });
