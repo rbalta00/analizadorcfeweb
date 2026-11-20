@@ -34,7 +34,13 @@ import {
 // calculó" de bloqueCalculo() esta apagado). 'seccion-numero' tampoco va aqui -- es el
 // "NN de XX" que el usuario usa para confirmar que no falta nada, se queda como
 // contenido real (ver el fallback generico de texto "huerfano" en recorrer()).
-const CLASES_OMITIR = [
+// Exportada (Parte 3 del encargo "Arreglar la conclusión vieja y los textos
+// guardados", 2026-11-20): excel.js mantenía su PROPIA copia de esta lista, que se
+// quedó atrás cuando se agregaron 'grupo-graficos-alternativos-header'/
+// 'alternativa-pdf-secundaria' (Corrección 3, 2026-11-19) -- el Excel imprimía la
+// gráfica alternativa de la §7 que el PDF ya excluía. Una sola fuente evita que esto
+// vuelva a desalinearse.
+export const CLASES_OMITIR = [
   'toggle-seccion', 'btn-guardar-texto',
   'btn-ocultar-texto', 'nota-texto-global', 'nota-texto-oculto', 'th-accion-tabla',
   'td-accion-tabla', 'grafico-apagado', 'campo-oculto', 'col-oculta-tabla',

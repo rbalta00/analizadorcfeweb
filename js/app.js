@@ -25,7 +25,7 @@ import { archivoAImagenComprimida, conDataUrlResuelto, resolverImagenesRemotasEn
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, escalaCostosParaTarifa, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion, seccionesDelBloque, BLOQUES_COTIZACION } from './bloques.js';
 import { M, PCT } from './util.js';
-import { detectarTextosTarifaCruzada, sanearTextosTarifaCruzada } from './tarifaDoctrina.js';
+import { detectarTextosTarifaCruzada, sanearTextosTarifaCruzada, sanearTextosDoctrinaDesactualizada } from './tarifaDoctrina.js';
 import {
   normalizarRpu, rpuDifiere, construirSelloDesdeCampos, diferenciasIdentidadRecibo, diferenciasSinConfirmar,
 } from './identidadRecibo.js';
@@ -3450,15 +3450,25 @@ function calcularYRenderizar() {
   // mano -- solo QUITA la entrada de textosEditados para que vuelva al generico
   // correcto de esta tarifa (eso es lo que detectarTextosTarifaCruzada ya sabe armar).
   if (!proyectoActual.bloqueada) {
-    const saneo = sanearTextosTarifaCruzada(r, proyectoActual.textosEditados || {});
-    if (saneo.restaurados.length) {
-      proyectoActual.textosEditados = saneo.textosEditados;
+    // Parte 2 del encargo "Arreglar la conclusión vieja y los textos guardados"
+    // (2026-11-20): extiende el saneamiento de arriba con la doctrina desactualizada
+    // (lista de "qué baja" de la §4, aclaración PDBT de la §3 -- ver
+    // sanearTextosDoctrinaDesactualizada en tarifaDoctrina.js) -- mismo aviso no
+    // bloqueante, mismo registro de auditoria (textosRestauradosTarifa), un solo
+    // guardado. El candado de exportacion (confirmarSinTextoTarifaCruzadaAntesDeExportar,
+    // mas abajo) sigue usando SOLO detectarTextosTarifaCruzada, sin cambios -- este es
+    // saneamiento previo, no otro candado.
+    const saneo1 = sanearTextosTarifaCruzada(r, proyectoActual.textosEditados || {});
+    const saneo2 = sanearTextosDoctrinaDesactualizada(r, saneo1.textosEditados);
+    const restaurados = [...saneo1.restaurados, ...saneo2.restaurados];
+    if (restaurados.length) {
+      proyectoActual.textosEditados = saneo2.textosEditados;
       proyectoActual.textosRestauradosTarifa = [
         ...(proyectoActual.textosRestauradosTarifa || []),
-        ...saneo.restaurados.map((x) => ({ id: x.id, fecha: new Date().toISOString() })),
+        ...restaurados.map((x) => ({ id: x.id, fecha: new Date().toISOString() })),
       ];
       guardarProyecto(clienteActual, proyectoActual);
-      mostrarAvisoTextosRestauradosTarifa(saneo.restaurados);
+      mostrarAvisoTextosRestauradosTarifa(restaurados);
     }
   }
   // Recupera texto editado que quedo huerfano por los fixes de id-fijo de hoy (ver

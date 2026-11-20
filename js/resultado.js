@@ -9,7 +9,7 @@ import {
   DIAS_MES_REF,
 } from './motor.js';
 import { generarNotas } from './notas.js';
-import { fechaEstudioEs, fechaVigenciaEs } from './util.js';
+import { fechaEstudioEs, fechaVigenciaEs, diferenciaRedondeada } from './util.js';
 
 export function construirResultado(input) {
   const {
@@ -201,7 +201,12 @@ export function construirResultado(input) {
       ahorroAnual: ahorroAnualV, om1: presV.inversion * 0.01, pctAhorro: pctAhorroV,
       payback: paybackV, van: flujo25V.van, tir: flujo25V.tir,
       recuperacionAcumulada: flujo25V.recuperacionAcumulada,
-      diferenciaPaneles: nVerificado - n, diferenciaAhorro: Math.round((ahorroAnualV - ahorroAnual) * 100) / 100,
+      // diferenciaAhorro: calculada con los dos montos YA REDONDEADOS a centavos (no
+      // con la resta de los valores crudos) -- Parte 4 del encargo "Arreglar la
+      // conclusión vieja..." (2026-11-20): si ambos escenarios redondean al MISMO
+      // centavo, la diferencia debe salir exactamente $0.00, nunca una fracción de
+      // centavo residual por el orden de las operaciones de punto flotante.
+      diferenciaPaneles: nVerificado - n, diferenciaAhorro: diferenciaRedondeada(ahorroAnualV, ahorroAnual, 2),
     };
   }
 

@@ -580,6 +580,12 @@ details.grupo-proyectos .lista-clientes { margin-top: 6px; }
   display: block; font-size: 0.72rem; color: #b94a48; font-weight: 600; margin-top: 2px;
 }
 @media (prefers-color-scheme: dark) { .nota-texto-oculto { color: #e68a89; } }
+/* Parrafo CALCULADO (encargo "Arreglar la conclusión vieja...", 2026-11-20): se
+   actualiza solo con las cifras del estudio, nunca ofrece edicion -- ver
+   parrafoCalculado() en secciones.js. */
+.nota-texto-calculado {
+  display: block; font-size: 0.72rem; color: var(--teal); font-weight: 600; margin-top: 2px; font-style: italic;
+}
 
 .detalle-calculo { margin: 10px 0; font-size: 0.85rem; }
 .detalle-calculo summary { cursor: pointer; color: var(--teal); font-weight: 600; }

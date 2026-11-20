@@ -3,7 +3,7 @@
 // aqui en HTML navegable en vez de PDF estatico. Cada seccion pertenece a un bloque de
 // bloques.js (para el boton de apagado) y recibe el mismo objeto `r` que arma
 // construirResultado() en app.js.
-import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, cadenciaPeriodo } from './util.js';
+import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_POR_ARBOL_ANIO, EXPLICACION_TARIFA, cadenciaPeriodo, diferenciaRedondeada } from './util.js';
 import { barraHorizontal, barraAgrupada, gauge, curvaFlujo } from './charts.js';
 import { bloqueDeSeccion, seccionesDelBloque } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
@@ -380,6 +380,29 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   btnOcultar.title = 'Apagar este párrafo -- no aparece en el estudio final.';
   btnOcultar.addEventListener('click', () => _onOcultarTextoActual(id, true));
   wrap.append(btnOcultar);
+  return wrap;
+}
+
+// Parrafo/bloque CALCULADO (Parte 1 del encargo "Arreglar la conclusión vieja y los
+// textos guardados", 2026-11-20 -- caso real: COBAEP Plantel 26, la conclusión del
+// comparativo seguía citando las cifras de una versión anterior y mezclada del
+// estudio, contradiciendo sus propias tablas ya corregidas): su contenido depende
+// SIEMPRE de las cifras actuales del estudio (diferencias de inversión, ahorro,
+// paneles y recuperación entre el escenario calculado y el de verificación) -- un
+// texto editado/guardado para estos párrafos NUNCA se imprime, ni en pantalla ni (por
+// construcción: el PDF/Excel leen el DOM ya renderizado, ver propuestaDom.js/excel.js)
+// en el documento del cliente. A diferencia de campoEditableConId(), esta función NO
+// consulta _overridesActuales/_plantillaTarifaActual en absoluto -- siempre el texto
+// recién calculado, de solo lectura, con una nota explícita. Un texto YA guardado en
+// un proyecto viejo bajo el id que usaban antes estos párrafos (campoEditableConId con
+// id fijo) queda huérfano -- nunca se lee ni se muestra, pero tampoco se borra.
+function parrafoCalculado(tag, cls, texto) {
+  const wrap = el('div', 'campo-editable campo-calculado');
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  e.textContent = texto;
+  wrap.append(e);
+  wrap.append(el('span', 'nota-texto-calculado', 'Párrafo calculado: se actualiza solo con las cifras del estudio, no se puede editar.'));
   return wrap;
 }
 
@@ -950,8 +973,13 @@ function s01(r, _leido, onToggle) {
     nodosComparativo.push(subtitulo(1, 'comparativo-verificacion', `Comparativo: calculado vs. verificación en sitio (ver sección ${refSeccion(20, r)})`));
     nodosComparativo.push(graficoToggle('g01-comparativo-verificacion', 'Tabla comparativa calculado vs. verificación en sitio', tabla(['Concepto comparable', `Verificación en sitio (sección ${refSeccion(19, r)})`, `Nuestro cálculo (sección ${refSeccion(1, r)})`, 'Diferencia'], [
       ['Paneles', `${ev.n}`, `${r.n}`, dif === 0 ? 'Igual' : `${dif > 0 ? '+' : ''}${dif}`],
-      ['Potencia', `${ev.kwp.toFixed(2)} kWp`, `${r.kwp.toFixed(2)} kWp`, `${(ev.kwp - r.kwp).toFixed(2)} kWp`],
-      ['Inversión, IVA incluido', M(ev.investment), M(r.investment), M(ev.investment - r.investment)],
+      // Diferencias calculadas con diferenciaRedondeada() -- Parte 4 del encargo
+      // "Arreglar la conclusión vieja..." (2026-11-20): con los valores YA REDONDEADOS
+      // tal como se muestran en las 2 celdas de la izquierda (nunca con la resta de
+      // los crudos), para que nunca contradiga lo que el lector ve con sus propios
+      // ojos (ej. "2.5 años" y "2.5 años" con una diferencia que no sea "0.0").
+      ['Potencia', `${ev.kwp.toFixed(2)} kWp`, `${r.kwp.toFixed(2)} kWp`, `${diferenciaRedondeada(ev.kwp, r.kwp, 2).toFixed(2)} kWp`],
+      ['Inversión, IVA incluido', M(ev.investment), M(r.investment), M(diferenciaRedondeada(ev.investment, r.investment, 2))],
       ['Ahorro anual', M(ev.ahorroAnual), M(r.ahorroAnual), M(ev.diferenciaAhorro)],
       // BUG REAL encontrado por el usuario, 2026-11-19 (prueba 1 del machote GDMTH,
       // caso Antiguo Edificio de Finanzas): esta celda mostraba recuperacionDiferencia()
@@ -964,16 +992,19 @@ function s01(r, _leido, onToggle) {
       // `anosExtra`), que ya lo explica bien -- aquí la columna vuelve a ser una resta
       // simple, igual que Paneles/Potencia/Inversión/Ahorro de las filas de arriba.
       ['Recuperación simple', ev.payback ? `${ev.payback.toFixed(1)} años` : 'N/D', r.payback ? `${r.payback.toFixed(1)} años` : 'N/D',
-        (ev.payback != null && r.payback != null) ? `${(ev.payback - r.payback).toFixed(1)} años` : '—'],
+        (ev.payback != null && r.payback != null) ? `${diferenciaRedondeada(ev.payback, r.payback, 1).toFixed(1)} años` : '—'],
       ['% de ahorro de factura', PCT(ev.pctAhorro), PCT(r.pctAhorro), '—'],
     ], { small: true, id: 'g01-comparativo-verificacion' })));
-    // Mismo fix de id FIJO que el parrafo de arriba -- ver ese comentario.
-    nodosComparativo.push(campoEditableConId('div', 'aviso-cream', dif === 0
+    // Parrafo CALCULADO (Parte 1 del encargo "Arreglar la conclusión vieja...",
+    // 2026-11-20) -- se construye con `dif` (diferencia de paneles entre escenarios),
+    // mismo criterio que la conclusión de la sección 20: nunca se imprime un texto
+    // editado/guardado aquí, ver parrafoCalculado() arriba.
+    nodosComparativo.push(parrafoCalculado('div', 'aviso-cream', dif === 0
       ? 'El número de paneles coincide con el de la verificación en campo -- ambos escenarios salen iguales.'
       : `La verificación en campo sugiere ${Math.abs(dif)} panel${Math.abs(dif) === 1 ? '' : 'es'} ${dif > 0 ? 'más' : 'menos'} que lo que ` +
         'calcula este estudio a partir del consumo real del recibo -- ambos criterios son válidos y conviene presentarle al cliente las dos ' +
         'referencias antes de decidir el tamaño final. Ambos escenarios se calcularon con el mismo motor (mismo recibo, misma tarifa, ' +
-        'mismos costos) -- no implica que ambos tamaños quepan físicamente en el espacio disponible.', 's1-verif-aviso'));
+        'mismos costos) -- no implica que ambos tamaños quepan físicamente en el espacio disponible.'));
   }
   // Quitado por completo, pedido explicito del usuario 2026-11-18: "no quiero una
   // fecha ni que ahi hable de los precios ni del provedor ni de revisar" -- este aviso
@@ -1332,7 +1363,11 @@ function s25(r, _leido, onToggle) {
   // vivia en s20-t3) ya no tape el calculo de este recibo; siguienteTextoId() se sigue
   // consumiendo para no desfasar s20-t4/s20-t5 (ediciones ya guardadas).
   siguienteTextoId();
-  const difInv = ev.investment - r.investment;
+  // difInv/difAh: calculados con diferenciaRedondeada()/diferenciaAhorro (ya
+  // redondeado en resultado.js) -- Parte 4 del encargo "Arreglar la conclusión
+  // vieja..." (2026-11-20), misma regla que la tabla comparativa de la sección 1:
+  // la diferencia se saca de los valores YA REDONDEADOS, nunca de los crudos.
+  const difInv = diferenciaRedondeada(ev.investment, r.investment, 2);
   const difAh = ev.diferenciaAhorro;
   const masMenos = (x) => (x > 0 ? 'más' : 'menos');
   const pb = (x) => (x ? `${x.toFixed(1)} años` : 'N/D');
@@ -1361,11 +1396,11 @@ function s25(r, _leido, onToggle) {
     conclusion += ' La verificación en campo suele basarse en el espacio disponible observado en sitio, no necesariamente en el consumo exacto -- ' +
       'conviene presentarle al cliente las dos referencias antes de decidir el tamaño final.';
   }
-  art.append(campoEditableConId('p', null, conclusion, 's20-conclusion'));
+  art.append(parrafoCalculado('p', null, conclusion));
   art.append(bloqueCalculo(20, [
     graficoToggle('g20-calc-formula', 'Tabla de fórmula de la diferencia', tabla(['Variable', 'Fórmula', 'Sustitución'], [
       ['Diferencia de paneles', 'Paneles verificación − paneles calculados', `${ev.n} − ${r.n} = ${dif > 0 ? '+' : ''}${dif}`],
-      ['Diferencia de inversión', 'Inversión verificación − inversión calculada', `${M(ev.investment)} − ${M(r.investment)} = ${M(ev.investment - r.investment)}`],
+      ['Diferencia de inversión', 'Inversión verificación − inversión calculada', `${M(ev.investment)} − ${M(r.investment)} = ${M(difInv)}`],
       ['Diferencia de ahorro anual', 'Ahorro verificación − ahorro calculado', `${M(ev.ahorroAnual)} − ${M(r.ahorroAnual)} = ${M(ev.diferenciaAhorro)}`],
     ], { small: true, textCols: [1], id: 'g20-calc-formula' })),
   ], r));
@@ -1946,18 +1981,23 @@ function s07(r, _leido, onToggle) {
   // repetido), pero el consumo aqui es el dato real facturado de cada periodo del
   // historial, no un promedio plano -- asi se ve si algun mes real del cliente ya
   // supera o se queda corto respecto a lo que generarian los paneles propuestos.
-  // Corrección 3 (encargo 2026-11-19, "7 correcciones de salida"): el cliente debe ver
-  // UNA sola de estas 2 graficas (la "primera visible", en el mismo orden de pantalla),
-  // nunca las 2 ni la instruccion de edicion de arriba -- antes el PDF (que lee este
-  // mismo DOM genericamente, ver propuestaDom.js) imprimia ambas si el admin las dejaba
-  // prendidas, mas la instruccion "Elige cuál gráfica... dejar visible aquí", que es
-  // texto dirigido al editor, no al cliente. `primariaG07` decide cual de las 2 es la
-  // que SI debe imprimirse; a la otra (si tambien esta prendida) se le agrega la clase
-  // 'alternativa-pdf-secundaria' (CLASES_OMITIR en propuestaDom.js) -- en pantalla
-  // ambas se siguen viendo y pudiendose elegir exactamente igual que antes.
+  // Corrección 3 (encargo 2026-11-19, "7 correcciones de salida") + Parte 3 del
+  // encargo "Arreglar la conclusión vieja y los textos guardados" (2026-11-20): el
+  // cliente debe ver UNA sola de estas 2 gráficas, nunca las 2 ni la instrucción de
+  // edición de arriba -- "la ruta del cliente los excluye siempre, sin importar las
+  // banderas de visibilidad guardadas en el proyecto". Antes cuál de las 2 era "la
+  // primaria" dependía de _graficosExcluidosActual (primariaG07 = la primera de la
+  // lista que NO estuviera apagada individualmente), un cálculo indirecto que podía
+  // quedar desalineado. Ahora es una regla FIJA: si hay historial disponible (datos
+  // reales de ESTE cliente), esa es la que llega al cliente y la extrapolada SIEMPRE
+  // se marca 'alternativa-pdf-secundaria' (CLASES_OMITIR en propuestaDom.js/excel.js)
+  // -- sin consultar ninguna otra bandera. Si el admin apaga individualmente
+  // g07-historial (grafico-apagado, mecanismo distinto, ya excluido por su propio
+  // toggle), la extrapolada queda como la única visible de verdad, tanto en pantalla
+  // como al cliente, sin necesitar esta marca. En pantalla ambas se siguen viendo y
+  // pudiéndose apagar individualmente igual que antes -- esto solo decide qué llega al
+  // documento del cliente cuando las 2 están genuinamente activas.
   const hayAlternativaHistorialG07 = !!(r.historial && r.historial.length >= 2);
-  const idsAlternativasG07 = hayAlternativaHistorialG07 ? ['g07-historial', 'g07-extrapolado'] : ['g07-extrapolado'];
-  const primariaG07 = idsAlternativasG07.find((id) => !_graficosExcluidosActual.includes(id)) || null;
   if (hayAlternativaHistorialG07) {
     const genMensualEstimada = r.gen / 12;
     // Bug real reportado por el usuario, 2026-11-01: esta grafica comparaba generacion
@@ -1977,9 +2017,9 @@ function s07(r, _leido, onToggle) {
       textoChico('Generación mensual estimada con los paneles propuestos'), r.historial.map(() => genMensualEstimada),
       textoChico('Su consumo normalizado a kWh/mes ese período'), r.consumosMensualesUsados,
     ), { notaAlternativa: 'Alternativa a la gráfica de abajo (generación vs. consumo EXTRAPOLADO) -- esta usa el consumo real de cada período de su historial.' });
-    if (primariaG07 !== 'g07-historial' && !_graficosExcluidosActual.includes('g07-historial')) {
-      nodoG07Historial.classList.add('alternativa-pdf-secundaria');
-    }
+    // g07-historial ya NUNCA se marca 'alternativa-pdf-secundaria' -- cuando existe (y
+    // no está apagada individualmente), siempre es la que llega al cliente (ver nota
+    // arriba).
     art.append(nodoG07Historial);
     art.append(p(`Cada barra de "consumo normalizado a kWh/mes" parte del dato real impreso en su propio recibo para ` +
       'ese período, convertido a su equivalente mensual (así un período bimestral no se compara contra una ' +
@@ -1994,7 +2034,11 @@ function s07(r, _leido, onToggle) {
     hayAlternativaHistorialG07
       ? { notaAlternativa: 'Alternativa a la gráfica de arriba (generación vs. consumo real del historial) -- esta usa el consumo extrapolado de un año completo, no el historial real.' }
       : {});
-  if (primariaG07 !== 'g07-extrapolado' && !_graficosExcluidosActual.includes('g07-extrapolado')) {
+  // Regla fija (ver nota arriba): si hay historial disponible, la extrapolada SIEMPRE
+  // es la alternativa para el documento del cliente -- sin importar
+  // _graficosExcluidosActual. Si g07-historial está apagada individualmente, esta ya
+  // es un 'grafico-apagado' aparte (no aplica) y no hace falta marcarla.
+  if (hayAlternativaHistorialG07 && !_graficosExcluidosActual.includes('g07-historial')) {
     nodoG07Extrapolado.classList.add('alternativa-pdf-secundaria');
   }
   art.append(nodoG07Extrapolado);

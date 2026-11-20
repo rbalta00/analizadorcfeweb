@@ -42,18 +42,14 @@
 // en el PDF (los documentos adjuntos) si se incrustan.
 import { seccionesActivasEnOrden } from './secciones.js';
 import { resumenInmueble } from './propuesta.js';
-import { anchosProporcionales } from './propuestaDom.js';
+import { anchosProporcionales, CLASES_OMITIR } from './propuestaDom.js';
 import { CONTENT_W, CONTENT_TOP, CONTENT_BOTTOM, MARGIN_L, MARGIN_R, MARGIN_T, MARGIN_B, crearDoc } from './pdfComponents.js';
 
-// Mismas clases que CLASES_OMITIR en propuestaDom.js (controles del propio editor,
-// contenido apagado) -- un nodo con cualquiera de estas clases (o cualquier <button>)
-// nunca se exporta, ni el ni sus hijos.
-const CLASES_OMITIR = [
-  'toggle-seccion', 'btn-guardar-texto', 'btn-ocultar-texto', 'nota-texto-global',
-  'nota-texto-oculto', 'th-accion-tabla', 'td-accion-tabla', 'grafico-apagado',
-  'campo-oculto', 'col-oculta-tabla', 'calculo-detalle-apagado', 'fila-oculta-tabla',
-  'documento-adjunto-pdf', 'nota-admin-oculto', 'badge-num-editable',
-];
+// CLASES_OMITIR: importada de propuestaDom.js (controles del propio editor, contenido
+// apagado, graficas alternativas no-primarias) -- un nodo con cualquiera de estas
+// clases (o cualquier <button>) nunca se exporta, ni el ni sus hijos. Antes era una
+// copia local que se desalineo de la de propuestaDom.js (ver nota ahi, Parte 3 del
+// encargo "Arreglar la conclusión vieja...", 2026-11-20) -- una sola fuente.
 const CLASES_CELDA_EXCLUIR = ['col-oculta-tabla', 'fila-oculta-tabla', 'th-accion-tabla', 'td-accion-tabla', 'badge-num-editable', 'nota-texto-global', 'nota-texto-oculto'];
 
 // Mismos colores de marca que el PDF/la pantalla.

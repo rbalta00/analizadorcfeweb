@@ -31,7 +31,7 @@
 // verificar" (app.js) como para BLOQUEAR la exportacion de PDF/Excel si algo asi
 // sigue sin resolverse.
 
-import { listaConceptos } from './util.js';
+import { listaConceptos, NOMBRES_CONCEPTO } from './util.js';
 
 // Parrafo "Tarifa X. <razon>" de la seccion/pagina "Que cargos pueden disminuir" --
 // UNA sola fuente para secciones.js (s04), propuesta.js (pagina04) y resumen.js
@@ -184,6 +184,78 @@ export function detectarTextosTarifaCruzada(r, textosEditados) {
 // para que el llamador decida si guardar/avisar (vacia si no habia nada que sanear).
 export function sanearTextosTarifaCruzada(r, textosEditados) {
   const conflictos = detectarTextosTarifaCruzada(r, textosEditados);
+  if (!conflictos.length) return { textosEditados: textosEditados || {}, restaurados: [] };
+  const saneado = { ...(textosEditados || {}) };
+  for (const c of conflictos) delete saneado[c.id];
+  return { textosEditados: saneado, restaurados: conflictos.map((c) => ({ id: c.id, motivo: c.motivo })) };
+}
+
+// Parte 2 del encargo "Arreglar la conclusión vieja y los textos guardados"
+// (2026-11-20): dos parrafos de DOCTRINA -- la lista de "qué baja / qué no baja" de la
+// §4 (secciones.js s04) y la aclaración PDBT del "En palabras simples" de la §3
+// (secciones.js s03) -- tienen como fuente única este archivo. Si un texto editado
+// guardado para ESOS párrafos (identificados por su forma fija, nunca por id, para que
+// esto funcione sin importar en qué id secuencial hayan quedado guardados) CONTRADICE
+// la clasificación vigente para la tarifa/recibo de este estudio, se restaura.
+// Deliberadamente SEPARADO de evaluarTextoTarifaCruzada()/detectarTextosTarifaCruzada()
+// de arriba (el candado de exportación y aplicarMachoteAProyecto siguen usando SOLO
+// esas, sin cambios -- "el candado... queda como está, esto es saneamiento previo, no
+// otro candado"); app.js corre AMBOS saneamientos en la misma pasada, con el mismo
+// aviso y el mismo registro de auditoría.
+
+// §4: "Lo que SÍ baja: <lista>. Lo que NO baja: <lista>." (ver secciones.js s04) --
+// forma FIJA, por eso se puede verificar sin interpretar prosa libre: si algún
+// concepto que SÍ baja en este recibo (r.meta.reducibles) no aparece mencionado en la
+// parte "SÍ baja" del texto guardado, o si algún concepto que NO baja (r.meta.noReducibles)
+// sí aparece ahí, hay contradicción.
+function evaluarTextoListaReducibles(texto, r) {
+  const m = /^Lo que SÍ baja:\s*([^.]*)\./i.exec(texto.trim());
+  if (!m) return null; // no es este parrafo -- no se interpreta nada mas
+  const siBaja = m[1].toLowerCase();
+  const faltantes = (r.meta.reducibles || []).filter((k) => !siBaja.includes((NOMBRES_CONCEPTO[k] || k).toLowerCase()));
+  const indebidos = (r.meta.noReducibles || []).filter((k) => siBaja.includes((NOMBRES_CONCEPTO[k] || k).toLowerCase()));
+  if (!faltantes.length && !indebidos.length) return null;
+  const detalles = [];
+  if (faltantes.length) detalles.push(`omite ${listaConceptos(faltantes)}, que sí baja en este recibo`);
+  if (indebidos.length) detalles.push(`incluye ${listaConceptos(indebidos)}, que en este recibo NO baja`);
+  return { motivo: `la lista de "qué baja" ${detalles.join(' y ')}` };
+}
+
+// §3, solo PDBT: "En palabras simples: ..." (ver secciones.js s03) -- si el texto
+// guardado explica Capacidad/Distribución como cargo por demanda/potencia contratada
+// (doctrina de GDMTO/GDMTH/GDBT) y no trae la aclaración vigente de
+// aclaracionPalabrasSimplesPdbt() (que esos 2 conceptos son componentes por kWh en
+// PDBT), hay contradicción.
+function evaluarTextoPalabrasSimplesPdbt(texto, r) {
+  if (r.tarifa !== 'PDBT') return null;
+  if (!/^En palabras simples:/i.test(texto.trim())) return null; // no es este parrafo
+  const explicaComoDemanda = /(capacidad|distribuci[oó]n)[^.]{0,120}(demanda|potencia contratada)/i.test(texto) ||
+    /(demanda|potencia contratada)[^.]{0,120}(capacidad|distribuci[oó]n)/i.test(texto);
+  if (!explicaComoDemanda) return null;
+  const aclaracion = aclaracionPalabrasSimplesPdbt(r).trim();
+  if (aclaracion && texto.includes(aclaracion)) return null; // ya trae la aclaración vigente
+  return { motivo: 'explica Capacidad/Distribución como cargo por demanda sin la aclaración vigente de que en PDBT son componentes por kWh' };
+}
+
+export function evaluarTextoDoctrinaDesactualizada(texto, r) {
+  if (typeof texto !== 'string' || !texto.trim() || !r || !r.tarifa || !r.meta) return null;
+  return evaluarTextoListaReducibles(texto, r) || evaluarTextoPalabrasSimplesPdbt(texto, r);
+}
+
+export function detectarTextosDoctrinaDesactualizada(r, textosEditados) {
+  const conflictos = [];
+  if (!r || !r.tarifa || !r.meta) return conflictos;
+  for (const [id, texto] of Object.entries(textosEditados || {})) {
+    if (typeof texto !== 'string' || !texto.trim()) continue;
+    const resultado = evaluarTextoDoctrinaDesactualizada(texto, r);
+    if (!resultado) continue;
+    conflictos.push({ id, texto, motivo: resultado.motivo });
+  }
+  return conflictos;
+}
+
+export function sanearTextosDoctrinaDesactualizada(r, textosEditados) {
+  const conflictos = detectarTextosDoctrinaDesactualizada(r, textosEditados);
   if (!conflictos.length) return { textosEditados: textosEditados || {}, restaurados: [] };
   const saneado = { ...(textosEditados || {}) };
   for (const c of conflictos) delete saneado[c.id];

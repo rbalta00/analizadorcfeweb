@@ -1,8 +1,35 @@
 // Utilidades compartidas por secciones.js, propuesta.js y app.js: formato de dinero,
 // porcentajes, fecha en espanol, y agrupacion del presupuesto en categorias legibles
 // (port 1:1 de _agrupar_presupuesto en app/propuesta.py).
-export const M = (x) => `$${Number(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-export const PCT = (x) => `${(100 * Number(x)).toFixed(1)}%`;
+
+// Redondea `x` a `decimales` lugares (mismo algoritmo "redondeo lejos de cero + colchon
+// de punto flotante" que R() en motor.js, generalizado a cualquier cantidad de
+// decimales) y normaliza -0 a 0 -- Parte 4 del encargo "Arreglar la conclusión vieja y
+// los textos guardados" (2026-11-20): un numero MUY cercano a cero pero negativo
+// (ej. -0.001) redondea a "-0.00"/"-0.0%" en JS de forma nativa (el signo se conserva
+// aunque el valor mostrado sea literalmente cero) -- real en este proyecto: la
+// diferencia de recuperación del comparativo calculado-vs-verificación salía
+// "-0.0 años" en vez de "0.0 años" cuando ambos escenarios redondeaban al mismo valor.
+export function redondear(x, decimales) {
+  const factor = 10 ** decimales;
+  const n = Number(x);
+  let r = (Math.sign(n) * Math.round(Math.abs(n) * factor + 1e-9)) / factor;
+  if (r === 0) r = 0; // -0 === 0 es true en JS -- esta asignacion es la que de verdad quita el signo
+  return r;
+}
+
+// Diferencia entre dos numeros, calculada DESPUES de redondear cada uno por separado a
+// `decimales` -- usar siempre que el resultado se vaya a imprimir junto a dos celdas
+// que YA muestran `a` y `b` redondeados a esa misma precisión (Parte 4 del mismo
+// encargo: "la diferencia impresa debe ser la resta de los dos números impresos", no
+// de los valores crudos sin redondear -- si no, dos celdas que se VEN iguales en
+// pantalla podían mostrar una diferencia distinta de cero).
+export function diferenciaRedondeada(a, b, decimales) {
+  return redondear(redondear(a, decimales) - redondear(b, decimales), decimales);
+}
+
+export const M = (x) => `$${redondear(Number(x), 2).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const PCT = (x) => `${redondear(100 * Number(x), 1).toFixed(1)}%`;
 
 const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
                    'septiembre', 'octubre', 'noviembre', 'diciembre'];
