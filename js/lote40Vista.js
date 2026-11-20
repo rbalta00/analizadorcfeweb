@@ -4,9 +4,11 @@
 // dentro de la SPA de index.html -- pedido explicito de seguimiento del usuario, mismo
 // dia: "que me abra en una ventana independiente", para poder tener el analizador y
 // este visor abiertos al mismo tiempo en pestañas/ventanas distintas sin que se pisen.
-// Lee el MISMO localStorage (mismo origen que index.html) via clientes.js -- es
-// solo lectura, nunca escribe nada aqui.
-import { listarClientes } from './clientes.js';
+// Lee el MISMO localStorage (mismo origen que index.html) via clientes.js -- de
+// solo lectura en casi todo, con UNA excepcion explicita: el boton "+ Crear" de un
+// inmueble "— Sin crear" (ver tarjetaLote40/crearProyectoPendiente mas abajo,
+// 2026-11-20) SI escribe un proyecto nuevo en blanco, pedido explicito del usuario.
+import { listarClientes, crearCliente, crearProyecto } from './clientes.js';
 import { LOTE_40_INMUEBLES, normalizarRpu } from './lote40.js';
 import { ETIQUETAS_TARIFA, ORDEN_TARIFAS } from './tarifas.js';
 import { M } from './util.js';
@@ -185,8 +187,43 @@ function tarjetaLote40(fila) {
       aExcel.href = `${base}&descargar=excel`;
       div.append(aExcel);
     }
+  } else {
+    // Botón "+ Crear" -- pedido explicito del usuario, 2026-11-20: "a los que aparecen
+    // sin crear ponles un boton de crear". Única escritura real de este visor (ver
+    // nota del import arriba) -- crea un proyecto en blanco bajo el cliente "40
+    // inmuebles" (mismo cliente que ya usan 18 de los 23 reales del lote, convención
+    // dominante -- no se inventó una ni se adivinó por inmueble) con el nombre
+    // "<RPU> <inmueble>" (mismo patrón "<rpu> <nombre>" que datosLote40() ya reconoce
+    // por dígitos del RPU, así que el cruce de la próxima vez que se abra/recargue el
+    // visor encuentra este proyecto solo, sin tocar nada más). Después de crear, abre
+    // el proyecto nuevo en otra pestaña directo en el formulario (mismo &editar=1 que
+    // "✏️ Editar") para subir el recibo de una vez, y refresca esta tarjeta en el
+    // visor sin recargar la página completa.
+    const aCrear = document.createElement('a');
+    aCrear.className = 'btn-link';
+    aCrear.textContent = '+ Crear';
+    aCrear.href = '#';
+    aCrear.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      crearProyectoPendiente(def);
+    });
+    div.append(aCrear);
   }
   return div;
+}
+
+const NOMBRE_CLIENTE_LOTE_40 = '40 inmuebles';
+
+function crearProyectoPendiente(def) {
+  // Revisa de nuevo con datos frescos (no los de cuando se renderizó esta tarjeta) por
+  // si otra pestaña ya creó este mismo proyecto mientras tanto -- evita un duplicado.
+  const yaExiste = datosLote40().find((f) => f.def.id === def.id)?.proyecto;
+  if (yaExiste) { render(); return; }
+  let cliente = listarClientes().find((c) => c.nombre === NOMBRE_CLIENTE_LOTE_40);
+  if (!cliente) cliente = crearCliente({ nombre: NOMBRE_CLIENTE_LOTE_40, tipo: 'Gobierno' });
+  const proyecto = crearProyecto(cliente, { nombre: `${def.rpu} ${def.inmueble}` });
+  window.open(`index.html?cliente=${encodeURIComponent(cliente.id)}&proyecto=${encodeURIComponent(proyecto.id)}&editar=1`, '_blank', 'noopener');
+  render();
 }
 
 // Pedido explicito del usuario, 2026-11-14 (seguimiento): "permite agruparlos por
