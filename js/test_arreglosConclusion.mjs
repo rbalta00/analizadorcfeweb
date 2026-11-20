@@ -112,6 +112,20 @@ const rPdbt = {
     evaluarTextoDoctrinaDesactualizada(textoZacapoaxtlaCorrecto, rGdmth) === null);
 }
 
+// Revisión v4 del encargo (2026-11-20): el caso real del COBAEP traía la §4 guardada
+// con una redacción MÁS VIEJA que "Lo que SÍ baja: ...", de antes de que esa frase
+// existiera -- la primera versión de esta regla solo reconocía la redacción actual, así
+// que este texto real nunca se detectaba como párrafo de doctrina.
+{
+  const textoHistorico = 'Los parametros que si pueden disminuir son: "Energía" "Transmisión" "CENACE" "SCnMEM"';
+  const resultado = evaluarTextoDoctrinaDesactualizada(textoHistorico, rPdbt);
+  ok('§4, redacción histórica real del COBAEP: SÍ se detecta', !!resultado, JSON.stringify(resultado));
+  ok('§4, redacción histórica: el motivo menciona Distribución y Capacidad omitidos',
+    resultado && /Distribución/.test(resultado.motivo) && /Capacidad/.test(resultado.motivo), resultado && resultado.motivo);
+  const saneo = sanearTextosDoctrinaDesactualizada(rPdbt, { 's4-viejo': textoHistorico });
+  ok('§4, redacción histórica: se restaura (se quita del objeto saneado)', !('s4-viejo' in saneo.textosEditados));
+}
+
 // Sin r válido / sin textosEditados -- no debe tronar.
 {
   ok('sin r válido: regresa vacío sin tronar', sanearTextosDoctrinaDesactualizada(null, { a: 'x' }).restaurados.length === 0);

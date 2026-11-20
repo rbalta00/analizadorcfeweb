@@ -1998,6 +1998,18 @@ function s07(r, _leido, onToggle) {
   // pudiéndose apagar individualmente igual que antes -- esto solo decide qué llega al
   // documento del cliente cuando las 2 están genuinamente activas.
   const hayAlternativaHistorialG07 = !!(r.historial && r.historial.length >= 2);
+  // Revisión v4 del encargo "Arreglar la conclusión vieja..." (2026-11-20): bug real
+  // encontrado en el COBAEP -- `hayAlternativaHistorialG07` solo revisa si HAY DATOS de
+  // historial, no si g07-historial está realmente visible (el admin pudo haberla
+  // apagado individualmente en una sesión anterior, ej. cuando el recibo todavía
+  // traía datos mezclados de otro servicio). La nota "Alternativa a la gráfica de
+  // arriba..." de g07-extrapolado se seguía agregando con la sola condición
+  // `hayAlternativaHistorialG07` -- si historial estaba apagada, esa nota quedaba
+  // apuntando a una gráfica que el cliente NUNCA ve, y encima g07-extrapolado (la
+  // única visible en ese caso) no se marcaba 'alternativa-pdf-secundaria' (correcto,
+  // es la única), así que esa nota colgante SÍ llegaba al documento del cliente.
+  // `g07HistorialVisible` es la condición correcta para las dos decisiones de abajo.
+  const g07HistorialVisible = hayAlternativaHistorialG07 && !_graficosExcluidosActual.includes('g07-historial');
   if (hayAlternativaHistorialG07) {
     const genMensualEstimada = r.gen / 12;
     // Bug real reportado por el usuario, 2026-11-01: esta grafica comparaba generacion
@@ -2011,7 +2023,14 @@ function s07(r, _leido, onToggle) {
     // seccion 5.
     art.append(grupoGraficosAlternativos('Elige cuál gráfica de generación vs. consumo dejar visible aquí -- las ' +
       'dos explican algo muy similar (no hace falta repetir ambas para el mismo cliente):'));
-    art.append(subtituloChico(7, 'generacion-vs-historial', 'Generación mensual estimada vs. su consumo real facturado'));
+    const subtituloHistorialG07 = subtituloChico(7, 'generacion-vs-historial', 'Generación mensual estimada vs. su consumo real facturado');
+    // Si g07-historial está apagada individualmente, este subtítulo (que la etiqueta)
+    // se excluye también del documento del cliente -- revisión v4 del encargo: sin
+    // esto, el cliente veía el subtítulo "flotando" sin ninguna gráfica debajo (la
+    // gráfica misma ya se excluía bien via 'grafico-apagado'). En pantalla el admin lo
+    // sigue viendo siempre, como etiqueta del toggle apagado.
+    if (!g07HistorialVisible) subtituloHistorialG07.classList.add('alternativa-pdf-secundaria');
+    art.append(subtituloHistorialG07);
     const nodoG07Historial = graficoToggle('g07-historial', 'Generación vs. su consumo REAL del historial', barraAgrupada(
       r.historial.map(h => `${h.mes} ${h.anio}`),
       textoChico('Generación mensual estimada con los paneles propuestos'), r.historial.map(() => genMensualEstimada),
@@ -2031,14 +2050,15 @@ function s07(r, _leido, onToggle) {
   const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
   const nodoG07Extrapolado = graficoToggle('g07-extrapolado', 'Generación vs. consumo EXTRAPOLADO (los 12 meses)',
     barraAgrupada(mesesAbrev, textoChico('Generación estimada'), r.rows.map(x => x.generacionKwh), textoChico('Consumo extrapolado'), r.rows.map(x => x.consumoExtrapoladoKwh)),
-    hayAlternativaHistorialG07
+    g07HistorialVisible
       ? { notaAlternativa: 'Alternativa a la gráfica de arriba (generación vs. consumo real del historial) -- esta usa el consumo extrapolado de un año completo, no el historial real.' }
       : {});
-  // Regla fija (ver nota arriba): si hay historial disponible, la extrapolada SIEMPRE
-  // es la alternativa para el documento del cliente -- sin importar
-  // _graficosExcluidosActual. Si g07-historial está apagada individualmente, esta ya
-  // es un 'grafico-apagado' aparte (no aplica) y no hace falta marcarla.
-  if (hayAlternativaHistorialG07 && !_graficosExcluidosActual.includes('g07-historial')) {
+  // Regla fija (ver nota arriba): si g07-historial está genuinamente visible, la
+  // extrapolada SIEMPRE es la alternativa para el documento del cliente. Si
+  // g07-historial está apagada individualmente, la extrapolada queda como la única
+  // visible de verdad (ni se marca secundaria, ni carga una nota colgante que
+  // referencie una gráfica que el cliente nunca ve).
+  if (g07HistorialVisible) {
     nodoG07Extrapolado.classList.add('alternativa-pdf-secundaria');
   }
   art.append(nodoG07Extrapolado);

@@ -73,6 +73,14 @@ export const CLASES_OMITIR = [
   // prendidas) deja que el PDF imprima solo UNA. Ninguna de las dos afecta la vista en
   // pantalla -- el admin sigue viendo/pudiendo elegir entre ambas igual que siempre.
   'grupo-graficos-alternativos-header', 'alternativa-pdf-secundaria',
+  // nota-texto-calculado: el aviso "Párrafo calculado: se actualiza solo con las
+  // cifras del estudio, no se puede editar" (parrafoCalculado() en secciones.js, Parte
+  // 1 del encargo "Arreglar la conclusión vieja...", 2026-11-20) es informativo SOLO
+  // para el editor -- bug real encontrado en la revisión v4: se quedó fuera de esta
+  // lista cuando se creó parrafoCalculado(), así que se colaba tal cual en el PDF del
+  // cliente (dos veces: tras la conclusión del comparativo de la portada y de la §
+  // "Comparativo: calculado vs. verificación en sitio").
+  'nota-texto-calculado',
 ];
 
 function tieneClaseOmitida(nodo) {

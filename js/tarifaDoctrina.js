@@ -208,10 +208,25 @@ export function sanearTextosTarifaCruzada(r, textosEditados) {
 // concepto que SÍ baja en este recibo (r.meta.reducibles) no aparece mencionado en la
 // parte "SÍ baja" del texto guardado, o si algún concepto que NO baja (r.meta.noReducibles)
 // sí aparece ahí, hay contradicción.
+// Revisión v4 del encargo "Arreglar la conclusión vieja..." (2026-11-20): un proyecto
+// real (COBAEP) traía este párrafo guardado con una redacción MÁS VIEJA que "Lo que SÍ
+// baja: ..." ("Los parametros que si pueden disminuir son: ..."), de antes de que esa
+// frase existiera -- la version anterior de esta regla solo reconocía la redacción
+// actual, así que ese texto nunca entraba a esta función, ni se detectaba como párrafo
+// de doctrina. Se reconocen AMBAS redacciones (se pueden agregar más si aparecen) para
+// que esto no dependa de que el texto guardado use exactamente la frase de hoy.
+const PATRONES_LISTA_REDUCIBLES = [
+  /^Lo que SÍ baja:\s*([^.]*)\./i,
+  /par[aá]metros?\s+que\s+s[ií]\s+pueden\s+disminuir\s+son:?\s*([^.]*)\.?/i,
+];
 function evaluarTextoListaReducibles(texto, r) {
-  const m = /^Lo que SÍ baja:\s*([^.]*)\./i.exec(texto.trim());
-  if (!m) return null; // no es este parrafo -- no se interpreta nada mas
-  const siBaja = m[1].toLowerCase();
+  let lista = null;
+  for (const patron of PATRONES_LISTA_REDUCIBLES) {
+    const m = patron.exec(texto.trim());
+    if (m) { lista = m[1]; break; }
+  }
+  if (lista == null) return null; // no es este parrafo (en ninguna de sus redacciones conocidas) -- no se interpreta nada mas
+  const siBaja = lista.toLowerCase();
   const faltantes = (r.meta.reducibles || []).filter((k) => !siBaja.includes((NOMBRES_CONCEPTO[k] || k).toLowerCase()));
   const indebidos = (r.meta.noReducibles || []).filter((k) => siBaja.includes((NOMBRES_CONCEPTO[k] || k).toLowerCase()));
   if (!faltantes.length && !indebidos.length) return null;
