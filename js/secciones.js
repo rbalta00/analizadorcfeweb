@@ -587,6 +587,11 @@ function botonOcultarColFila(oculto, onClick) {
 function tabla(headers, filas, { small = false, textCols = [], id = null, idsFilas = null } = {}) {
   const wrap = el('div', 'tabla-wrap');
   const t = el('table', 'tabla-seccion' + (small ? ' tabla-chica' : ''));
+  // data-tabla-id: identifica la tabla en el DOM para reglas de CSS puntuales (ver
+  // "table-layout: fixed" de g04-calc-franjas en styles.css) -- mismo id que ya usan
+  // graficoToggle()/tablaF()/dibujarTabla() (propuestaDom.js), expuesto aqui tambien en
+  // el <table> mismo en vez de inferirlo de la celda editable del encabezado.
+  if (id != null) t.dataset.tablaId = id;
   const clase = (i) => (i === 0 ? null : textCols.includes(i) ? 'texto' : 'num');
   const esEditable = (i) => id != null && (i === 0 || textCols.includes(i));
   const colsOcultas = id != null ? new Set(_columnasOcultasActual[id] || []) : new Set();

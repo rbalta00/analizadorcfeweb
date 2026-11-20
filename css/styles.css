@@ -694,6 +694,36 @@ details.grupo-proyectos .lista-clientes { margin-top: 6px; }
 .tabla-seccion td { padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: normal; }
 .tabla-seccion tr:last-child td { border-bottom: none; }
 
+/* Tabla de franjas horarias GDMTH, sección 4 (g04-calc-franjas) -- anchos fijos y
+   estables, pedido explicito del usuario, 2026-11-20: el reparto automatico del
+   navegador (sin table-layout:fixed) depende de cuanto espacio mide el CONTENEDOR al
+   momento de renderizar, que no es igual en toda ruta/contexto -- aqui se fija la
+   PROPORCION de cada columna en la tabla misma, para que el editor se vea siempre
+   igual sin importar el ancho disponible. (El PDF de "Cotización completa" no lee
+   estos anchos -- los suyos se calculan aparte, de forma 100% determinista, en
+   ANCHOS_FIJOS_TABLA, propuestaDom.js -- esta regla es solo para la vista en pantalla.)
+   Porcentajes en PLANO (12/13/37/16/22%, sin calc()) -- confirmado en vivo que el
+   algoritmo de table-layout:fixed de Chrome ignora un ancho de columna expresado con
+   calc() (cae de vuelta al reparto automático en partes iguales) aunque
+   getComputedStyle lo resuelva bien; con porcentaje plano SÍ lo respeta. Los 24px fijos
+   de la columna de acción (.th-accion-tabla/.td-accion-tabla) se suman aparte -- el
+   100% de las 5 columnas reales más esos 24px puede desbordar la tabla por esos mismos
+   24px, absorbidos por el scroll horizontal que .tabla-wrap ya tiene para cualquier
+   tabla angosta. */
+table[data-tabla-id="g04-calc-franjas"] { table-layout: fixed; }
+table[data-tabla-id="g04-calc-franjas"] th.texto,
+table[data-tabla-id="g04-calc-franjas"] td.texto { min-width: 0; max-width: none; }
+table[data-tabla-id="g04-calc-franjas"] th:nth-child(1),
+table[data-tabla-id="g04-calc-franjas"] td:nth-child(1) { width: 12%; }
+table[data-tabla-id="g04-calc-franjas"] th:nth-child(2),
+table[data-tabla-id="g04-calc-franjas"] td:nth-child(2) { width: 13%; }
+table[data-tabla-id="g04-calc-franjas"] th:nth-child(3),
+table[data-tabla-id="g04-calc-franjas"] td:nth-child(3) { width: 37%; }
+table[data-tabla-id="g04-calc-franjas"] th:nth-child(4),
+table[data-tabla-id="g04-calc-franjas"] td:nth-child(4) { width: 16%; }
+table[data-tabla-id="g04-calc-franjas"] th:nth-child(5),
+table[data-tabla-id="g04-calc-franjas"] td:nth-child(5) { width: 22%; }
+
 .recuadro-implica {
   background: var(--bg); border-left: 3px solid var(--cfe-gold); border-radius: 6px;
   padding: 10px 12px; font-size: 0.85rem; margin: 10px 0;
