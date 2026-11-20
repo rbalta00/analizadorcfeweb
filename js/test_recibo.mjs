@@ -5,6 +5,7 @@
 // texto que pypdf (eso se prueba aparte, ver test_recibo_pdf.mjs).
 import { readFileSync } from 'node:fs';
 import { extraerCampos } from './recibo.js';
+import { elegirMejorCandidato, esLecturaPerfecta } from './leerRecibo.js';
 
 // abue=GDMTO (energia en 1 fila), museo=GDMTH (3 franjas horarias), pdbt=sin demanda,
 // secfinanzas=OCR real con varios campos faltantes (debe fallar la reconciliacion),
@@ -121,6 +122,89 @@ if (Math.abs(recargoSinRe.recargo_fp_monto - 137.10) < 0.01) {
 } else {
   fallosTotal++;
   console.log(`FALLO recargo_fp_monto con "Cargo..." (sin "Re") -> real=${recargoSinRe.recargo_fp_monto} esperado=137.10`);
+}
+
+// Seleccion por puntaje entre reconstrucciones de texto -- pedido explicito del
+// usuario, 2026-11-20: el recibo real GDMTH del Antiguo Edificio de la Secretaria de
+// Finanzas (220890101496) se lee perfecto cuando pdf.js entrega los items en el orden
+// "correcto", pero si el mismo PDF entrega el stream con las columnas en otro orden, el
+// mismo lector pierde periodo_kwh/dap/bonus_monto/subtotal_resumen y mezcla el
+// domicilio con la caja de "Total a pagar". No se puede reproducir la reordenacion
+// geometrica real de pdf.js aqui (los fixtures son texto plano, sin x/y) -- en vez de
+// eso, esta prueba fija el caso real que SI se puede probar sin abrir un PDF: dados dos
+// resultados de extraerCampos() ya calculados (uno de un candidato que leyo mal, como
+// el que produciria una reconstruccion que mezcla columnas; otro de un candidato que
+// leyo bien), elegirMejorCandidato() debe quedarse SIEMPRE con el que reconcilia,
+// nunca con el que "parecia legible primero". La logica de generar los 3 candidatos en
+// si (pdftext.js: reconstruirLineas/reconstruirPorRenglon/reconstruirPorColumnas) vive
+// en el navegador (necesita pdf.js) -- se verifico en vivo contra la app real, ver
+// reporte de verificacion del encargo.
+console.log('\n=== seleccion por puntaje (Finanzas GDMTH, 220890101496) ===');
+const textoFinanzasCorrecto = readFileSync(new URL('./fixtures/recibo_texto_finanzas_correcto.txt', import.meta.url), 'utf8');
+const textoFinanzasMezclado = readFileSync(new URL('./fixtures/recibo_texto_finanzas_mezclado.txt', import.meta.url), 'utf8');
+const camposCorrecto = extraerCampos(textoFinanzasCorrecto, false);
+const camposMezclado = extraerCampos(textoFinanzasMezclado, false);
+
+// Primero, confirma que los fixtures de verdad reproducen el defecto real: el
+// candidato "mezclado" SI pierde exactamente los 4 campos que reporto el usuario, y el
+// candidato "correcto" SI es una lectura perfecta -- si cualquiera de los dos dejara
+// de ser cierto, la prueba de seleccion de abajo dejaria de probar lo que dice probar.
+const perdidosEsperados = ['periodo_kwh', 'dap', 'bonus_monto', 'subtotal_resumen'];
+for (const campo of perdidosEsperados) {
+  const valor = camposMezclado[campo];
+  if (valor === null || valor === undefined) {
+    console.log(`ok    fixture mezclado SI pierde ${campo} (como el caso real)`);
+  } else {
+    fallosTotal++;
+    console.log(`FALLO fixture mezclado deberia perder ${campo}, pero dio ${JSON.stringify(valor)} -- el fixture ya no reproduce el defecto real`);
+  }
+}
+if (esLecturaPerfecta(camposCorrecto)) {
+  console.log('ok    fixture correcto SI es una lectura perfecta');
+} else {
+  fallosTotal++;
+  console.log(`FALLO fixture correcto deberia ser una lectura perfecta -- reconciliacion_diff=${camposCorrecto.reconciliacion_diff}, campos_no_encontrados=${JSON.stringify(camposCorrecto.campos_no_encontrados)}`);
+}
+
+// La prueba real: la seleccion debe quedarse con el candidato correcto, sin importar
+// en que orden se le den los dos (simula que el candidato "mezclado" sea A, B o C).
+for (const [nombre, lista] of Object.entries({
+  'mezclado primero': [camposMezclado, camposCorrecto],
+  'correcto primero': [camposCorrecto, camposMezclado],
+})) {
+  const elegido = elegirMejorCandidato(lista);
+  if (elegido === camposCorrecto) {
+    console.log(`ok    elegirMejorCandidato (${nombre}) -> se queda con el candidato correcto`);
+  } else {
+    fallosTotal++;
+    console.log(`FALLO elegirMejorCandidato (${nombre}) -> se quedo con el candidato equivocado`);
+  }
+}
+
+// La lectura perfecta final (la que devolveria leerReciboMultiple en este caso) debe
+// traer exactamente los valores reales del recibo.
+const elegidoFinal = elegirMejorCandidato([camposMezclado, camposCorrecto]);
+const esperadosFinales = {
+  reconciliacion_diff: 0,
+  periodo_kwh: 51159,
+  dap: 197,
+  bonus_monto: -3169.27,
+};
+for (const [campo, esperado] of Object.entries(esperadosFinales)) {
+  const real = elegidoFinal[campo];
+  if (Math.abs(real - esperado) < 0.01) {
+    console.log(`ok    lectura final ${campo}: ${real}`);
+  } else {
+    fallosTotal++;
+    console.log(`FALLO lectura final ${campo}: real=${JSON.stringify(real)} esperado=${esperado}`);
+  }
+}
+const franjas = ['energia_base', 'energia_intermedia', 'energia_punta'];
+if (franjas.every(k => elegidoFinal[k] != null)) {
+  console.log(`ok    lectura final trae las 3 franjas GDMTH: base=${elegidoFinal.energia_base} intermedia=${elegidoFinal.energia_intermedia} punta=${elegidoFinal.energia_punta}`);
+} else {
+  fallosTotal++;
+  console.log(`FALLO lectura final deberia traer las 3 franjas GDMTH -- base=${elegidoFinal.energia_base} intermedia=${elegidoFinal.energia_intermedia} punta=${elegidoFinal.energia_punta}`);
 }
 
 console.log('\n' + (fallosTotal === 0 ? 'TODO OK' : `${fallosTotal} FALLOS`));
