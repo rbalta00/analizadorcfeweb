@@ -142,6 +142,24 @@ function tarjetaLote40(fila) {
     const base = `index.html?cliente=${encodeURIComponent(cliente.id)}&proyecto=${encodeURIComponent(proyecto.id)}`;
     a.href = base;
     div.append(a);
+    // Botón "Editar" -- pedido explicito del usuario, 2026-11-20: varios estudios del
+    // lote se generaron antes de correcciones recientes (líneas BT/FP de la sección 3,
+    // franjas GDMTH, sección 9, aclaración PDBT) y el dueño los va a reabrir uno por
+    // uno para recalcular/regenerar con el código vigente -- este es el atajo directo
+    // a esa pasada. A diferencia de "PDF"/"Excel", aparece para CUALQUIER servicio con
+    // proyecto (calculado o no, a propósito -- también hay estudios sin calcular que
+    // necesitan completarse). Mismo mecanismo de enlace profundo (&editar=1, consumido
+    // una sola vez en el arranque de app.js), que dentro de index.html deja el
+    // formulario "Datos y recibo" visible/enfocado en vez de aterrizar solo en el
+    // resumen -- no es un modo de edición nuevo, es la misma pantalla de siempre,
+    // scrolleada a la sección donde se capturan/cambian los datos.
+    const aEditar = document.createElement('a');
+    aEditar.className = 'btn-link';
+    aEditar.textContent = '✏️ Editar';
+    aEditar.target = '_blank';
+    aEditar.rel = 'noopener';
+    aEditar.href = `${base}&editar=1`;
+    div.append(aEditar);
     // Botones "PDF"/"Excel" directo desde el visor -- pedido explicito del usuario,
     // 2026-11-20: "sin tener que abrir cada proyecto". Mismo mecanismo de enlace
     // profundo que "Abrir" (&descargar=pdf|excel, consumido una sola vez en el

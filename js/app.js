@@ -5333,6 +5333,13 @@ $('btnVerificarPdf').addEventListener('click', async () => {
   // y un refresh normal de la pagina nunca vuelve a disparar la descarga sola (ver
   // manejarDescargaPorEnlaceProfundo()).
   const descargarParam = parametros.get('descargar');
+  // &editar=1 (mismo patron, mismo motivo que &descargar -- pedido explicito del
+  // usuario, 2026-11-20): botón "✏️ Editar" del visor del lote de 40
+  // (lote40Vista.js), para reabrir un estudio directo en el formulario de captura
+  // ("Datos y recibo") en vez del resumen -- no existe un modo de edición separado en
+  // esta app (es una sola pantalla continua), así que esto solo desplaza el scroll y
+  // enfoca el primer campo real del formulario (ver el final de este IIFE).
+  const editarParam = parametros.get('editar');
   if (clienteParam && proyectoParam) {
     const cliente = obtenerCliente(clienteParam);
     const proyecto = cliente ? obtenerProyecto(cliente, proyectoParam) : null;
@@ -5341,6 +5348,12 @@ $('btnVerificarPdf').addEventListener('click', async () => {
       abrirProyecto(clienteParam, proyectoParam);
       if (descargarParam === 'pdf' || descargarParam === 'excel') {
         manejarDescargaPorEnlaceProfundo(descargarParam);
+      } else if (editarParam === '1') {
+        const tab = $('tabCaptura');
+        if (tab) {
+          tab.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          $('titular')?.focus();
+        }
       }
       return;
     }
