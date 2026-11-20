@@ -27,6 +27,9 @@ import { todosLosBloques, bloqueDeSeccion, seccionesDelBloque, BLOQUES_COTIZACIO
 import { M, PCT } from './util.js';
 import { detectarTextosTarifaCruzada, sanearTextosTarifaCruzada } from './tarifaDoctrina.js';
 import {
+  normalizarRpu, rpuDifiere, construirSelloDesdeCampos, diferenciasIdentidadRecibo, diferenciasSinConfirmar,
+} from './identidadRecibo.js';
+import {
   TARIFAS_SOPORTADAS, esDomestica, conectarEventosFormularioRecibo,
   leerFormularioRecibo, aplicarFormularioRecibo, llenarFormularioDesdeReciboCampos,
 } from './formularioRecibo.js';
@@ -2112,6 +2115,9 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   // aqui (ver asegurarPasos en clientes.js) -- nunca pierden lo que ya tuvieran apagado.
   asegurarPasos(proyectoActual);
   renderSelectorPasos();
+  // "El RPU manda" (encargo 2026-11-20): proyectos guardados antes de que existiera el
+  // sello de identidad del recibo se migran solos aqui tambien -- ver asegurarReciboSello.
+  asegurarReciboSello(proyectoActual);
   // Si esta cotizacion ya tenia un link de vista previa compartida activo de una
   // sesion anterior, mostrar la caja con el link de nuevo (en vez de empezar oculta
   // como si nunca se hubiera compartido).
@@ -2347,9 +2353,13 @@ async function reescanearArchivosRecibo() {
     }
     const campos = await leerReciboMultiple(files);
     ultimoLeido = campos;
-    llenarFormularioDesdeRecibo(campos);
-    mostrarEstadoLecturaRecibo(campos);
-    intentarAutoCalcular(campos);
+    if (llenarFormularioDesdeRecibo(campos)) {
+      mostrarEstadoLecturaRecibo(campos);
+      intentarAutoCalcular(campos);
+    } else {
+      estadoEl.className = 'nota';
+      estadoEl.textContent = 'No se aplicó esta relectura -- el estudio se quedó exactamente como estaba.';
+    }
   } catch (err) {
     estadoEl.className = 'nota';
     estadoEl.textContent = 'Error al releer el recibo: ' + err.message;
@@ -3124,10 +3134,19 @@ $('archivoRecibo').addEventListener('change', async (e) => {
   try {
     const campos = await leerReciboMultiple(files);
     ultimoLeido = campos;
-    llenarFormularioDesdeRecibo(campos);
-    mostrarEstadoLecturaRecibo(campos);
-    intentarAutoCalcular(campos);
-    agregarArchivosReciboAProyecto(nuevos);
+    // "El RPU manda": si el usuario cancela el conflicto de servicio (ver
+    // llenarFormularioDesdeRecibo), el estudio debe quedar exactamente como estaba --
+    // ni un campo, ni un archivo (punto 3.b del encargo). Sin este candado, los 3
+    // pasos de abajo seguian corriendo de todos modos (el archivo se subia y quedaba
+    // adjunto aunque el usuario hubiera elegido "no tocar nada").
+    if (llenarFormularioDesdeRecibo(campos)) {
+      mostrarEstadoLecturaRecibo(campos);
+      intentarAutoCalcular(campos);
+      agregarArchivosReciboAProyecto(nuevos);
+    } else {
+      estadoEl.className = 'nota';
+      estadoEl.textContent = 'No se aplicó este recibo -- el estudio se quedó exactamente como estaba.';
+    }
   } catch (err) {
     estadoEl.className = 'nota';
     estadoEl.textContent = 'Error al leer el recibo: ' + err.message;
@@ -3137,11 +3156,55 @@ $('archivoRecibo').addEventListener('change', async (e) => {
   }
 });
 
+// "El RPU manda" (encargo 2026-11-20, ver js/identidadRecibo.js): los datos de un
+// recibo (titular, domicilio, tarifa, no. de servicio, cargos, periodo, dap,
+// historial, archivo adjunto) viajan como UN SOLO conjunto sellado con el RPU de ese
+// recibo -- nunca se mezcla "solo el consumo" o "solo los cargos" de un servicio
+// distinto al del estudio. Unico punto de entrada para aplicar un recibo a un
+// proyecto YA abierto (el boton de subir foto, "Volver a leer este recibo", y el caso
+// camposIniciales de un proyecto recien creado -- este ultimo nunca tiene RPU previo,
+// asi que cae solo al caso 1, sin preguntar nada). Se omite por completo en una
+// cotizacion bloqueada (mismo criterio que sanearTextosTarifaCruzada en
+// calcularYRenderizar): no tiene sentido alterar en memoria un documento que se dejo
+// congelado a proposito. Regresa false cuando el usuario CANCELA el conflicto de RPU
+// (el llamador debe entonces saltarse mostrarEstadoLecturaRecibo/intentarAutoCalcular/
+// agregarArchivosReciboAProyecto -- sin este valor de regreso, esos 3 pasos seguian
+// corriendo de todos modos y el archivo quedaba adjunto aunque el usuario hubiera
+// elegido "no tocar nada", contradiciendo el punto 3.b del encargo).
 function llenarFormularioDesdeRecibo(c) {
+  if (proyectoActual && !proyectoActual.bloqueada) {
+    const rpuActual = $('noServicio').value;
+    const rpuNuevo = c.no_servicio;
+    if (rpuDifiere(rpuActual, rpuNuevo)) {
+      const cambiar = confirm(
+        `Este recibo es del servicio ${rpuNuevo} y este estudio es del servicio ${rpuActual}.\n` +
+        `El RPU manda: no se mezclan datos de dos servicios.\n\n` +
+        `Aceptar = cambiar este estudio al servicio ${rpuNuevo} (reemplaza TODO: cargos, periodo, historial, ` +
+        `titular, domicilio y los archivos de recibo ya adjuntos del servicio anterior).\n` +
+        `Cancelar = no tocar nada -- el estudio se queda exactamente como está.`
+      );
+      if (!cambiar) return false; // caso 3.b del encargo: cancelar, nada se mezcla
+      // caso 3.a: reemplazo atomico -- limpia primero TODO lo que pertenecia al RPU
+      // anterior (incluye titular/domicilio, para que si el recibo nuevo no detecta
+      // alguno no se quede con el del servicio anterior) antes de aplicar el conjunto
+      // nuevo encima.
+      aplicarFormularioRecibo(null);
+      $('titular').value = '';
+      $('domicilio').value = '';
+      proyectoActual.archivosRecibo = null;
+      proyectoActual.datosCapturadosConfirmados = null;
+      renderArchivosRecibo();
+    }
+  }
   if (c.titular) $('titular').value = c.titular;
   if (c.domicilio) $('domicilio').value = c.domicilio;
   if (c.no_servicio) $('noServicio').value = c.no_servicio;
   llenarFormularioDesdeReciboCampos(c);
+  if (proyectoActual && !proyectoActual.bloqueada) {
+    proyectoActual.reciboSello = construirSelloDesdeCampos(c);
+    guardarProyecto(clienteActual, proyectoActual);
+  }
+  return true;
 }
 
 // ---------------- Calcular ----------------
@@ -4663,6 +4726,93 @@ function confirmarEdicionEnCursoAntesDeExportar() {
   }
 }
 
+// "El RPU manda" (encargo 2026-11-20): proyectos guardados ANTES de que existiera el
+// sello de identidad del recibo se migran solos aqui -- reconstruido desde
+// proyecto.campos (la ULTIMA lectura de recibo que si se guardo con el proyecto),
+// NUNCA desde proyecto.formulario (que pudo haberse editado/mezclado a mano -- es
+// justo el dato que este encargo corrige, no la fuente de verdad del recibo). Si el
+// proyecto nunca tuvo un recibo leido (proyecto.campos tambien ausente, captura 100%
+// manual), no hay nada que sellar -- el candado de identidad simplemente no aplica
+// para ese caso (punto 4 del encargo). Idempotente: no hace nada si ya hay sello, y
+// nunca borra ni reescribe ningun otro dato del proyecto (punto 3 del encargo).
+function asegurarReciboSello(proyecto) {
+  if (!proyecto || proyecto.reciboSello || !proyecto.campos) return;
+  const sello = construirSelloDesdeCampos(proyecto.campos, proyecto.creadoEn || new Date().toISOString());
+  if (!sello || !sello.noServicio) return; // el recibo guardado ni siquiera traia no. de servicio
+  proyecto.reciboSello = sello;
+  if (!proyecto.bloqueada) guardarProyecto(clienteActual, proyecto);
+}
+
+// Candado de identidad al exportar (Parte 2 del encargo "El RPU manda", 2026-11-20 --
+// misma familia que confirmarSinTextoTarifaCruzadaAntesDeExportar, justo abajo): un
+// estudio debe ser de UN SOLO numero de servicio. Bloquea la exportacion -- por TODAS
+// las rutas, ver sus 3 call sites (PDF, Excel, WhatsApp) -- si el no. de servicio
+// capturado ya no coincide con el del recibo sellado de este proyecto, o si
+// titular/domicilio/consumo/dias capturados difieren de ese mismo recibo. Un estudio
+// normal de un solo RPU (sin sello, o con el formulario igual al sello) exporta sin
+// que este candado aparezca -- punto 4 del encargo.
+function confirmarIdentidadRpuAntesDeExportar(r) {
+  if (!proyectoActual) return true;
+  asegurarReciboSello(proyectoActual);
+  const sello = proyectoActual.reciboSello;
+  if (!sello) return true; // nunca se leyo un recibo para este estudio -- nada que verificar
+  let rActual = r;
+
+  if (normalizarRpu(rActual.noServicio) !== normalizarRpu(sello.noServicio)) {
+    if (proyectoActual.bloqueada) {
+      alert(
+        `⛔ Exportación bloqueada: el número de servicio de este estudio (${rActual.noServicio || '(vacío)'}) no ` +
+        `coincide con el del recibo aplicado a este estudio (${sello.noServicio}). El RPU manda -- este estudio ` +
+        `está bloqueado (congelado): desbloquéalo primero para corregirlo.`
+      );
+      return false;
+    }
+    const corregir = confirm(
+      `⛔ Exportación bloqueada: el número de servicio de este estudio (${rActual.noServicio || '(vacío)'}) no ` +
+      `coincide con el del recibo aplicado a este estudio (${sello.noServicio}). El RPU manda: no se mezclan ` +
+      `datos de dos servicios.\n\nAceptar = corregir el no. de servicio al del recibo aplicado (${sello.noServicio}) ` +
+      `y continuar.\nCancelar = no exportar.`
+    );
+    if (!corregir) return false;
+    $('noServicio').value = sello.noServicio;
+    try { calcularYRenderizar(); } catch (e) { console.error('No se pudo recalcular tras corregir el no. de servicio:', e); return false; }
+    rActual = ultimoResultado;
+  }
+
+  const diffsTodo = diferenciasIdentidadRecibo(sello, rActual);
+  const diffs = diferenciasSinConfirmar(diffsTodo, proyectoActual.datosCapturadosConfirmados);
+  if (!diffs.length) return true;
+
+  const detalle = diffs.map((d) => `• ${d.etiqueta}: dice "${d.capturado}" -- el recibo de este RPU dice "${d.recibo}"`).join('\n');
+  if (proyectoActual.bloqueada) {
+    alert(
+      `⛔ Exportación bloqueada: ${diffs.length} dato(s) capturado(s) no coinciden con el recibo del RPU ` +
+      `${sello.noServicio}:\n\n${detalle}\n\nEste estudio está bloqueado (congelado): desbloquéalo primero para ` +
+      `corregirlo.`
+    );
+    return false;
+  }
+  const usarRecibo = confirm(
+    `⛔ Exportación bloqueada: ${diffs.length} dato(s) capturado(s) no coinciden con el recibo del RPU ` +
+    `${sello.noServicio}:\n\n${detalle}\n\nAceptar = usar los datos del recibo (se corrige el formulario y la ` +
+    `exportación continúa).\nCancelar = mantener mis datos capturados (para correcciones legítimas, ej. un ` +
+    `domicilio truncado en el recibo -- no se volverá a preguntar mientras no cambien).`
+  );
+  if (usarRecibo) {
+    if (sello.titular != null) $('titular').value = sello.titular;
+    if (sello.domicilio != null) $('domicilio').value = sello.domicilio;
+    const dom = esDomestica($('tarifa').value);
+    if (sello.periodoDias != null) $(dom ? 'd_periodoDias' : 'periodoDias').value = sello.periodoDias;
+    if (sello.periodoKwh != null) $(dom ? 'd_periodoKwh' : 'periodoKwh').value = sello.periodoKwh;
+    try { calcularYRenderizar(); } catch (e) { console.error('No se pudo recalcular tras corregir los datos del recibo:', e); return false; }
+    return true;
+  }
+  proyectoActual.datosCapturadosConfirmados = { ...(proyectoActual.datosCapturadosConfirmados || {}) };
+  for (const d of diffs) proyectoActual.datosCapturadosConfirmados[d.campo] = d.capturado;
+  guardarProyecto(clienteActual, proyectoActual);
+  return true;
+}
+
 // Candado de consistencia antes de exportar (Parte A.4 del encargo 2026-11-19,
 // "Cotización 40" COBAEB Plantel 26/PDBT): bloquea la exportación -- SIN excepciones
 // silenciosas, sin importar si el estudio nació de un machote, se marcó verificado, o
@@ -4694,6 +4844,7 @@ function confirmarSinTextoTarifaCruzadaAntesDeExportar(r) {
 // pero esta función no depende de esa confianza).
 async function generarPdfCotizacion({ avisarSiNoHayResultado = true } = {}) {
   if (!ultimoResultado) { if (avisarSiNoHayResultado) alert('Calcula primero.'); return null; }
+  if (!confirmarIdentidadRpuAntesDeExportar(ultimoResultado)) return null;
   if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return null;
   confirmarEdicionEnCursoAntesDeExportar();
   if (!confirmarAntesDeGenerarDocumento(true)) return null;
@@ -4738,6 +4889,7 @@ $('btnGenerarPdf').addEventListener('click', () => { generarPdfCotizacion(); });
 // generarPdfCotizacion() arriba.
 async function generarExcelCotizacion({ avisarSiNoHayResultado = true } = {}) {
   if (!ultimoResultado) { if (avisarSiNoHayResultado) alert('Calcula primero.'); return false; }
+  if (!confirmarIdentidadRpuAntesDeExportar(ultimoResultado)) return false;
   if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return false;
   confirmarEdicionEnCursoAntesDeExportar();
   const boton = $('btnGenerarExcel');
@@ -5035,6 +5187,7 @@ $('btnCrearClienteGuardar').addEventListener('click', () => {
 // (abre el chat de un numero fijo con el texto, el PDF se adjunta a mano).
 $('btnEnviarWhatsapp').addEventListener('click', async () => {
   if (!ultimoResultado) { alert('Calcula primero.'); return; }
+  if (!confirmarIdentidadRpuAntesDeExportar(ultimoResultado)) return;
   if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return;
   confirmarEdicionEnCursoAntesDeExportar();
   if (!confirmarSiHayCambiosSinCalcular()) return;
