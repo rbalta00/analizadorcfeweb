@@ -139,8 +139,34 @@ function tarjetaLote40(fila) {
     a.textContent = 'Abrir';
     a.target = '_blank';
     a.rel = 'noopener';
-    a.href = `index.html?cliente=${encodeURIComponent(cliente.id)}&proyecto=${encodeURIComponent(proyecto.id)}`;
+    const base = `index.html?cliente=${encodeURIComponent(cliente.id)}&proyecto=${encodeURIComponent(proyecto.id)}`;
+    a.href = base;
     div.append(a);
+    // Botones "PDF"/"Excel" directo desde el visor -- pedido explicito del usuario,
+    // 2026-11-20: "sin tener que abrir cada proyecto". Mismo mecanismo de enlace
+    // profundo que "Abrir" (&descargar=pdf|excel, consumido una sola vez en el
+    // arranque de app.js) -- nunca otro generador/plantilla, es EL MISMO documento que
+    // el botón manual produce dentro del proyecto. Solo se ofrecen si el estudio ya
+    // tiene cifras calculadas; si no, no aparecen (nada que descargar todavía). El
+    // visor sigue siendo de solo lectura: estos enlaces nunca escriben nada aquí, solo
+    // abren index.html en otra pestaña.
+    if (proyecto.ultimaInversionTotal != null) {
+      const aPdf = document.createElement('a');
+      aPdf.className = 'btn-link';
+      aPdf.textContent = '⬇ PDF';
+      aPdf.target = '_blank';
+      aPdf.rel = 'noopener';
+      aPdf.href = `${base}&descargar=pdf`;
+      div.append(aPdf);
+
+      const aExcel = document.createElement('a');
+      aExcel.className = 'btn-link';
+      aExcel.textContent = '⬇ Excel';
+      aExcel.target = '_blank';
+      aExcel.rel = 'noopener';
+      aExcel.href = `${base}&descargar=excel`;
+      div.append(aExcel);
+    }
   }
   return div;
 }

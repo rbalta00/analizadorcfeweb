@@ -4632,11 +4632,20 @@ function confirmarSinTextoTarifaCruzadaAntesDeExportar(r) {
   return false;
 }
 
-$('btnGenerarPdf').addEventListener('click', async () => {
-  if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return;
+// Genera "Cotización completa" -- extraída a función aparte, 2026-11-20 (pedido:
+// botones "PDF"/"Excel" directo en el visor "Estado del lote de 40 inmuebles",
+// lote40.html/lote40Vista.js), para que el botón manual y el enlace profundo
+// ?descargar=pdf (ver manejarDescargaPorEnlaceProfundo() y arrancar() más abajo) usen
+// EXACTAMENTE el mismo camino -- nunca dos generadores/plantillas distintos.
+// avisarSiNoHayResultado=false cuando se dispara sola (enlace profundo): si el estudio
+// nunca se calculó, no hace nada, en vez de interrumpir con un alert() que en ese
+// momento nadie está mirando (el visor ya filtra para no ofrecer el botón en ese caso,
+// pero esta función no depende de esa confianza).
+async function generarPdfCotizacion({ avisarSiNoHayResultado = true } = {}) {
+  if (!ultimoResultado) { if (avisarSiNoHayResultado) alert('Calcula primero.'); return null; }
+  if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return null;
   confirmarEdicionEnCursoAntesDeExportar();
-  if (!confirmarAntesDeGenerarDocumento(true)) return;
+  if (!confirmarAntesDeGenerarDocumento(true)) return null;
   const boton = $('btnGenerarPdf');
   boton.disabled = true;
   exportandoDocumento = true;
@@ -4660,21 +4669,25 @@ $('btnGenerarPdf').addEventListener('click', async () => {
     // archivosVerificacion) se perdia en silencio de este PDF -- ver imagenes.js.
     await resolverImagenesRemotasEnDom();
     const doc = generarPdfCompletaDesdeVista(r);
-    mostrarPdfEnVisor(doc, nombreArchivoProyecto('Cotizacion'));
+    const nombreArchivo = nombreArchivoProyecto('Cotizacion');
+    mostrarPdfEnVisor(doc, nombreArchivo);
+    return { doc, nombreArchivo };
   } finally {
     boton.disabled = false;
     exportandoDocumento = false;
     boton.textContent = textoOriginal;
   }
-});
+}
+$('btnGenerarPdf').addEventListener('click', () => { generarPdfCotizacion(); });
 
 // Pedido explicito del usuario, 2026-11-11: "un boton para descargar la cotizacion no
 // solo en pdf tambien en excel". Lee las TABLAS ya visibles en pantalla (una hoja por
 // tabla, mismo respeto a secciones/graficos/columnas/filas apagadas que el PDF) -- ver
-// js/excel.js.
-$('btnGenerarExcel').addEventListener('click', async () => {
-  if (!ultimoResultado) { alert('Calcula primero.'); return; }
-  if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return;
+// js/excel.js. Extraída a función aparte, 2026-11-20, mismo motivo que
+// generarPdfCotizacion() arriba.
+async function generarExcelCotizacion({ avisarSiNoHayResultado = true } = {}) {
+  if (!ultimoResultado) { if (avisarSiNoHayResultado) alert('Calcula primero.'); return false; }
+  if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return false;
   confirmarEdicionEnCursoAntesDeExportar();
   const boton = $('btnGenerarExcel');
   boton.disabled = true;
@@ -4683,15 +4696,37 @@ $('btnGenerarExcel').addEventListener('click', async () => {
   boton.textContent = 'Generando…';
   try {
     await descargarExcelCotizacion(ultimoResultado, nombreArchivoProyecto('Estudio', 'xlsx'));
+    return true;
   } catch (err) {
     alert('No se pudo generar el Excel: ' + err.message);
     console.error(err);
+    return false;
   } finally {
     boton.disabled = false;
     exportandoDocumento = false;
     boton.textContent = textoOriginal;
   }
-});
+}
+$('btnGenerarExcel').addEventListener('click', () => { generarExcelCotizacion(); });
+
+// Enlace profundo ?descargar=pdf|excel (ver arrancar() más abajo) -- pedido explicito
+// del usuario, 2026-11-20: botones "⬇ PDF"/"⬇ Excel" en el visor "Estado del lote de 40
+// inmuebles" (lote40.html/lote40Vista.js, OTRA página/contexto de JS, no puede llamar
+// generarPdfCotizacion()/generarExcelCotizacion() de aquí directamente) -- el botón
+// abre este mismo index.html con ?cliente=&proyecto=&descargar=pdf|excel, y en cuanto
+// abrirProyecto() ya recalculó y renderizó ese estudio (ver arrancar()), se dispara la
+// MISMA función que usa el botón manual, una sola vez. Para PDF, además de mostrarlo en
+// el visor (igual que el botón manual) se llama doc.save() de una vez -- el punto de
+// este enlace es no necesitar un clic extra después de llegar aquí. Para Excel no hace
+// falta nada extra: descargarExcelCotizacion() ya dispara la descarga real por sí sola.
+async function manejarDescargaPorEnlaceProfundo(tipo) {
+  if (tipo === 'pdf') {
+    const resultado = await generarPdfCotizacion({ avisarSiNoHayResultado: false });
+    if (resultado) resultado.doc.save(resultado.nombreArchivo);
+  } else if (tipo === 'excel') {
+    await generarExcelCotizacion({ avisarSiNoHayResultado: false });
+  }
+}
 
 // (el boton "Cotizacion editada" / window.print() se quito 2026-11-07, pedido
 // explicito del usuario: "los botones que no sirvan o esten redudantes quitalos" --
@@ -5292,12 +5327,21 @@ $('btnVerificarPdf').addEventListener('click', async () => {
   const parametros = new URLSearchParams(location.search);
   const clienteParam = parametros.get('cliente');
   const proyectoParam = parametros.get('proyecto');
+  // &descargar=pdf|excel (pedido explicito del usuario, 2026-11-20): se lee ANTES del
+  // replaceState de abajo (que limpia toda la query string, incluido este parametro) --
+  // asi el valor sigue disponible en esta variable aunque la URL ya haya quedado limpia,
+  // y un refresh normal de la pagina nunca vuelve a disparar la descarga sola (ver
+  // manejarDescargaPorEnlaceProfundo()).
+  const descargarParam = parametros.get('descargar');
   if (clienteParam && proyectoParam) {
     const cliente = obtenerCliente(clienteParam);
     const proyecto = cliente ? obtenerProyecto(cliente, proyectoParam) : null;
     if (cliente && proyecto) {
       history.replaceState(null, '', location.pathname);
       abrirProyecto(clienteParam, proyectoParam);
+      if (descargarParam === 'pdf' || descargarParam === 'excel') {
+        manejarDescargaPorEnlaceProfundo(descargarParam);
+      }
       return;
     }
   }
