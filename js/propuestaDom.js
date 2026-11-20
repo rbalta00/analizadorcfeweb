@@ -293,6 +293,31 @@ function dibujarTablaPaginada(doc, y, headers, rows, widths, small) {
   return y;
 }
 
+// Anchos fijos para tablas puntuales donde el reparto proporcional generico
+// (anchosProporcionales, arriba) sigue fallando por desproporcion real entre columnas --
+// pedido explicito del usuario, 2026-11-20 (tabla de franjas horarias GDMTH, seccion 4,
+// g04-calc-franjas, casos reales Finanzas 220890101496 y Zacapoaxtla 836050403034): el
+// piso de anchosProporcionales solo mira la palabra mas larga del ENCABEZADO ("Franja",
+// 6 caracteres), nunca la de las CELDAS ("Intermedia", 10 caracteres) -- y la columna
+// "¿Como/por que?" (oraciones completas) domina el reparto proporcional, dejando a
+// "Franja" por debajo de lo que "Intermedia" necesita y partiendola a la mitad
+// ("Intermedi-a"). Proporciones fijas y estables (el texto de las celdas cambia de
+// recibo a recibo, la FORMA de esta tabla no).
+const ANCHOS_FIJOS_TABLA = {
+  'g04-calc-franjas': [0.12, 0.13, 0.37, 0.16, 0.22],
+};
+
+// Id de la tabla (mismo id compartido con graficoToggle()/tablaF(), ver tabla() en
+// secciones.js), leido del data-texto-id de la celda editable del primer encabezado
+// ("{id}-h0") -- la columna 0 de tabla() siempre es editable, asi que ese span siempre
+// existe cuando la tabla se armo con un id.
+function idDeTabla(celdasHead) {
+  const span = celdasHead[0]?.querySelector('.celda-editable');
+  const dataId = span?.dataset.textoId || '';
+  const m = dataId.match(/^(.+)-h0$/);
+  return m ? m[1] : null;
+}
+
 function dibujarTabla(doc, tabla, y) {
   const filasHead = Array.from(tabla.querySelectorAll('thead tr'));
   const filasBody = Array.from(tabla.querySelectorAll('tbody tr')).filter((tr) => !tr.classList.contains('fila-oculta-tabla'));
@@ -317,8 +342,9 @@ function dibujarTabla(doc, tabla, y) {
   // la tabla de clasificacion de cargos). Las paginas fijas de propuesta.js siempre
   // le dan "widths" a mano por tabla -- aqui se calcula un ancho proporcional al
   // texto mas largo de cada columna (encabezado o celda), generico para cualquier
-  // tabla que venga del DOM.
-  const widths = anchosProporcionales(headers, rows);
+  // tabla que venga del DOM. Excepcion: ANCHOS_FIJOS_TABLA, ver arriba.
+  const proporcionesFijas = ANCHOS_FIJOS_TABLA[idDeTabla(celdasHead)];
+  const widths = proporcionesFijas ? proporcionesFijas.map((p) => p * CONTENT_W) : anchosProporcionales(headers, rows);
   y = dibujarTablaPaginada(doc, y, headers, rows, widths, true);
   return spacer(y, 8);
 }
