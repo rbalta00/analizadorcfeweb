@@ -63,6 +63,25 @@ export function razonCargosPuedenDisminuirCorta(r) {
   return 'no tiene cargo fijo por potencia contratada, así que casi todo el recibo es reducible con paneles';
 }
 
+// Corrección 6 (encargo 2026-11-19, "7 correcciones de salida"): el párrafo "En
+// palabras simples" de la sección "Cómo se forma lo que paga a CFE" (secciones.js s03,
+// propuesta.js pagina03) explica Suministro/Distribución/Transmisión/CENACE/Energía/
+// Capacidad/SCnMEM con el mismo texto para CUALQUIER tarifa -- correcto para GDMTO/
+// GDMTH/GDBT (ahí Distribución y Capacidad SÍ se facturan por demanda contratada), pero
+// incompleto para PDBT: en esa tarifa esos 2 conceptos NO tienen cargo de demanda,
+// se facturan por kWh igual que Energía, y por eso SÍ bajan con los paneles (ya
+// calculado así, correctamente, por el motor -- ver r.meta.reducibles). Sin esta
+// aclaración, un lector de PDBT podía confundirse con el texto genérico, que suena a
+// que Distribución/Capacidad son "cargos aparte" sin aclarar si bajan o no. UNA sola
+// fuente para ambos generadores (secciones.js/propuesta.js), mismo criterio que
+// razonCargosPuedenDisminuir() arriba -- regresa cadena vacía para cualquier tarifa
+// que no sea PDBT, para no tener que acordarse de excluirla en cada llamador.
+export function aclaracionPalabrasSimplesPdbt(r) {
+  if (r.tarifa !== 'PDBT') return '';
+  return ' En esta tarifa, Distribución y Capacidad NO son cargos por demanda: son componentes del precio de cada ' +
+    'kWh consumido, por eso sí disminuyen con los paneles. El único cargo que no baja es Suministro.';
+}
+
 // Tarifas CON demanda contratada conocidas por este motor (ver motor.js
 // TARIFAS_CON_DEMANDA) -- usadas solo para detectar que un documento mencione el
 // NOMBRE de una de ellas cuando la tarifa real del estudio es otra. Se excluye '01'

@@ -10,7 +10,7 @@ import { COMERCIAL } from './comercial.js';
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
 import { leerPlantillaTarifa } from './textosGlobales.js';
 import { beneficioCosto, R } from './motor.js';
-import { razonCargosPuedenDisminuir } from './tarifaDoctrina.js';
+import { razonCargosPuedenDisminuir, aclaracionPalabrasSimplesPdbt } from './tarifaDoctrina.js';
 
 // Razon real por la que un concepto NO reducible no baja con paneles solares -- NO es la
 // misma razon para todos. 'suministro' es un cargo fijo por tener contrato (no depende de
@@ -766,9 +766,22 @@ export function seccionesActivasEnOrden(r) {
 // pidio esta sesion). Sin esto, cualquier reordenamiento deja las referencias cruzadas
 // del texto apuntando al numero equivocado -- reportado en la auditoria de 2026-11-01.
 // Uso: `sección ${refSeccion(19, r)}` en vez de escribir "sección 19" a mano.
+//
+// Corrección 4 (encargo 2026-11-19, "7 correcciones de salida"): cuando la seccion
+// referida NO esta incluida (apagada a mano, o condicional sin datos -- ej. 17-20),
+// esto regresaba el literal '(no incluida en esta estudio)', que llegaba impreso tal
+// cual en frases como "(ver sección (no incluida en esta estudio))" -- confirmado en
+// un PDF real (Colegio Puebla, PDBT, 221890413427). Este helper se usa en ~60 lugares
+// de este archivo, casi siempre como `sección ${refSeccion(N, r)}` dentro de una frase
+// mas larga -- reescribir cada una de esas 60 frases para omitir la clausula completa
+// sin dejar un hueco gramatical (ej. "(ver sección )." o "en la sección .") es trabajo
+// de otra escala. En su lugar, el reemplazo nunca es un literal roto ni un numero
+// inventado: "correspondiente" ocupa el mismo lugar gramatical que un numero
+// ("sección correspondiente"/"secciones correspondientes") sin afirmar nada falso ni
+// imprimir nunca la frase original.
 function refSeccion(numero, r) {
   const pos = seccionesActivasEnOrden(r).indexOf(numero) + 1;
-  return pos > 0 ? String(pos) : '(no incluida en esta estudio)';
+  return pos > 0 ? String(pos) : 'correspondiente';
 }
 
 // Toggle INDIVIDUAL por seccion (no por bloque completo) -- pedido explicito del
@@ -1164,14 +1177,25 @@ function s22(r, _leido, onToggle) {
     const grid = el('div', 'documentos-grid');
     recibo.forEach(a => grid.append(filaArchivo(a)));
     art.append(grid);
+    // Corrección 5b (encargo 2026-11-19, "7 correcciones de salida"): este aviso
+    // afirma que el documento SE ADJUNTA -- antes se imprimia SIEMPRE, incluso en la
+    // rama de arriba (sin ningun archivo), asi que un PDF real (Colegio Puebla, PDBT,
+    // 221890413427) salia con la pagina en "Pendiente" (el badge/parrafo honesto de
+    // abajo) seguida de este mismo texto afirmando lo contrario. Movido aqui, dentro
+    // del SI hay archivo -- la rama sin archivo ya tiene su propio aviso honesto, sin
+    // este.
+    art.append(avisoCream(`Este documento se adjunta tal cual, para que el cliente pueda verificar contra su propio ` +
+      `recibo cualquier dato usado en el estudio (ver sección ${refSeccion(2, r)} para de dónde salió cada dato).`));
   } else {
     art.append(badgeEstado('pendiente'));
-    art.append(p('Aún no se adjuntó el recibo original a esta estudio. Para adjuntarlo: abre este proyecto, ' +
-      'sube el PDF o la foto del recibo con "Adjuntar archivo(s) del recibo" (arriba, en la captura de datos), y ' +
-      'aparecerá aquí.'));
+    // Pedido explicito del usuario, 2026-11-19 ("no quiero instrucciones de como usar
+    // el analizador... solo lo que tenga que ver con el analisis del servicio"): este
+    // parrafo SI llega al cliente real (seccionTieneDatos(17,r) siempre es true, a
+    // diferencia de 18/19/20 -- ver esa funcion mas abajo), asi que no puede traer
+    // instrucciones de uso de la app ("abre este proyecto, sube el PDF... arriba, en
+    // la captura de datos") -- solo el estado, relevante al análisis mismo.
+    art.append(p('Aún no se adjuntó el recibo original a este análisis.'));
   }
-  art.append(avisoCream(`Este documento se adjunta tal cual, para que el cliente pueda verificar contra su propio ` +
-    `recibo cualquier dato usado en el estudio (ver sección ${refSeccion(2, r)} para de dónde salió cada dato).`));
   return art;
 }
 
@@ -1202,9 +1226,11 @@ function s23(r, _leido, onToggle) {
     }
   } else {
     art.append(badgeEstado('pendiente'));
-    art.append(p('Aún no se adjuntó el documento de "Verificación en sitio" del gobierno a esta estudio. Para ' +
-      'adjuntarlo: abre este proyecto, sube el PDF o la foto en "1b. Verificación en sitio" (en la captura de ' +
-      'datos), y aparecerá aquí.'));
+    // Mismo criterio que s22 arriba -- sin instrucciones de uso de la app. Esta en
+    // particular nunca llega al cliente de todos modos (seccionTieneDatos(18,r) exige
+    // el archivo, asi que sin el la seccion completa queda marcada 'seccion-apagada' y
+    // se filtra antes de exportar), pero se limpia igual por consistencia.
+    art.append(p('Aún no se adjuntó el documento de "Verificación en sitio" a este análisis.'));
   }
   return art;
 }
@@ -1221,10 +1247,9 @@ function s24(r, _leido, onToggle) {
   const ev = r.escenarioVerificado;
   if (!ev) {
     art.append(badgeEstado('pendiente'));
-    art.append(p('Aún no se capturó cuántos paneles sugiere la verificación en campo. Para generar este resumen: ' +
-      'abre este proyecto y llena "Paneles que sugiere la verificación en campo" en Condiciones del inmueble -- se ' +
-      'recalculará la inversión y el ahorro con ese número, usando el mismo recibo y los mismos costos que el resto ' +
-      'del estudio.'));
+    // Mismo criterio que s22/s23 arriba -- sin instrucciones de uso de la app. Tampoco
+    // llega nunca al cliente (seccionTieneDatos(19,r) exige r.escenarioVerificado).
+    art.append(p('Aún no se capturó cuántos paneles sugiere la verificación en campo para este inmueble.'));
     return art;
   }
   art.append(p(`${r.titular} · ${r.domicilio || 'domicilio por confirmar'}`));
@@ -1387,7 +1412,7 @@ function s03(r, _leido, onToggle) {
     'consuma. "Distribución" y "Transmisión" son el costo de llevar la electricidad desde la planta hasta su ' +
     'medidor. "CENACE" y "SCnMEM" son cargos que CFE traslada tal cual del operador del sistema eléctrico ' +
     'nacional — no los decide CFE libremente. "Energía" y "Capacidad" son lo que cuesta generar y tener ' +
-    'disponible la electricidad que usa.'));
+    'disponible la electricidad que usa.' + aclaracionPalabrasSimplesPdbt(r)));
   art.append(p('Para valorar el ahorro no se multiplica toda la producción solar por el precio medio de la ' +
     'factura: cada uno de estos cargos tiene su propia regla, explicada en la sección siguiente.'));
   if (r.tarifa === 'GDBT') {
@@ -1921,7 +1946,19 @@ function s07(r, _leido, onToggle) {
   // repetido), pero el consumo aqui es el dato real facturado de cada periodo del
   // historial, no un promedio plano -- asi se ve si algun mes real del cliente ya
   // supera o se queda corto respecto a lo que generarian los paneles propuestos.
-  if (r.historial && r.historial.length >= 2) {
+  // Corrección 3 (encargo 2026-11-19, "7 correcciones de salida"): el cliente debe ver
+  // UNA sola de estas 2 graficas (la "primera visible", en el mismo orden de pantalla),
+  // nunca las 2 ni la instruccion de edicion de arriba -- antes el PDF (que lee este
+  // mismo DOM genericamente, ver propuestaDom.js) imprimia ambas si el admin las dejaba
+  // prendidas, mas la instruccion "Elige cuál gráfica... dejar visible aquí", que es
+  // texto dirigido al editor, no al cliente. `primariaG07` decide cual de las 2 es la
+  // que SI debe imprimirse; a la otra (si tambien esta prendida) se le agrega la clase
+  // 'alternativa-pdf-secundaria' (CLASES_OMITIR en propuestaDom.js) -- en pantalla
+  // ambas se siguen viendo y pudiendose elegir exactamente igual que antes.
+  const hayAlternativaHistorialG07 = !!(r.historial && r.historial.length >= 2);
+  const idsAlternativasG07 = hayAlternativaHistorialG07 ? ['g07-historial', 'g07-extrapolado'] : ['g07-extrapolado'];
+  const primariaG07 = idsAlternativasG07.find((id) => !_graficosExcluidosActual.includes(id)) || null;
+  if (hayAlternativaHistorialG07) {
     const genMensualEstimada = r.gen / 12;
     // Bug real reportado por el usuario, 2026-11-01: esta grafica comparaba generacion
     // MENSUAL contra el kWh CRUDO de cada periodo de historial -- para periodos
@@ -1935,11 +1972,15 @@ function s07(r, _leido, onToggle) {
     art.append(grupoGraficosAlternativos('Elige cuál gráfica de generación vs. consumo dejar visible aquí -- las ' +
       'dos explican algo muy similar (no hace falta repetir ambas para el mismo cliente):'));
     art.append(subtituloChico(7, 'generacion-vs-historial', 'Generación mensual estimada vs. su consumo real facturado'));
-    art.append(graficoToggle('g07-historial', 'Generación vs. su consumo REAL del historial', barraAgrupada(
+    const nodoG07Historial = graficoToggle('g07-historial', 'Generación vs. su consumo REAL del historial', barraAgrupada(
       r.historial.map(h => `${h.mes} ${h.anio}`),
       textoChico('Generación mensual estimada con los paneles propuestos'), r.historial.map(() => genMensualEstimada),
       textoChico('Su consumo normalizado a kWh/mes ese período'), r.consumosMensualesUsados,
-    ), { notaAlternativa: 'Alternativa a la gráfica de abajo (generación vs. consumo EXTRAPOLADO) -- esta usa el consumo real de cada período de su historial.' }));
+    ), { notaAlternativa: 'Alternativa a la gráfica de abajo (generación vs. consumo EXTRAPOLADO) -- esta usa el consumo real de cada período de su historial.' });
+    if (primariaG07 !== 'g07-historial' && !_graficosExcluidosActual.includes('g07-historial')) {
+      nodoG07Historial.classList.add('alternativa-pdf-secundaria');
+    }
+    art.append(nodoG07Historial);
     art.append(p(`Cada barra de "consumo normalizado a kWh/mes" parte del dato real impreso en su propio recibo para ` +
       'ese período, convertido a su equivalente mensual (así un período bimestral no se compara contra una ' +
       'generación mensual como si fuera el mismo). La generación estimada es la misma para los ' +
@@ -1948,11 +1989,15 @@ function s07(r, _leido, onToggle) {
       'que ese período concreto consumió.'));
   }
   const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
-  art.append(graficoToggle('g07-extrapolado', 'Generación vs. consumo EXTRAPOLADO (los 12 meses)',
+  const nodoG07Extrapolado = graficoToggle('g07-extrapolado', 'Generación vs. consumo EXTRAPOLADO (los 12 meses)',
     barraAgrupada(mesesAbrev, textoChico('Generación estimada'), r.rows.map(x => x.generacionKwh), textoChico('Consumo extrapolado'), r.rows.map(x => x.consumoExtrapoladoKwh)),
-    r.historial && r.historial.length >= 2
+    hayAlternativaHistorialG07
       ? { notaAlternativa: 'Alternativa a la gráfica de arriba (generación vs. consumo real del historial) -- esta usa el consumo extrapolado de un año completo, no el historial real.' }
-      : {}));
+      : {});
+  if (primariaG07 !== 'g07-extrapolado' && !_graficosExcluidosActual.includes('g07-extrapolado')) {
+    nodoG07Extrapolado.classList.add('alternativa-pdf-secundaria');
+  }
+  art.append(nodoG07Extrapolado);
   art.append(detalle('Ver detalle', tabla(['Mes', 'Generación estimada', 'Consumo extrapolado'],
     r.rows.map(x => [x.mes, `${x.generacionKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${x.consumoExtrapoladoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]), { small: true, id: 'g07-detalle-mensual' })));
   art.append(badgeEstado('supuesto'));
@@ -2005,13 +2050,22 @@ function s08(r, _leido, onToggle) {
 function s09(r, _leido, onToggle) {
   const art = crearSeccion(9, 'Cómo se obtiene el ahorro que se presenta', '¿Qué reglas sigue el modelo para calcular el ahorro?', r, onToggle);
   art.append(p('Se calcula mes a mes la energía neta facturable y la factura resultante. En palabras simples, el modelo sigue estas reglas:'));
-  art.append(graficoToggle('g09-criterios', 'Tabla de criterios del modelo de ahorro', tabla(['Criterio', 'Aplicación'], [
+  // Corrección 2 (encargo 2026-11-19, "7 correcciones de salida"): esta tabla es TEXTO
+  // del modelo (las reglas que el parrafo de arriba anuncia), no un grafico opcional --
+  // envolverla en graficoToggle() permitia apagarla por separado del parrafo que la
+  // anuncia (y asi quedo apagada sin querer en los machotes clonados, ver
+  // MACHOTE_ENTRE_TARIFAS.md), dejando la seccion hueca tanto en pantalla como en el
+  // PDF. Se quita el toggle individual -- se muestra siempre que la seccion 9 este
+  // activa, igual que su parrafo. `id: 'g09-criterios'` se conserva para que siga
+  // pudiendose ocultar una fila/columna puntual (tabla(), mas abajo), un control
+  // distinto al toggle que se quita aqui.
+  art.append(tabla(['Criterio', 'Aplicación'], [
     ['Compensación', 'Medición neta: lo que generan los paneles se resta directo de su consumo del mes, en vez de vendérselo a CFE aparte. Requiere contrato y medidor autorizados.'],
     ['Energía aplicada', 'Cada mes se compara cuánto consumió contra cuánto generaron los paneles ese mismo mes, y se usa el MENOR de los dos — así nunca se le da más ahorro del que realmente generó (se reserva además un 1% de margen de seguridad).'],
     ['Excedentes entre meses', 'Si algún mes los paneles generan más de lo que consume, ese sobrante no se guarda para el siguiente mes ni se vende aparte: el modelo no le da ningún valor económico.'],
     [listaConceptos(r.meta.noReducibles), 'Se conserva su gasto de referencia proporcional a días, sin presupuestar ahorro adicional.'],
     ['IVA y DAP', 'Se incluye IVA 16%. Se conserva el DAP observado en los pagos modelados.'],
-  ], { textCols: [1], id: 'g09-criterios' })));
+  ], { textCols: [1], id: 'g09-criterios' }));
   art.append(badgeEstado('comprobado'));
   art.append(avisoCream('Esta estimación no es una refacturación oficial de CFE ni una garantía mínima de ahorro.'));
   return art;

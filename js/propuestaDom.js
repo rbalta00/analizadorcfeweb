@@ -56,6 +56,17 @@ const CLASES_OMITIR = [
   // de "cualquier BUTTON se omite" (ver esVisible() abajo) no lo atrapaba solo -- sin
   // esta linea, el "№47" se habria colado como texto real dentro del PDF.
   'badge-num-editable',
+  // Corrección 3 (encargo 2026-11-19, "7 correcciones de salida"): el grupo de
+  // graficas alternativas (ver grupoGraficosAlternativos()/s07 en secciones.js) le
+  // muestra al ADMIN una instruccion de edicion ("Elige cuál gráfica... dejar visible
+  // aquí") y, si deja ambas prendidas, las DOS graficas que explican casi lo mismo --
+  // el cliente no debe ver ni la instruccion (es para el editor, no para el) ni las
+  // dos graficas repetidas. 'grupo-graficos-alternativos-header' quita la instruccion
+  // siempre; 'alternativa-pdf-secundaria' (agregada por secciones.js solo a la
+  // alternativa que NO es la "primera visible" del grupo, cuando ambas estan
+  // prendidas) deja que el PDF imprima solo UNA. Ninguna de las dos afecta la vista en
+  // pantalla -- el admin sigue viendo/pudiendo elegir entre ambas igual que siempre.
+  'grupo-graficos-alternativos-header', 'alternativa-pdf-secundaria',
 ];
 
 function tieneClaseOmitida(nodo) {
@@ -174,7 +185,24 @@ function anchosProporcionales(headers, rows) {
   // "Cantidad y función" porque la OTRA columna tenia valores de oraciones completas
   // (70+ caracteres) que dominaban el reparto proporcional, dejando a "Parte del
   // sistema" (17 caracteres) por debajo de lo que su propio encabezado necesita.
-  const pisos = headers.map((h) => Math.max(CONTENT_W * 0.1, String(h).length * 4.6 + 14));
+  // Piso por columna basado en la PALABRA mas larga del encabezado (no el encabezado
+  // completo sin partir) -- bug real reportado por el usuario, 2026-11-19 (estudio del
+  // ITS Zacapoaxtla, 836050403034, tabla de franjas horarias GDMTH, seccion 4): con 5
+  // columnas de encabezado verboso ("¿Baja con los paneles? ¿Cómo/por qué?", "Ahorro
+  // máximo (paneles ilimitados)"...), el piso viejo (encabezado completo × 4.6 + 14)
+  // sumaba casi TODO el ancho disponible entre las otras 4 columnas, dejando a la
+  // columna de explicacion (la que de verdad necesita espacio, por su texto largo en
+  // las CELDAS) con el deficit COMPLETO -- en ese caso real, colapsaba a 3.3pt (~1
+  // caracter), partiendo el texto letra por letra en 3 paginas con los encabezados
+  // encimados. Ahora que dibujarTablaPaginada() tambien envuelve el ENCABEZADO a varias
+  // lineas (ver abajo, mismo mecanismo que ya usan las celdas), el piso solo necesita
+  // alcanzar para la palabra mas larga sin partirla a la mitad -- deja mucho mas ancho
+  // disponible para repartir por contenido real (pesos), que es donde debe ir la
+  // mayoria del espacio en una tabla con una columna de puro texto largo.
+  const pisos = headers.map((h) => {
+    const palabraMasLarga = Math.max(...String(h).split(/\s+/).map((w) => w.length), 3);
+    return Math.max(CONTENT_W * 0.07, palabraMasLarga * 5.2 + 16);
+  });
   const faltante = anchosCrudos.reduce((suma, a, i) => suma + Math.max(pisos[i] - a, 0), 0);
   if (!faltante) return anchosCrudos;
   const totalPorEncimaDePiso = anchosCrudos.reduce((suma, a, i) => suma + (a > pisos[i] ? a : 0), 0) || 1;
@@ -194,14 +222,26 @@ function anchosProporcionales(headers, rows) {
 function dibujarTablaPaginada(doc, y, headers, rows, widths, small) {
   const padX = 6, padY = 5;
   const sizeH = small ? 8 : 9, sizeB = small ? 8 : 9;
-  const lineH = (small ? 10 : 11.5) + padY * 2;
+  const lineHUnidad = small ? 10 : 11.5;
+  // El encabezado ahora SI se envuelve a varias lineas cuando su columna quedo angosta
+  // (mismo splitTextToSize que ya usan las celdas del cuerpo, ver dibujarTablaPaginada
+  // mas abajo) -- antes asumia una sola linea siempre, lo que forzaba a
+  // anchosProporcionales() a reservarle a cada columna el ancho de su encabezado
+  // COMPLETO sin partir, dejando muy poco para la columna que de verdad necesita
+  // espacio (texto largo en las celdas). Bug real, ver nota en anchosProporcionales().
+  doc.setFontSize(sizeH);
+  const headerLineas = headers.map((h, i) => doc.splitTextToSize(String(h), Math.max(widths[i] - padX * 2, 10)));
+  const nLineasHeader = Math.max(...headerLineas.map((l) => l.length), 1);
+  const lineH = nLineasHeader * lineHUnidad + padY * 2;
   function dibujarEncabezado(yActual) {
     doc.setFillColor(NAVY);
     doc.rect(MARGIN_L, yActual, CONTENT_W, lineH, 'F');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(sizeH); doc.setTextColor(WHITE);
     let x = MARGIN_L;
     headers.forEach((h, i) => {
-      doc.text(String(h), x + padX, yActual + lineH / 2 + sizeH / 2 - 1);
+      headerLineas[i].forEach((linea, li) => {
+        doc.text(linea, x + padX, yActual + padY + (small ? 8 : 9) + li * lineHUnidad);
+      });
       x += widths[i];
     });
     return yActual + lineH;

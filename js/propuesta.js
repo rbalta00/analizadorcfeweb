@@ -20,7 +20,7 @@ import { M, PCT, listaConceptos, agruparPresupuesto, FACTOR_CO2_KG_KWH, CO2_KG_P
 import { BLOQUES_COTIZACION } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { dibujarSeccionGenerica, textoVisibleDe } from './propuestaDom.js';
-import { razonCargosPuedenDisminuir } from './tarifaDoctrina.js';
+import { razonCargosPuedenDisminuir, aclaracionPalabrasSimplesPdbt } from './tarifaDoctrina.js';
 // beneficioCosto importado desde motor.js (auditoria 2026-11-06, hallazgo 1): antes
 // esta copia local omitia la reposicion del inversor del costo descontado, mientras
 // que secciones.js (pantalla) SI la incluia -- el PDF mostraba un indicador mas
@@ -177,7 +177,7 @@ function pagina03(doc, r, numero) {
     'cuánto consuma. "Distribución" y "Transmisión" son el costo de llevar la electricidad desde la planta ' +
     'hasta su medidor. "CENACE" y "SCnMEM" son cargos que CFE traslada tal cual del operador del sistema ' +
     'eléctrico nacional — no los decide CFE libremente. "Energía" y "Capacidad" son lo que cuesta generar y ' +
-    'tener disponible la electricidad que usa.');
+    'tener disponible la electricidad que usa.' + aclaracionPalabrasSimplesPdbt(r));
   y = bodyX(doc, y, 'Para valorar el ahorro no se multiplica toda la producción solar por el precio medio de la ' +
     'factura: cada uno de estos cargos tiene su propia regla, explicada en la página siguiente.');
   if (r.tarifa === 'GDBT') {
@@ -528,16 +528,25 @@ function pagina09(doc, r, numero) {
   let y = encabezado(doc, numero, 'Cómo se obtiene el ahorro que se presenta', r.titular);
   y = bodyX(doc, y, 'Se calcula mes a mes la energía neta facturable y la factura resultante. En palabras ' +
     'simples, el modelo sigue estas reglas:');
-  if (graficoIncluido(r, 'g09-criterios')) {
-    y = tablaF(doc, y, 'g09-criterios', r, ['Criterio', 'Aplicación'], [
-      ['Compensación', 'Medición neta: lo que generan los paneles se resta directo de su consumo del mes, en vez de vendérselo a CFE aparte. Requiere contrato y medidor autorizados.'],
-      ['Energía aplicada', 'Cada mes se compara cuánto consumió contra cuánto generaron los paneles ese mismo mes, y se usa el MENOR de los dos (se reserva además un 1% de margen de seguridad).'],
-      ['Excedentes entre meses', 'Si algún mes los paneles generan más de lo que consume, ese sobrante no se guarda para el siguiente mes ni se vende aparte.'],
-      [listaConceptos(r.meta.noReducibles), 'Se conserva su gasto de referencia proporcional a días, sin presupuestar ahorro adicional.'],
-      ['IVA y DAP', 'Se incluye IVA 16%. Se conserva el DAP observado en los pagos modelados.'],
-    ], { widths: [CONTENT_W * 0.3, CONTENT_W * 0.7] });
-    y = spacer(y, 8);
-  }
+  // Corrección 2 (encargo 2026-11-19, "7 correcciones de salida"): esta tabla es TEXTO
+  // del modelo (las reglas que el parrafo de arriba anuncia), no un grafico opcional --
+  // antes estaba atada a graficoIncluido(r,'g09-criterios'), asi que si ese toggle
+  // quedaba apagado (por ejemplo heredado de un machote de otra tarifa, ver
+  // MACHOTE_ENTRE_TARIFAS.md) el parrafo se imprimia anunciando reglas que nunca
+  // llegaban a listarse -- la seccion salia hueca en el PDF real. Se desacopla del
+  // toggle: se imprime siempre que se imprime el parrafo que la anuncia (si la pagina
+  // completa esta apagada, PAGINAS ya filtra la pagina entera antes de llegar aqui, asi
+  // que ni el parrafo ni la tabla se imprimen en ese caso). tablaF() sigue respetando el
+  // ocultado INDIVIDUAL de filas/columnas (r.tablaFilasOcultas/tablaColumnasOcultas),
+  // que es un control distinto al toggle que se quita aqui.
+  y = tablaF(doc, y, 'g09-criterios', r, ['Criterio', 'Aplicación'], [
+    ['Compensación', 'Medición neta: lo que generan los paneles se resta directo de su consumo del mes, en vez de vendérselo a CFE aparte. Requiere contrato y medidor autorizados.'],
+    ['Energía aplicada', 'Cada mes se compara cuánto consumió contra cuánto generaron los paneles ese mismo mes, y se usa el MENOR de los dos (se reserva además un 1% de margen de seguridad).'],
+    ['Excedentes entre meses', 'Si algún mes los paneles generan más de lo que consume, ese sobrante no se guarda para el siguiente mes ni se vende aparte.'],
+    [listaConceptos(r.meta.noReducibles), 'Se conserva su gasto de referencia proporcional a días, sin presupuestar ahorro adicional.'],
+    ['IVA y DAP', 'Se incluye IVA 16%. Se conserva el DAP observado en los pagos modelados.'],
+  ], { widths: [CONTENT_W * 0.3, CONTENT_W * 0.7] });
+  y = spacer(y, 8);
   notice(doc, y, 'Esta estimación no es una refacturación oficial de CFE ni una garantía mínima de ahorro.');
 }
 
