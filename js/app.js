@@ -4695,6 +4695,12 @@ async function generarExcelCotizacion({ avisarSiNoHayResultado = true } = {}) {
   const textoOriginal = boton.textContent;
   boton.textContent = 'Generando…';
   try {
+    // prepararDocumentosAdjuntosParaPdf() (2026-11-19, encargo "Excel clon del PDF"):
+    // antes el Excel nunca preparaba r._archivosReciboImgs/_archivosVerificacionImgs
+    // (eso solo corria en la ruta de PDF) -- sin esto, el anexo de documentos del
+    // Excel nunca tendria la imagen real para incrustar, aunque el proyecto SI tenga
+    // el archivo adjunto.
+    await prepararDocumentosAdjuntosParaPdf(ultimoResultado);
     await descargarExcelCotizacion(ultimoResultado, nombreArchivoProyecto('Estudio', 'xlsx'));
     return true;
   } catch (err) {

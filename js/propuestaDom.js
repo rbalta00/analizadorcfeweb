@@ -172,7 +172,10 @@ function dibujarTexto(doc, nodo, y) {
 // corto no quede comicamente angosta. No es exacto (no mide el ancho real de fuente,
 // solo cuenta caracteres) pero evita el encimado de encabezados largos en tablas de
 // muchas columnas sin tener que afinar "widths" a mano por cada tabla posible.
-function anchosProporcionales(headers, rows) {
+// Exportada (2026-11-19, encargo "Excel clon del PDF"): excel.js la reusa para que las
+// columnas de sus tablas tengan EXACTAMENTE la misma proporcion que las del PDF real,
+// en vez de inventar anchos nuevos a mano.
+export function anchosProporcionales(headers, rows) {
   const pesos = headers.map((h, i) => {
     const valores = [h, ...rows.map((r) => String(r[i] || ''))];
     return Math.max(...valores.map((v) => v.length), 3);
