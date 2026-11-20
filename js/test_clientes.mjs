@@ -24,7 +24,7 @@ globalThis.localStorage = crearLocalStorageFalso();
 const mod = await import('./clientes.js');
 const {
   crearCliente, crearProyecto, guardarProyecto, eliminarProyecto, obtenerCliente,
-  moverProyecto, bloquearProyecto, desbloquearProyecto,
+  moverProyecto, bloquearProyecto, desbloquearProyecto, aplicarMachoteAProyecto,
 } = mod;
 
 let fallos = 0;
@@ -207,6 +207,54 @@ function ok(nombre, cond, detalle = '') {
   ok('la cotización SÍ llegó al destino', !!destinoFinal.proyectos.find((p) => p.nombre === 'MOVER-ESTE-2'));
   ok('si falla la limpieza, queda duplicada (no perdida) -- peor caso aceptado',
     !!origenFinal.proyectos.find((p) => p.nombre === 'MOVER-ESTE-2'));
+}
+
+// ---------------------------------------------------------------------------
+// aplicarMachoteAProyecto: Parte 2 del encargo 2026-11-20 ("Autocorrección de textos
+// con doctrina de otra tarifa") -- un texto editado del machote ORIGEN que trae la
+// doctrina/nombre de OTRA tarifa no debe viajar al estudio NUEVO si su tarifa ya se
+// conoce y es distinta. Caso real que motivo esto: un machote de GDMTO (demanda
+// contratada) aplicado sobre un estudio PDBT (sin demanda).
+{
+  localStorage.clear();
+  const clienteOrigen = crearCliente({ nombre: 'TEST-MACHOTE-ORIGEN', tipo: 'Gobierno' });
+  const origenProyecto = crearProyecto(clienteOrigen, { nombre: 'Machote GDMTO' });
+  origenProyecto.formulario = { tarifa: 'GDMTO' };
+  origenProyecto.textosEditados = {
+    's2-t1': 'Tarifa GDMTO: Gran Demanda de Media tensión Ordinaria, con cargo fijo mensual de acuerdo a la ' +
+      'potencia contratada (demanda)…',
+    's4-t0': 'En la Tarifa GDMTO. El recibo de energía eléctrica, los parámetros que no disminuyen aunque la ' +
+      'energía consumida llegue a cero son el "Suministro" y la "Capacidad" "Distribución" ya que estos dos ' +
+      'últimos se componen por la demanda contratada en kW…',
+    's9-t0': 'Este texto no menciona ninguna tarifa ni doctrina de demanda, es redacción pura.',
+  };
+  guardarProyecto(clienteOrigen, origenProyecto);
+
+  // 2a: la tarifa del estudio nuevo YA se conoce (PDBT) y difiere de la del machote (GDMTO).
+  const clienteDestino = crearCliente({ nombre: 'TEST-MACHOTE-DESTINO', tipo: 'Gobierno' });
+  const nuevoPdbt = crearProyecto(clienteDestino, { nombre: 'Estudio PDBT nuevo' });
+  nuevoPdbt.formulario = { tarifa: 'PDBT' };
+  aplicarMachoteAProyecto(nuevoPdbt, { cliente: clienteOrigen, proyecto: origenProyecto });
+
+  ok('machote a tarifa distinta: s2-t1 (menciona GDMTO) no viaja', !('s2-t1' in nuevoPdbt.textosEditados));
+  ok('machote a tarifa distinta: s4-t0 (doctrina de demanda) no viaja', !('s4-t0' in nuevoPdbt.textosEditados));
+  ok('machote a tarifa distinta: texto sin doctrina de tarifa SÍ viaja', nuevoPdbt.textosEditados['s9-t0'] === origenProyecto.textosEditados['s9-t0']);
+  ok('machote a tarifa distinta: queda anotado en textosRevisionMachote como resuelto',
+    (nuevoPdbt.textosRevisionMachote || []).filter((h) => h.motivo === 'tarifa-cruzada' && h.resuelto).length === 2);
+
+  // 2b: control inverso -- un estudio nuevo de la MISMA tarifa (GDMTO) no pierde nada
+  // por esta regla (su propia doctrina de demanda es correcta para él).
+  const nuevoGdmto = crearProyecto(clienteDestino, { nombre: 'Estudio GDMTO nuevo' });
+  nuevoGdmto.formulario = { tarifa: 'GDMTO' };
+  aplicarMachoteAProyecto(nuevoGdmto, { cliente: clienteOrigen, proyecto: origenProyecto });
+  ok('machote a la MISMA tarifa: ningún texto se pierde por la regla de tarifa cruzada',
+    's2-t1' in nuevoGdmto.textosEditados && 's4-t0' in nuevoGdmto.textosEditados);
+
+  // 2c: si la tarifa del estudio nuevo AÚN no se conoce (sin recibo cargado todavía),
+  // no se bloquea nada aquí -- el saneamiento automático al calcular (app.js) lo cubre.
+  const nuevoSinTarifa = crearProyecto(clienteDestino, { nombre: 'Estudio sin tarifa aún' });
+  aplicarMachoteAProyecto(nuevoSinTarifa, { cliente: clienteOrigen, proyecto: origenProyecto });
+  ok('machote sin tarifa destino conocida: no se bloquea nada aquí', 's2-t1' in nuevoSinTarifa.textosEditados);
 }
 
 console.log('\n' + (fallos === 0 ? 'TODO OK' : `${fallos} FALLOS`));

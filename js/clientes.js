@@ -11,6 +11,8 @@
 // Subir un recibo nuevo crea un proyecto nuevo (ver app.js) en vez de sobreescribir el
 // que ya estaba abierto.
 import { todosLosBloques } from './bloques.js';
+import { TARIFAS_CON_DEMANDA } from './motor.js';
+import { evaluarTextoTarifaCruzada } from './tarifaDoctrina.js';
 
 const CLAVE_STORAGE = 'cfe_clientes_v1';
 
@@ -773,6 +775,19 @@ export function aplicarMachoteAProyecto(proyecto, origen) {
   const origenProyecto = origen.proyecto;
   const identidadOrigen = valoresIdentidadDe(origenProyecto);
   const ocultosOrigen = origenProyecto.textosOcultos || {};
+  // Parte 2 del encargo 2026-11-20 ("Autocorrección de textos con doctrina de otra
+  // tarifa"): prevencion al aplicar el machote, misma idea que la identidad de arriba
+  // -- si la tarifa del estudio NUEVO ya se conoce (proyecto.formulario.tarifa, que
+  // esta funcion nunca toca, ver nota de CAMPOS_EDITORIAL_MACHOTE), ningun texto
+  // editado del origen que nombre otra tarifa o enuncie la doctrina de demanda/sin
+  // demanda que no le corresponde debe viajar. Si la tarifa nueva AUN no se conoce
+  // (proyecto recien creado, sin recibo cargado todavia), no se bloquea nada aqui --
+  // el saneamiento automatico en el primer calculo (calcularYRenderizar, app.js) lo
+  // cubre en cuanto la tarifa real del recibo ya mande. tieneDemandaDestino se deriva
+  // de la MISMA lista que usa el motor (TARIFAS_CON_DEMANDA, motor.js) -- nunca una
+  // copia nueva.
+  const tarifaDestino = proyecto.formulario?.tarifa || null;
+  const tieneDemandaDestino = tarifaDestino ? TARIFAS_CON_DEMANDA.has(tarifaDestino) : false;
   const revision = [];
   for (const campo of CAMPOS_EDITORIAL_MACHOTE) {
     if (origenProyecto[campo] === undefined) continue;
@@ -789,6 +804,12 @@ export function aplicarMachoteAProyecto(proyecto, origen) {
           revision.push({ id, texto, motivo: 'identidad', resuelto: true,
             detalle: 'Mencionaba la dirección/titular/no. de servicio del inmueble anterior -- se usó el texto genérico (ya con los datos del nuevo servicio) en su lugar.' });
           continue; // se cae al texto generico, que ya es correcto para el nuevo servicio
+        }
+        const cruceTarifa = tarifaDestino ? evaluarTextoTarifaCruzada(texto, tarifaDestino, tieneDemandaDestino) : null;
+        if (cruceTarifa) {
+          revision.push({ id, texto, motivo: 'tarifa-cruzada', resuelto: true,
+            detalle: `Traía la doctrina/nombre de otra tarifa (${cruceTarifa.motivo}) -- se usó el texto genérico de ${tarifaDestino} en su lugar.` });
+          continue; // se cae al texto generico, que ya es correcto para la tarifa de este servicio
         }
         // Las dos deteccciones son independientes y pueden coincidir en el mismo texto
         // (ej. "convendría agregar 10 paneles más" trae CIFRA y CONCLUSION a la vez) --

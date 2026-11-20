@@ -5,6 +5,6 @@
   "description": "Version PWA (HTML/JS/CSS, sin frameworks) del analizador fotovoltaico CFE -- misma funcionalidad que cfe-presupuestos/app (Streamlit/Python), reconstruida para poder instalarse como app real. Ver ESTADO.md.",
   "type": "module",
   "scripts": {
-    "test": "node js/test_motor.mjs && node js/test_recibo.mjs && node js/test_clientes.mjs"
+    "test": "node js/test_motor.mjs && node js/test_recibo.mjs && node js/test_resultado.mjs && node js/test_clientes.mjs && node js/test_tarifaDoctrina.mjs"
   }
 }

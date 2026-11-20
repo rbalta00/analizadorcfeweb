@@ -25,7 +25,7 @@ import { archivoAImagenComprimida, conDataUrlResuelto, resolverImagenesRemotasEn
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, escalaCostosParaTarifa, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion, seccionesDelBloque, BLOQUES_COTIZACION } from './bloques.js';
 import { M, PCT } from './util.js';
-import { detectarTextosTarifaCruzada } from './tarifaDoctrina.js';
+import { detectarTextosTarifaCruzada, sanearTextosTarifaCruzada } from './tarifaDoctrina.js';
 import {
   TARIFAS_SOPORTADAS, esDomestica, conectarEventosFormularioRecibo,
   leerFormularioRecibo, aplicarFormularioRecibo, llenarFormularioDesdeReciboCampos,
@@ -105,6 +105,25 @@ function mostrarAvisoGuardadoOk() {
   _timeoutAvisoGuardadoOk = setTimeout(() => { el.hidden = true; }, 2500);
 }
 alGuardar((ok) => (ok ? ocultarAvisoErrorGuardado() : mostrarAvisoErrorGuardado()));
+
+// Aviso NO bloqueante (nunca un alert()) de que el saneamiento automatico de tarifa
+// cruzada (ver calcularYRenderizar) quito solo uno o mas textos editados -- Parte 1 del
+// encargo 2026-11-20. Descartable con su propio boton; no se vuelve a mostrar sola en
+// una apertura siguiente porque el saneamiento es idempotente (si ya no quedan
+// entradas conflictivas en textosEditados, no hay nada que restaurar de nuevo).
+function mostrarAvisoTextosRestauradosTarifa(restaurados) {
+  const el = $('avisoTextosRestauradosTarifa');
+  if (!el) return;
+  const ids = restaurados.map((r) => r.id).join(', ');
+  $('avisoTextosRestauradosTarifaTexto').textContent =
+    `ℹ️ Se restauraron ${restaurados.length} texto(s) que traían la doctrina de otra tarifa (${ids}): ` +
+    'ahora usan el texto correcto de esta tarifa.';
+  el.hidden = false;
+}
+function ocultarAvisoTextosRestauradosTarifa() {
+  const el = $('avisoTextosRestauradosTarifa');
+  if (el) el.hidden = true;
+}
 
 let clienteActual = null;
 let proyectoActual = null;
@@ -329,6 +348,7 @@ function mostrarPantallaClientes() {
   $('pantallaCliente').hidden = true;
   clienteActual = null; proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
   ocultarAvisoCambiosSinCalcular();
+  ocultarAvisoTextosRestauradosTarifa();
   renderListaClientes();
   fijarTitulo('Clientes');
 }
@@ -1059,6 +1079,7 @@ function mostrarPantallaProyectos(clienteId) {
   if (!clienteActual) { mostrarPantallaClientes(); return; }
   proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
   ocultarAvisoCambiosSinCalcular();
+  ocultarAvisoTextosRestauradosTarifa();
   archivosReciboAcumulados = []; // empieza limpio -- no arrastrar fotos de otro cliente/proyecto
   if ($('inputBuscarProyecto')) $('inputBuscarProyecto').value = ''; // no arrastrar busqueda de otro cliente
   $('pantallaClientes').hidden = true;
@@ -2124,6 +2145,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   ultimoResultado = null;
   ultimoInputJSON = null;
   ocultarAvisoCambiosSinCalcular();
+  ocultarAvisoTextosRestauradosTarifa();
   $('contenedorSecciones').innerHTML = '';
   $('ayudaEdicion').hidden = true;
   $('tabPdf').hidden = true;
@@ -3313,6 +3335,7 @@ $('tabCaptura').addEventListener('input', () => { if (hayCambiosSinCalcular()) m
 $('tabCaptura').addEventListener('change', () => { if (hayCambiosSinCalcular()) mostrarAvisoCambiosSinCalcular(); });
 $('btnIrACalcular').addEventListener('click', () => $('btnCalcular').scrollIntoView({ behavior: 'smooth', block: 'center' }));
 $('btnCerrarAvisoErrorGuardado').addEventListener('click', ocultarAvisoErrorGuardado);
+$('btnCerrarAvisoTextosRestauradosTarifa').addEventListener('click', ocultarAvisoTextosRestauradosTarifa);
 
 function calcularYRenderizar() {
   const input = leerInputCalculo();
@@ -3347,6 +3370,34 @@ function calcularYRenderizar() {
   r.tablaFilasOcultas = proyectoActual.tablaFilasOcultas || {};
   r.calculosActivos = proyectoActual.calculosActivos || todosLosBloques();
   r.ordenSecciones = proyectoActual.ordenSecciones || null;
+  // Saneamiento automatico de texto con doctrina de otra tarifa (Parte 1 del encargo
+  // 2026-11-20, "Autocorrección de textos con doctrina de otra tarifa" -- caso real:
+  // COBAEP Plantel 26, PDBT 217991104461, con 2 textos heredados de un machote de
+  // GDMTO que seguian bloqueando la exportacion). El candado de exportacion
+  // (confirmarSinTextoTarifaCruzadaAntesDeExportar, mas abajo) YA detectaba esto bien,
+  // pero obligaba a restaurar texto por texto a mano -- esto corre justo aqui, en
+  // CUANTO se (re)calcula con la tarifa real de este recibo (r.tarifa/r.meta ya
+  // listos), que es el mismo momento en que abrirProyecto() recalcula solo al reabrir
+  // -- asi cubre tambien la ruta de descarga por enlace profundo del visor del lote 40
+  // (manejarDescargaPorEnlaceProfundo llama abrirProyecto antes de exportar). Se omite
+  // en una cotizacion bloqueada (definitiva/machote congelado): guardarProyecto() de
+  // por si rechaza escribir ahi, y no tiene sentido alterar en memoria el texto de un
+  // documento que se dejo congelado a proposito -- el candado de exportacion se queda
+  // como unica salida para ese caso (desbloquear primero). NUNCA reescribe un texto a
+  // mano -- solo QUITA la entrada de textosEditados para que vuelva al generico
+  // correcto de esta tarifa (eso es lo que detectarTextosTarifaCruzada ya sabe armar).
+  if (!proyectoActual.bloqueada) {
+    const saneo = sanearTextosTarifaCruzada(r, proyectoActual.textosEditados || {});
+    if (saneo.restaurados.length) {
+      proyectoActual.textosEditados = saneo.textosEditados;
+      proyectoActual.textosRestauradosTarifa = [
+        ...(proyectoActual.textosRestauradosTarifa || []),
+        ...saneo.restaurados.map((x) => ({ id: x.id, fecha: new Date().toISOString() })),
+      ];
+      guardarProyecto(clienteActual, proyectoActual);
+      mostrarAvisoTextosRestauradosTarifa(saneo.restaurados);
+    }
+  }
   // Recupera texto editado que quedo huerfano por los fixes de id-fijo de hoy (ver
   // recuperarTextosEditadosOrfanados en clientes.js) -- no se pisa nada, solo se
   // completa lo que el id nuevo todavia no tenga, usando el id viejo si existe.

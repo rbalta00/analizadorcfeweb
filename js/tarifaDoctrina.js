@@ -106,7 +106,7 @@ const FRASES_DOCTRINA_SIN_DEMANDA = [
   'sin cargo fijo por potencia', 'no tiene demanda contratada',
 ];
 
-function mencionaOtraTarifa(texto, tarifaActual) {
+export function mencionaOtraTarifa(texto, tarifaActual) {
   const up = texto.toUpperCase();
   return TARIFAS_CONOCIDAS_PARA_CANDADO.some((t) => {
     if (t === tarifaActual) return false;
@@ -123,34 +123,69 @@ function contieneAlguna(texto, frases) {
   return frases.some((f) => bajo.includes(f));
 }
 
-// Candado de consistencia (Parte A.4/B del encargo): revisa el texto EDITADO a mano de
-// un estudio (textosEditados -- parrafos, titulos, celdas de tabla) contra la tarifa Y
-// la clasificacion real de ESTE estudio (r.tarifa / r.meta.tieneDemandaContratada), en
-// AMBAS direcciones (doctrina de demanda en un estudio sin demanda, o doctrina de "sin
-// demanda" en un estudio con demanda -- ej. machote de PDBT aplicado sobre GDMTH).
-// Regresa la lista de conflictos encontrados, vacia si no hay ninguno. NO revisa el
-// texto generico/por-defecto (ese ya se corrigio en el propio codigo, Parte A/C de
-// este mismo archivo) -- solo lo que alguien escribio a mano o llego copiado de un
-// machote de otra tarifa, que es exactamente donde puede quedar un texto cruzado sin
-// que el codigo lo regenere solo.
+// Evaluador puro (Parte 1/2 del encargo 2026-11-20, "Autocorrección de textos con
+// doctrina de otra tarifa"): compara UN texto contra la tarifa/clasificacion DESTINO,
+// sin necesitar el resultado completo `r` -- asi lo puede reusar tanto
+// detectarTextosTarifaCruzada() (abajo, con r.tarifa/r.meta ya calculados) como
+// aplicarMachoteAProyecto() (clientes.js, que solo conoce proyecto.formulario.tarifa
+// del estudio nuevo, antes de que exista ningun `r`). Regresa null si el texto no
+// tiene ningun conflicto, o {motivo} si si.
+export function evaluarTextoTarifaCruzada(texto, tarifaDestino, tieneDemandaDestino) {
+  if (typeof texto !== 'string' || !texto.trim() || !tarifaDestino) return null;
+  const otraTarifa = mencionaOtraTarifa(texto, tarifaDestino);
+  // Solo es un conflicto real si la doctrina NO corresponde a la clasificacion REAL
+  // de la tarifa destino -- en GDMTO/GDMTH/GDBT la doctrina de demanda es correcta (no
+  // se marca), y en PDBT/01/DAC la doctrina de "sin demanda" es correcta (no se marca).
+  const doctrinaDemandaIndebida = !tieneDemandaDestino && contieneAlguna(texto, FRASES_DOCTRINA_DEMANDA);
+  const doctrinaSinDemandaIndebida = tieneDemandaDestino && contieneAlguna(texto, FRASES_DOCTRINA_SIN_DEMANDA);
+  if (!otraTarifa && !doctrinaDemandaIndebida && !doctrinaSinDemandaIndebida) return null;
+  const motivos = [];
+  if (otraTarifa) motivos.push(`menciona el nombre de otra tarifa distinta a ${tarifaDestino}`);
+  if (doctrinaDemandaIndebida) motivos.push('describe "demanda contratada" / facturación por kW, pero este recibo no tiene demanda contratada');
+  if (doctrinaSinDemandaIndebida) motivos.push('describe una tarifa sin cargo fijo por potencia, pero este recibo SÍ tiene demanda contratada');
+  return { motivo: motivos.join(' y ') };
+}
+
+// Candado de consistencia (Parte A.4/B del encargo 2026-11-19): revisa el texto
+// EDITADO a mano de un estudio (textosEditados -- parrafos, titulos, celdas de tabla)
+// contra la tarifa Y la clasificacion real de ESTE estudio (r.tarifa /
+// r.meta.tieneDemandaContratada), en AMBAS direcciones (doctrina de demanda en un
+// estudio sin demanda, o doctrina de "sin demanda" en un estudio con demanda -- ej.
+// machote de PDBT aplicado sobre GDMTH). Regresa la lista de conflictos encontrados,
+// vacia si no hay ninguno. NO revisa el texto generico/por-defecto (ese ya se corrigio
+// en el propio codigo, Parte A/C de este mismo archivo) -- solo lo que alguien
+// escribio a mano o llego copiado de un machote de otra tarifa, que es exactamente
+// donde puede quedar un texto cruzado sin que el codigo lo regenere solo.
 export function detectarTextosTarifaCruzada(r, textosEditados) {
   const conflictos = [];
   if (!r || !r.tarifa || !r.meta) return conflictos;
   const tieneDemanda = !!r.meta.tieneDemandaContratada;
   for (const [id, texto] of Object.entries(textosEditados || {})) {
     if (typeof texto !== 'string' || !texto.trim()) continue;
-    const otraTarifa = mencionaOtraTarifa(texto, r.tarifa);
-    // Solo es un conflicto real si la doctrina NO corresponde a la clasificacion REAL
-    // de este recibo -- en GDMTO/GDMTH/GDBT la doctrina de demanda es correcta (no se
-    // marca), y en PDBT/01/DAC la doctrina de "sin demanda" es correcta (no se marca).
-    const doctrinaDemandaIndebida = !tieneDemanda && contieneAlguna(texto, FRASES_DOCTRINA_DEMANDA);
-    const doctrinaSinDemandaIndebida = tieneDemanda && contieneAlguna(texto, FRASES_DOCTRINA_SIN_DEMANDA);
-    if (!otraTarifa && !doctrinaDemandaIndebida && !doctrinaSinDemandaIndebida) continue;
-    const motivos = [];
-    if (otraTarifa) motivos.push(`menciona el nombre de otra tarifa distinta a ${r.tarifa}`);
-    if (doctrinaDemandaIndebida) motivos.push('describe "demanda contratada" / facturación por kW, pero este recibo no tiene demanda contratada');
-    if (doctrinaSinDemandaIndebida) motivos.push('describe una tarifa sin cargo fijo por potencia, pero este recibo SÍ tiene demanda contratada');
-    conflictos.push({ id, texto, motivo: motivos.join(' y ') });
+    const resultado = evaluarTextoTarifaCruzada(texto, r.tarifa, tieneDemanda);
+    if (!resultado) continue;
+    conflictos.push({ id, texto, motivo: resultado.motivo });
   }
   return conflictos;
+}
+
+// Parte 1 del encargo 2026-11-20 ("Autocorrección de textos con doctrina de otra
+// tarifa"): saneamiento automatico, puro (sin tocar localStorage/DOM) para que app.js
+// lo pueda llamar en el camino normal de abrir/calcular un proyecto y decidir solo, sin
+// duplicar aqui la logica de donde guardar. Caso real que motivo esto (COBAEP Plantel
+// 26, PDBT 217991104461): el candado ya DETECTABA el texto cruzado (candado de
+// exportacion, confirmarSinTextoTarifaCruzadaAntesDeExportar en app.js) pero obligaba a
+// restaurar texto por texto a mano -- esto cura el proyecto solo, en cuanto se calcula
+// con la tarifa real del recibo. NUNCA reescribe el texto (eso seguiria contando como
+// "editado" para el candado) -- solo QUITA la entrada de textosEditados, para que el
+// parrafo vuelva a mostrar el texto generico correcto de esta tarifa (ya construido por
+// las funciones de arriba de este mismo archivo). Regresa el objeto de textos YA
+// saneado (nueva referencia, nunca muta el que se le paso) + la lista de lo que se quitó,
+// para que el llamador decida si guardar/avisar (vacia si no habia nada que sanear).
+export function sanearTextosTarifaCruzada(r, textosEditados) {
+  const conflictos = detectarTextosTarifaCruzada(r, textosEditados);
+  if (!conflictos.length) return { textosEditados: textosEditados || {}, restaurados: [] };
+  const saneado = { ...(textosEditados || {}) };
+  for (const c of conflictos) delete saneado[c.id];
+  return { textosEditados: saneado, restaurados: conflictos.map((c) => ({ id: c.id, motivo: c.motivo })) };
 }

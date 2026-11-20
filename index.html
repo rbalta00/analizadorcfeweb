@@ -733,6 +733,19 @@
       ✓ Guardado <span id="avisoGuardadoOkHora"></span>
     </div>
 
+    <!-- Saneamiento automatico de texto con doctrina de otra tarifa -- encargo 2026-11-20
+         ("Autocorrección de textos con doctrina de otra tarifa"). calcularYRenderizar()
+         (app.js) corre esto cada vez que se abre/calcula un proyecto: si algun parrafo
+         editado a mano trae la doctrina/nombre de OTRA tarifa, se quita solo (vuelve al
+         texto generico correcto de esta tarifa) y se avisa aqui -- nunca bloqueante, nunca
+         un alert(), para no interrumpir el flujo normal. El candado de exportacion
+         (confirmarSinTextoTarifaCruzadaAntesDeExportar) se queda como red final de
+         seguridad sin cambios. -->
+    <div id="avisoTextosRestauradosTarifa" class="aviso-flotante-cambios" hidden role="status">
+      <span id="avisoTextosRestauradosTarifaTexto"></span>
+      <button type="button" id="btnCerrarAvisoTextosRestauradosTarifa" class="btn-link-flotante">Entendido ✕</button>
+    </div>
+
     <!-- Las 21 secciones se insertan aquí dinámicamente tras calcular -->
     <p class="nota nota-ayuda-edicion" id="ayudaEdicion" hidden>✎ Todo el texto, cada celda de tabla y cada
       etiqueta de tarjeta/gráfica es editable: haz clic directo, escribe, y clic afuera para guardar (se marca
