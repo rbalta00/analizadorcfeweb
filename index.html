@@ -72,10 +72,12 @@
       <p class="nota">Tus clientes y cotizaciones se guardan solo en este navegador/dispositivo -- si quieres
         verlos también desde otra computadora o celular, sube una copia a la nube aquí y luego tráela allá.</p>
       <div class="acciones">
-        <button id="btnSubirNube" class="btn-secundario">☁️ Guardar copia en la nube</button>
+        <button id="btnSubirNube" class="btn-secundario">☁️ Respaldar todo en la nube</button>
         <button id="btnBajarNube" class="btn-secundario">⬇️ Traer de la nube</button>
         <button id="btnMostrarAvanzadoNube" class="btn-secundario">⚙️ Opciones avanzadas de la nube</button>
       </div>
+      <p class="nota">☁️ <strong>Respaldar todo en la nube:</strong> sube un respaldo completo de todos tus
+        clientes y estudios; reemplaza el respaldo anterior.</p>
       <p class="nota" id="estadoNube"></p>
 
       <div id="panelAvanzadoNube" class="panel-avanzado-nube" hidden>
@@ -300,6 +302,8 @@
           </select>
         </label>
       </div>
+      <p class="nota">✏️ <strong>Renombrar</strong> (ícono junto a cada estudio): solo cambia el nombre de ese
+        estudio, sin tocar sus datos ni crear nada nuevo.</p>
       <div id="listaProyectos" class="lista-clientes"></div>
     </section>
   </main>
@@ -338,8 +342,12 @@
       <p class="nota aviso">🔒 <strong>Esta es la versión DEFINITIVA ya entregada al cliente -- quedó congelada.</strong>
         No se puede editar ni volver a guardar mientras esté así. Si necesitas corregir algo puntual, desbloquéala
         abajo -- se queda identificada igual (✅ Definitiva / 📋 muestra), solo deja de estar protegida contra
-        cambios hasta que la vuelvas a bloquear.</p>
-      <button type="button" id="btnDesbloquearProyecto" class="btn-secundario">🔓 Desbloquear para editar</button>
+        cambios hasta que la vuelvas a bloquear. Si prefieres no tocar este registro, crea una copia editable aparte
+        en su lugar.</p>
+      <div class="acciones">
+        <button type="button" id="btnDesbloquearProyecto" class="btn-secundario">🔓 Desbloquear para editar</button>
+        <button type="button" id="btnCrearCopiaEditableDesdeBloqueo" class="btn-secundario">📋 Crear copia editable</button>
+      </div>
     </section>
     <section class="tarjeta" id="avisoProyectoDesbloqueado" hidden>
       <p class="nota aviso">🔓 <strong>Esta definitiva está desbloqueada temporalmente</strong> -- los cambios que
@@ -719,7 +727,7 @@
     <div id="avisoErrorGuardado" class="aviso-flotante-cambios aviso-flotante-error" hidden role="alert">
       ⚠️ <strong>No se pudo guardar</strong> -- probablemente la memoria del navegador para esta app está llena.
       Los últimos cambios NO se guardaron. Borra fotos/archivos viejos de alguna estudio (Datos y recibo →
-      Verificación en sitio/fotos) o usa "Guardar copia en la nube" después de liberar espacio.
+      Verificación en sitio/fotos) o usa "Respaldar todo en la nube" después de liberar espacio.
       <button type="button" id="btnCerrarAvisoErrorGuardado" class="btn-link-flotante">Entendido ✕</button>
     </div>
 
@@ -837,6 +845,8 @@
         <button id="btnMarcarDefinitivaCliente" class="btn-primario" title="Congela una copia aparte como lo entregado a ESTE cliente; este estudio se queda igual, sigue editable.">✅ Definitiva para EL CLIENTE (congela una copia)</button>
         <button id="btnMarcarDefinitivaMuestra" class="btn-secundario" title="Congela una copia aparte marcada como ejemplo reusable para esta tarifa; este estudio se queda igual, sigue editable.">📋 Definitiva para MUESTRA (ejemplo por tarifa)</button>
       </div>
+      <p class="nota">💾 <strong>Guardar:</strong> sobrescribe este mismo estudio con los cambios. ·
+        📋 <strong>Guardar como copia:</strong> crea un estudio nuevo con estos datos; este queda intacto.</p>
       <p class="nota">"Para el cliente" = la entrega final de esta estudio. "Para muestra" = además queda disponible como ejemplo para empezar cotizaciones nuevas de la misma tarifa (ver "+ Estudio en blanco" al crear/abrir un cliente). Ambas quedan congeladas, nunca se vuelven a modificar.</p>
       <div class="fila fila-nuevo-cliente-guardar" id="filaNuevoClienteGuardar" hidden>
         <label>Nombre del cliente nuevo

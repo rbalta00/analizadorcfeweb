@@ -620,13 +620,21 @@ export function clonarProyectoEditable(cliente, proyecto, nombreNuevo) {
   const ahora = new Date().toISOString();
   const clon = JSON.parse(JSON.stringify(proyecto));
   clon.id = uuid();
-  clon.nombre = nombreNuevo || `${proyecto.nombre} (copia)`;
+  clon.nombre = nombreNuevo || `${proyecto.nombre} — copia`;
   clon.creadoEn = ahora;
   clon.actualizadoEn = ahora;
   clon.definitiva = false;
   clon.bloqueada = false;
   clon.entregadaEn = null;
   clon.propositoDefinitiva = null;
+  // Pedido explicito del usuario, 2026-11-20 ("Guardar simple y predecible"): la copia
+  // nace como borrador normal, SIN marca de machote tampoco -- si el original era (o
+  // venia de) un machote con `tarifaMachote` fijo, la copia no debe aparecer sola como
+  // candidata a "machote verificado" de esa tarifa (proyectosParaVerificarMachote lee
+  // justo este campo). `machotePredeterminadoTarifa` tampoco tendria sentido en un
+  // borrador editable nuevo.
+  clon.tarifaMachote = null;
+  clon.machotePredeterminadoTarifa = false;
   const proyectosFrescos = proyectosFrescosDe(cliente);
   proyectosFrescos.push(clon);
   cliente.proyectos = proyectosFrescos;

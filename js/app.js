@@ -134,13 +134,6 @@ let proyectoActual = null;
 // formulario desde "+ Nuevo paso desde aqui" o desde "✏️ Renombrar" (mismo formulario
 // chico reutilizado para las 2 acciones, ver conectarEventosPasosEntrega).
 let modoFormularioPaso = 'crear';
-// Copia completa (deep clone) de proyectoActual tal como estaba AL ABRIRLO -- ver
-// guardarProyectoRespetandoRenombre() mas abajo. Necesaria porque Calcular ya autoguarda
-// (guardarProyecto dentro de calcularYRenderizar) ANTES de que el usuario llegue a
-// renombrar -- comparar contra lo que hay en disco en ese momento ya no sirve, porque
-// disco ya tiene los datos nuevos bajo el nombre viejo. Comparar contra esta copia (la
-// version real "de antes de tocar nada en esta sesion de edicion") si sirve.
-let snapshotProyectoAlAbrir = null;
 let ultimoResultado = null;
 let ultimoLeido = null;
 // Snapshot JSON del formulario que produjo ultimoResultado -- ver hayCambiosSinCalcular().
@@ -984,6 +977,35 @@ function tarjetaProyecto(p) {
     indicadores.join('') +
     `<span class="nota">${estado} · actualizado ${new Date(p.actualizadoEn).toLocaleDateString('es-MX')}</span></div>`;
   div.addEventListener('click', () => abrirProyecto(clienteActual.id, p.id));
+  // "Renombrar" desde la lista -- pedido explicito del usuario, 2026-11-20 ("Guardar
+  // simple y predecible"): accion propia que SOLO cambia el nombre de este registro,
+  // sin tocar datos ni crear nada -- a diferencia de editar el nombre dentro del
+  // editor abierto (que tambien guarda el resto del estado en pantalla al perder el
+  // foco), esto sirve para corregir el nombre de una estudio que ni siquiera esta
+  // abierta ahorita. Respeta el mismo candado que cualquier otro guardado (si esta
+  // bloqueada, no se le puede cambiar el nombre tampoco) -- pero avisa explicito en
+  // vez de fallar en silencio.
+  const btnRenombrar = document.createElement('button');
+  btnRenombrar.className = 'btn-link';
+  btnRenombrar.textContent = '✏️';
+  btnRenombrar.title = 'Renombrar esta estudio (solo el nombre, sin tocar sus datos)';
+  btnRenombrar.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (p.bloqueada) {
+      alert(`"${p.nombre}" está bloqueada (ya se entregó como definitiva) -- no se puede renombrar mientras esté así. Desbloquéala primero (abriéndola) si de verdad necesitas corregir el nombre.`);
+      return;
+    }
+    const nuevo = prompt('Nuevo nombre para esta estudio:', p.nombre);
+    if (nuevo == null) return;
+    const limpio = nuevo.trim();
+    if (!limpio || limpio === p.nombre) return;
+    p.nombre = limpio;
+    revisarDuplicadoProyecto(limpio, p.id);
+    guardarProyecto(clienteActual, p);
+    renderListaProyectos();
+    if (proyectoActual && proyectoActual.id === p.id) sincronizarInputsNombreProyecto();
+  });
+  div.append(btnRenombrar);
   const btnBorrar = document.createElement('button');
   btnBorrar.className = 'btn-link btn-borrar-cliente';
   btnBorrar.textContent = '🗑';
@@ -2198,14 +2220,6 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
       try { calcularYRenderizar(); } catch (e) { console.error('No se pudo recalcular automáticamente al reabrir:', e); }
     }
   }
-  // Snapshot DESPUES del recalculo automatico de arriba (si aplico) -- ese recalculo ya
-  // normaliza el formulario a como lo devuelve leerFormulario() (todo string, ej.
-  // periodoKwh "2400" en vez del numero 2400 que a veces trae lo guardado de antes) y
-  // ya lo autoguarda (calcularYRenderizar hace guardarProyecto). Si el snapshot se
-  // tomara ANTES de esto, compararia formas distintas del MISMO dato (numero vs
-  // string) y marcaria "los datos cambiaron" aunque el usuario no haya tocado nada --
-  // bug real encontrado probando esta misma sesion.
-  snapshotProyectoAlAbrir = JSON.parse(JSON.stringify(proyectoActual));
 }
 
 conectarEventosFormularioRecibo();
@@ -4954,51 +4968,18 @@ async function manejarDescargaPorEnlaceProfundo(tipo) {
 // de texto. El bloque CSS "body.modo-impresion" que usaba tambien se quito de
 // styles.css.)
 
-// Renombrar + guardar sin pisar una cotizacion ya guardada con datos distintos --
-// pedido explicito del usuario, 2026-11-07, tras un bug real: abrio "Casa del Abue"
-// (ya guardada como definitiva), cargo el recibo de "Carretera de Cuota" en la MISMA
-// pantalla (mismo proyectoActual.id), calculo (esto YA autoguarda -- ver
-// calcularYRenderizar, "guardarProyecto(clienteActual, proyectoActual)" tras cada
-// Calcular) y al renombrar+guardar se quedo con los datos de Carretera bajo el mismo
-// id que antes tenia Casa del Abue -- la version vieja ya no existia en ningun lado.
-//
-// Por eso NO sirve comparar contra lo que hay en disco en este momento (ya esta
-// contaminado por el autoguardado de Calcular) -- se compara contra
-// snapshotProyectoAlAbrir, una copia completa tomada en abrirProyecto() ANTES de que
-// el usuario tocara nada en esta sesion de edicion. Si el nombre cambio Y el
-// formulario (recibo/cargos) ya es distinto al que tenia esa cotizacion al abrirla, se
-// trata como "Guardar como": se RESTAURA el registro original (mismo id) a como
-// estaba al abrirlo, y se crea una cotizacion NUEVA (id nuevo) con los datos de
-// ahorita bajo el nombre nuevo. Si solo cambio el nombre (mismo recibo/datos, ej.
-// corrigiendo un error de dedo) se renombra la misma, sin duplicar -- de otro modo,
-// renombrar justo despues del primer "Marcar como definitiva" (comun: guardar
-// primero, ponerle el nombre real despues) crearia un duplicado vacio de si misma.
-function guardarProyectoRespetandoRenombre(cliente, proyecto) {
-  const snap = snapshotProyectoAlAbrir;
-  const esElMismoQueSeAbrio = snap && snap.id === proyecto.id;
-  const nombreCambio = esElMismoQueSeAbrio && snap.nombre.trim() !== proyecto.nombre.trim();
-  // snap.formulario null = la cotizacion estaba en blanco al abrirla (recien creada,
-  // "+ Cotizacion en blanco" o similar) -- llenarla por primera vez y ponerle nombre
-  // real despues NO es un "Guardar como", es la captura normal. Solo cuenta como
-  // "los datos cambiaron" si YA habia datos reales antes y ahora son otros.
-  const datosCambiaron = esElMismoQueSeAbrio && !!snap.formulario &&
-    JSON.stringify(snap.formulario) !== JSON.stringify(proyecto.formulario);
-  if (!esElMismoQueSeAbrio || !nombreCambio || !datosCambiaron) {
-    guardarProyecto(cliente, proyecto);
-    return { proyecto, esNuevo: false, nombreAnterior: null };
-  }
-  const datosDeAhorita = JSON.parse(JSON.stringify(proyecto));
-  // Restaura el registro original (mismo id) a como estaba al abrirlo -- deshace el
-  // autoguardado de Calcular que ya lo habia pisado con los datos nuevos.
-  Object.assign(proyecto, snap);
-  guardarProyecto(cliente, proyecto);
-  // Crea la cotizacion nueva con los datos de ahorita (los que se iban a guardar).
-  const nuevo = crearProyecto(cliente, { nombre: datosDeAhorita.nombre });
-  Object.assign(nuevo, datosDeAhorita, { id: nuevo.id, creadoEn: nuevo.creadoEn });
-  guardarProyecto(cliente, nuevo);
-  snapshotProyectoAlAbrir = JSON.parse(JSON.stringify(nuevo));
-  return { proyecto: nuevo, esNuevo: true, nombreAnterior: snap.nombre };
-}
+// Guardar SIEMPRE sobrescribe el mismo proyecto (mismo id), pase lo que pase con el
+// nombre y los datos -- pedido explicito del usuario, 2026-11-20 ("Guardar simple y
+// predecible"): antes esta misma ruta (guardarProyectoRespetandoRenombre, ver git
+// history si hace falta el detalle) detectaba un renombre + datos distintos a los
+// que tenia la cotizacion al abrirla y lo trataba como un "Guardar como" escondido
+// (restauraba el registro original y creaba uno nuevo aparte) -- el usuario no podia
+// saber de antemano cual de los 2 comportamientos iba a pasar con un mismo clic en
+// "Guardar". Ahora Guardar hace una sola cosa, siempre: sobrescribe este registro tal
+// cual se ve en pantalla (nombre y datos). Si de verdad se quiere conservar la
+// version anterior aparte, "Guardar como copia" (boton propio, ver
+// crearCopiaEditableDesdeActual) lo hace de forma explicita, nunca como efecto
+// secundario de renombrar.
 
 // Renombrar la cotizacion -- pedido explicito del usuario, 2026-11-05: poder
 // "ponerle nombre con su proyecto y su cliente" antes de guardarla como definitiva.
@@ -5021,15 +5002,7 @@ function renombrarProyectoActual(nuevoNombreCrudo) {
   proyectoActual.nombre = nuevo;
   sincronizarInputsNombreProyecto();
   revisarDuplicadoProyecto(nuevo, proyectoActual.id);
-  const resultado = guardarProyectoRespetandoRenombre(clienteActual, proyectoActual);
-  if (resultado.esNuevo) {
-    proyectoActual = resultado.proyecto;
-    sincronizarInputsNombreProyecto();
-    $('estadoGuardadoCotizacion').className = 'nota aviso';
-    $('estadoGuardadoCotizacion').textContent =
-      `✓ Se creó una estudio NUEVA llamada "${nuevo}" con los datos de ahorita -- ` +
-      `"${resultado.nombreAnterior}" se quedó intacta tal como estaba guardada.`;
-  }
+  guardarProyecto(clienteActual, proyectoActual);
 }
 $('inputNombreProyecto').addEventListener('blur', () => renombrarProyectoActual($('inputNombreProyecto').value));
 $('proyectoNombreBarraInput').addEventListener('blur', () => renombrarProyectoActual($('proyectoNombreBarraInput').value));
@@ -5078,7 +5051,16 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
   if (proyectoActual.bloqueada) {
     const estaMoviendoDeCliente = clienteDestinoId && clienteDestinoId !== clienteActual.id;
     if (definitiva || !estaMoviendoDeCliente) {
-      alert('Esta estudio ya se marcó como definitiva y quedó congelada (es la versión que se le entregó al cliente) -- no se puede volver a guardar ni modificar su contenido. Elige un cliente distinto arriba para solo moverla, o desbloquéala primero si necesitas editarla.');
+      // Aviso visible y accionable, nunca silencioso -- pedido explicito del usuario,
+      // 2026-11-20: antes de este cambio, un intento de guardado sobre una definitiva
+      // bloqueada caia en el candado interno de guardarProyecto() (clientes.js), que
+      // solo deja un console.warn -- el usuario creia que habia guardado y el cambio
+      // se perdia sin que nada en pantalla lo dijera. Aqui, en la ruta explicita del
+      // boton "Guardar", se intercepta ANTES de intentar guardar nada y se ofrece la
+      // salida real: crear una copia editable con los datos de ahorita.
+      if (confirm(`"${proyectoActual.nombre}" ya se marcó como definitiva y quedó congelada (es la versión que se le entregó al cliente) -- no se puede volver a guardar ni modificar su contenido.\n\n¿Crear una copia editable con los datos de ahorita? El original se queda intacto.\n\n(Cancelar no hace nada -- puedes elegir un cliente distinto arriba para solo moverla, o desbloquearla desde el aviso de arriba si de verdad necesitas editar ESTE registro.)`)) {
+        crearCopiaEditableDesdeActual();
+      }
       return false;
     }
   }
@@ -5094,16 +5076,7 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
     $('clienteTipoBarra').className = `chip-tipo ${claseTipo(clienteActual.tipo)}`;
     poblarSelectClienteGuardar();
   }
-  let avisoSeparada = '';
-  if (!seMovioDeCliente) {
-    // Solo aqui (no se movio de cliente arriba) puede aplicar el "Guardar como" --
-    // ver guardarProyectoRespetandoRenombre() mas abajo para el criterio completo.
-    const resultado = guardarProyectoRespetandoRenombre(clienteActual, proyectoActual);
-    if (resultado.esNuevo) {
-      proyectoActual = resultado.proyecto;
-      avisoSeparada = ` (se creó como estudio NUEVA -- "${resultado.nombreAnterior}" se quedó intacta.)`;
-    }
-  }
+  if (!seMovioDeCliente) guardarProyecto(clienteActual, proyectoActual);
   // Clona el estado de ahorita en un registro aparte y congelado (ver
   // clonarProyectoCongelado en clientes.js) -- ESE clon es "lo que se le entrega al
   // cliente" y nunca se vuelve a tocar. proyectoActual (lo que se sigue viendo en
@@ -5118,7 +5091,7 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
   const etiqueta = definitiva ? 'Versión definitiva creada' : 'Guardada';
   $('estadoGuardadoCotizacion').className = 'nota ok';
   $('estadoGuardadoCotizacion').textContent =
-    `✓ ${etiqueta} con "${clienteActual.nombre}", estudio "${proyectoActual.nombre}". Subiendo respaldo a la nube...` + avisoSeparada + avisoDefinitiva;
+    `✓ ${etiqueta} con "${clienteActual.nombre}", estudio "${proyectoActual.nombre}". Subiendo respaldo a la nube...` + avisoDefinitiva;
   mostrarAvisoGuardadoOk();
   // Pedido explicito del usuario, 2026-11-08 ("tambien se tiene que guardar en la
   // nube"): antes SOLO "Marcar como definitiva" subia a la nube automaticamente --
@@ -5130,12 +5103,12 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
     await subirANube();
     $('estadoGuardadoCotizacion').textContent =
       `✓ ${etiqueta} con "${clienteActual.nombre}", estudio "${proyectoActual.nombre}". ` +
-      'Respaldo en la nube actualizado.' + avisoSeparada + avisoDefinitiva;
+      'Respaldo en la nube actualizado.' + avisoDefinitiva;
   } catch (err) {
     $('estadoGuardadoCotizacion').className = 'nota aviso';
     $('estadoGuardadoCotizacion').textContent =
       `✓ ${etiqueta} en este dispositivo, pero NO se pudo subir el respaldo a la nube ` +
-      `(${err.message}). Usa "Guardar copia en la nube" más tarde para intentarlo de nuevo.` + avisoSeparada + avisoDefinitiva;
+      `(${err.message}). Usa "Respaldar todo en la nube" más tarde para intentarlo de nuevo.` + avisoDefinitiva;
     console.error(err);
   }
   return true;
@@ -5144,22 +5117,29 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
 $('btnGuardarCotizacion').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: false }));
 $('btnMarcarDefinitivaMuestra').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: true, proposito: 'muestra' }));
 $('btnMarcarDefinitivaCliente').addEventListener('click', () => guardarCotizacionConCliente({ definitiva: true, proposito: 'cliente' }));
-// "Guardar como copia" -- pedido explicito del usuario, 2026-11-12. A diferencia de
-// "Guardar cotización" (actualiza ESTE registro) y "Definitiva..." (congela un clon
-// aparte), esto crea un estudio nuevo e INDEPENDIENTE y EDITABLE con el estado actual,
-// y te deja viendo la copia nueva (el original se queda intacto, abierto donde estaba).
-$('btnGuardarComoCopia').addEventListener('click', () => {
-  if (!clienteActual || !proyectoActual) return;
-  const nombreSugerido = `${proyectoActual.nombre} (copia)`;
+// "Guardar como copia" -- pedido explicito del usuario, 2026-11-12, reforzado
+// 2026-11-20 ("Guardar simple y predecible"): a diferencia de "Guardar" (SIEMPRE
+// sobrescribe ESTE registro) y "Definitiva..." (congela un clon aparte), esto crea un
+// estudio nuevo e INDEPENDIENTE y EDITABLE con el estado actual, y te deja viendo la
+// copia nueva (el original se queda intacto, abierto donde estaba). Factorizada aparte
+// (no solo el handler del boton) porque tambien la usa el aviso de "estudio bloqueada"
+// (ver guardarCotizacionConCliente/renderAvisoBloqueo mas arriba) como la salida real
+// cuando no se puede guardar porque ya esta congelada.
+function crearCopiaEditableDesdeActual() {
+  if (!clienteActual || !proyectoActual) return null;
+  const nombreSugerido = `${proyectoActual.nombre} — copia`;
   const nombre = prompt('Nombre para la copia nueva:', nombreSugerido);
-  if (nombre == null) return; // cancelado
-  guardarProyecto(clienteActual, proyectoActual); // el original se guarda tal como esta antes de clonarlo
+  if (nombre == null) return null; // cancelado
+  guardarProyecto(clienteActual, proyectoActual); // el original se guarda tal como esta antes de clonarlo (no-op si ya esta bloqueada)
   const clon = clonarProyectoEditable(clienteActual, proyectoActual, nombre.trim() || nombreSugerido);
   $('estadoGuardadoCotizacion').className = 'nota ok';
   $('estadoGuardadoCotizacion').textContent = `✓ Se creó "${clon.nombre}" como copia independiente -- edítala aparte sin afectar "${proyectoActual.nombre}".`;
   mostrarAvisoGuardadoOk();
   abrirProyecto(clienteActual.id, clon.id);
-});
+  return clon;
+}
+$('btnGuardarComoCopia').addEventListener('click', () => crearCopiaEditableDesdeActual());
+$('btnCrearCopiaEditableDesdeBloqueo').addEventListener('click', () => crearCopiaEditableDesdeActual());
 
 // Crear un cliente nuevo sin salir de la cotizacion abierta -- elegir "+ Nuevo
 // cliente..." en el selector abre este mini-formulario en vez de guardar directo.
