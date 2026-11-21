@@ -9,7 +9,7 @@ import {
   DIAS_MES_REF,
 } from './motor.js';
 import { generarNotas } from './notas.js';
-import { fechaEstudioEs, fechaVigenciaEs, diferenciaRedondeada } from './util.js';
+import { fechaEstudioEs, diferenciaRedondeada } from './util.js';
 
 export function construirResultado(input) {
   const {
@@ -17,16 +17,15 @@ export function construirResultado(input) {
     periodoDias, periodoKwh, dap, cargos, rateKw, btPct, fpBonusPct, recargoFpPct,
     moduloWp, cobertura, horasUtiles, costos, escalamientoPct,
     escalones, dapDomestica, cargoFijoDomestica,
-    leido, inmueble, aplicaIsr, tasaIsrPct, historialManual, vigenciaDias, fechaBaseVigencia,
+    leido, inmueble, aplicaIsr, tasaIsrPct, historialManual, fechaBaseVigencia,
   } = input;
 
   // Hallazgo real, reportado por el usuario 2026-11-18 ("este dato sigue saliendo
-  // mal"): tanto "Estudio del [fecha]" como "válida hasta el [fecha] (N días)" se
-  // calculaban con `new Date()` -- HOY, el momento exacto de este calculo -- sin
-  // importar cuándo se creó realmente la estudio. Cada vez que se reabría/recalculaba
-  // un proyecto viejo (otro día), ambas fechas se recorrían solas hacia adelante,
-  // nunca expiraban de verdad y "Estudio del..." mentía diciendo que se había hecho
-  // hoy mismo. Ahora se ancla a la fecha real de creación de la estudio
+  // mal"): "Estudio del [fecha]" se calculaba con `new Date()` -- HOY, el momento
+  // exacto de este calculo -- sin importar cuándo se creó realmente la estudio. Cada
+  // vez que se reabría/recalculaba un proyecto viejo (otro día), la fecha se recorría
+  // sola hacia adelante y "Estudio del..." mentía diciendo que se había hecho hoy
+  // mismo. Ahora se ancla a la fecha real de creación de la estudio
   // (proyecto.creadoEn, o proyecto.entregadaEn si ya se congeló/entregó -- ver
   // app.js/vistaPreviaComun.js), con `new Date()` solo como respaldo si no se tiene
   // esa fecha (compatibilidad con llamadas/pruebas que no la pasan).
@@ -229,7 +228,6 @@ export function construirResultado(input) {
   const r = {
     titular: titular || 'Cliente', tituloRecibo: leido ? leido.titular : null, domicilio,
     noServicio, tarifa, fechaEstudio: fechaEstudioEs(fechaBase),
-    vigenciaDias: vigenciaDias || 15, fechaVigencia: fechaVigenciaEs(vigenciaDias || 15, fechaBase),
     periodoDias, periodoKwh, dap: esDomestica ? (dapDomestica || 0) : dap, cargos: cargosFinal, meta,
     btPct: btPct || 0, fpBonusPct: fpBonusPct || 0, recargoFpPct: recargoFpPct || 0, esDomestica: !!esDomestica,
     escalones: esDomestica ? escalones : null, cargoFijoDomestica: esDomestica ? (cargoFijoDomestica || 0) : null,

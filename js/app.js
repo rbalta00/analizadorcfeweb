@@ -24,7 +24,7 @@ import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida, conDataUrlResuelto, resolverImagenesRemotasEnDom } from './imagenes.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, escalaCostosParaTarifa, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion, seccionesDelBloque, BLOQUES_COTIZACION } from './bloques.js';
-import { M, PCT, fechaEstudioEs, fechaVigenciaEs, fechaBaseVigenciaDeProyecto } from './util.js';
+import { M, PCT, fechaEstudioEs, fechaBaseVigenciaDeProyecto } from './util.js';
 import { detectarTextosTarifaCruzada, sanearTextosTarifaCruzada, sanearTextosDoctrinaDesactualizada } from './tarifaDoctrina.js';
 import {
   normalizarRpu, rpuDifiere, construirSelloDesdeCampos, diferenciasIdentidadRecibo, diferenciasSinConfirmar,
@@ -2235,7 +2235,6 @@ function leerFormulario() {
     moduloWp: $('moduloWp').value, cobertura: $('cobertura').value, horasUtiles: $('horasUtiles').value,
     escalaCostos: $('escalaCostos').value, escalamiento: $('escalamiento').value,
     aplicaIsr: $('aplicaIsr').checked, tasaIsr: $('tasaIsr').value,
-    vigenciaDias: $('vigenciaDias').value,
   };
 }
 
@@ -2252,7 +2251,6 @@ function aplicarFormulario(f) {
   $('escalamiento').value = f?.escalamiento ?? 4.0;
   $('aplicaIsr').checked = f?.aplicaIsr || false; $('tasaIsr').value = f?.tasaIsr ?? 30;
   $('tasaIsr').disabled = !$('aplicaIsr').checked;
-  $('vigenciaDias').value = f?.vigenciaDias ?? 15;
 }
 $('aplicaIsr').addEventListener('change', () => { $('tasaIsr').disabled = !$('aplicaIsr').checked; });
 // Escala de costos: se deriva sola de la tarifa (ya no se pide a mano) -- gran demanda
@@ -3323,11 +3321,11 @@ function leerInputCalculo() {
   const inmueble = leerInmueble();
   const aplicaIsr = $('aplicaIsr').checked;
   const tasaIsrPct = Number($('tasaIsr').value);
-  const vigenciaDias = Number($('vigenciaDias').value) || 15;
-  // Ancla "Estudio del..."/"válida hasta..." a la fecha real de creación/entrega/última
-  // actualización de esta estudio -- ver fechaBaseVigenciaDeProyecto() en util.js,
-  // nunca a "hoy" directo (new Date() sigue siendo el respaldo final dentro de
-  // resultado.js si no hay ninguna fecha capturada).
+  // Ancla "Estudio del..." a la fecha real de creación/entrega/última actualización de
+  // esta estudio -- ver fechaBaseVigenciaDeProyecto() en util.js, nunca a "hoy" directo
+  // (new Date() sigue siendo el respaldo final dentro de resultado.js si no hay ninguna
+  // fecha capturada). El documento es un ANÁLISIS, no un presupuesto -- no lleva
+  // vigencia (pedido explícito del usuario, 2026-11-20).
   const fechaBaseVigencia = proyectoActual ? fechaBaseVigenciaDeProyecto(proyectoActual) : undefined;
   const historialCrudo = esDom ? leerFormularioRecibo().historialDom : leerFormularioRecibo().historialNoDom;
   const historialManual = historialCrudo.filter(v => v != null).map(Number);
@@ -3368,7 +3366,7 @@ function leerInputCalculo() {
     const recargoFpPct = traeRecargoFp ? recargoFpMonto / (baseAprox + btMonto) : 0.0;
     input = { titular, domicilio, noServicio, tarifa, esDomestica: false, periodoDias, periodoKwh, dap, cargos,
       rateKw, btPct, fpBonusPct, recargoFpPct, moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
-      aplicaIsr, tasaIsrPct, historialManual, vigenciaDias, fechaBaseVigencia };
+      aplicaIsr, tasaIsrPct, historialManual, fechaBaseVigencia };
   } else {
     const periodoDias = Number($('d_periodoDias').value);
     const periodoKwh = Number($('d_periodoKwh').value);
@@ -3380,7 +3378,7 @@ function leerInputCalculo() {
     input = { titular, domicilio, noServicio, tarifa, esDomestica: true, periodoDias, periodoKwh, escalones,
       dapDomestica: Number($('d_dap').value), cargoFijoDomestica: Number($('d_cargoFijo').value),
       moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido: ultimoLeido, inmueble,
-      aplicaIsr, tasaIsrPct, historialManual, vigenciaDias, fechaBaseVigencia };
+      aplicaIsr, tasaIsrPct, historialManual, fechaBaseVigencia };
   }
   return input;
 }
@@ -4878,14 +4876,13 @@ function confirmarSinTextoTarifaCruzadaAntesDeExportar(r) {
 // el ENCABEZADO del PDF (que si lee `r` directo, ver propuesta.js) habria mostrado la
 // fecha nueva pero la PORTADA se habria quedado con la vieja -- justo la inconsistencia
 // que el encargo pide evitar explicitamente ("no deben quedar una fecha en el
-// encabezado y otra distinta en la vigencia").
+// encabezado desincronizada de la portada").
 function refrescarFechaEstudioAntesDeGenerar() {
   if (!proyectoActual || !ultimoResultado || proyectoActual.bloqueada) return;
   proyectoActual.fechaActualizacionEstudio = new Date().toISOString();
   guardarProyecto(clienteActual, proyectoActual);
   const fechaBase = new Date(proyectoActual.fechaActualizacionEstudio);
   ultimoResultado.fechaEstudio = fechaEstudioEs(fechaBase);
-  ultimoResultado.fechaVigencia = fechaVigenciaEs(ultimoResultado.vigenciaDias || 15, fechaBase);
   renderSecciones(ultimoResultado);
 }
 

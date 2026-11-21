@@ -33,10 +33,9 @@ export function construirInputDesdeFormulario(f, proyecto) {
   const noServicio = f.noServicio || '';
   const aplicaIsr = !!f.aplicaIsr;
   const tasaIsrPct = Number(f.tasaIsr ?? 30);
-  const vigenciaDias = Number(f.vigenciaDias) || 15;
   // Mismo fix que app.js (ver fechaBaseVigenciaDeProyecto en util.js): ancla "Estudio
-  // del..."/"válida hasta..." a la fecha real de creación/entrega/última actualización
-  // del proyecto, nunca a "hoy".
+  // del..." a la fecha real de creación/entrega/última actualización del proyecto,
+  // nunca a "hoy". El documento es un análisis, no un presupuesto -- no lleva vigencia.
   const fechaBaseVigencia = fechaBaseVigenciaDeProyecto(proyecto);
   const inmueble = proyecto.inmueble || null;
   const leido = proyecto.campos || null;
@@ -72,7 +71,7 @@ export function construirInputDesdeFormulario(f, proyecto) {
     const recargoFpPct = traeRecargoFp ? recargoFpMonto / (baseAprox + btMonto) : 0.0;
     return { titular, domicilio, noServicio, tarifa, esDomestica: false, periodoDias, periodoKwh, dap, cargos,
       rateKw, btPct, fpBonusPct, recargoFpPct, moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido, inmueble,
-      aplicaIsr, tasaIsrPct, historialManual, vigenciaDias, fechaBaseVigencia };
+      aplicaIsr, tasaIsrPct, historialManual, fechaBaseVigencia };
   }
   const periodoDias = Number(f.dPeriodoDias);
   const periodoKwh = Number(f.dPeriodoKwh);
@@ -84,7 +83,7 @@ export function construirInputDesdeFormulario(f, proyecto) {
   return { titular, domicilio, noServicio, tarifa, esDomestica: true, periodoDias, periodoKwh, escalones,
     dapDomestica: Number(f.dDap), cargoFijoDomestica: Number(f.dCargoFijo),
     moduloWp, cobertura, horasUtiles, costos, escalamientoPct, leido, inmueble,
-    aplicaIsr, tasaIsrPct, historialManual, vigenciaDias, fechaBaseVigencia };
+    aplicaIsr, tasaIsrPct, historialManual, fechaBaseVigencia };
 }
 
 // A partir de un `proyecto` guardado (formulario + todo el estado de edicion/apagado),

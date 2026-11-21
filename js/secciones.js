@@ -1017,8 +1017,9 @@ function s01(r, _leido, onToggle) {
   // repetida, el usuario lo probo varias veces y lo sigue rechazando aunque se
   // corrigiera la redaccion/gramatica/fecha -- la decision final es que no debe
   // aparecer en absoluto, ni en pantalla ni en el PDF (ver mismo cambio en
-  // propuesta.js). r.fechaVigencia/r.vigenciaDias se quedan calculados en resultado.js
-  // por si se usan en otro lado, solo se quito este parrafo que los mostraba.
+  // propuesta.js). El concepto de vigencia se retiro por completo despues (2026-11-20,
+  // "Fecha del estudio al dia y SIN vigencia"): el documento es un analisis, no un
+  // presupuesto, nunca caduca -- resultado.js ya no calcula r.fechaVigencia/r.vigenciaDias.
   art.append(graficoToggle('g01-tarjetas-principales', 'Tarjetas: inversión, recuperación y ahorro año 1', tarjetas([
     [M(r.investment), 'Lo que cuesta el sistema, IVA incluido'],
     [r.payback ? `${r.payback.toFixed(1)} años` : 'N/D', 'En cuánto tiempo se paga solo'],

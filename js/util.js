@@ -38,16 +38,7 @@ export function fechaEstudioEs(d = new Date()) {
   return `${d.getDate()} de ${MESES_ES[d.getMonth()]} de ${d.getFullYear()}`;
 }
 
-// Fecha de vigencia de la cotizacion = hoy + diasVigencia -- los precios de materiales
-// (dimensionamiento.py/motor.js COSTOS_RESIDENCIAL/COMERCIAL) son una provision, no una
-// cotizacion de proveedor fija, asi que toda propuesta de ventas deberia traer una
-// fecha limite explicita en vez de dar a entender que el precio es fijo para siempre.
-export function fechaVigenciaEs(diasVigencia, base = new Date()) {
-  const d = new Date(base.getTime() + diasVigencia * 86400000);
-  return fechaEstudioEs(d);
-}
-
-// Fecha base de "Estudio del..."/"válida hasta..." -- pedido explicito del usuario,
+// Fecha base de "Estudio del..." -- pedido explicito del usuario,
 // 2026-11-20 ("La fecha del estudio se actualiza al Guardar y al generar PDF/Excel"):
 // antes se anclaba SIEMPRE a creadoEn/entregadaEn (ver resultado.js), asi que un
 // estudio vuelto a guardar o a generar semanas despues seguia imprimiendo su fecha de
