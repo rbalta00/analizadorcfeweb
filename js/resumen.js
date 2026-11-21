@@ -69,8 +69,8 @@ export function generarResumenEjecutivo(r) {
     notice(doc, y, clasif + escTxt);
   }
 
-  return buildPdf(`Resumen ejecutivo · ${r.titular}`, 'GESTORIA Y PROYECTOS SOELRB',
-    'Resumen de apoyo para la presentación — ver la estudio completa de 21 páginas para el detalle.', [pagina]);
+  return buildPdf(`Resumen ejecutivo · ${r.titular}`,
+    'Resumen de apoyo para la presentación — ver la estudio completa de 21 páginas para el detalle.', '', [pagina]);
 }
 
 const GUIA_FILAS = [
@@ -115,8 +115,8 @@ export function generarGuiaPresentacion() {
     bodyX(doc, y, '• "¿Esto es definitivo?" -> No: es preliminar, precios y levantamiento en sitio pendientes (pág. 17).');
   }
 
-  return buildPdf('Guía de presentación · Analizador FV CFE', 'GESTORIA Y PROYECTOS SOELRB',
-    'Guía de apoyo para presentar cualquier estudio — no es específica de un predio.', [pagina]);
+  return buildPdf('Guía de presentación · Analizador FV CFE',
+    'Guía de apoyo para presentar cualquier estudio — no es específica de un predio.', '', [pagina]);
 }
 
 // ---------------------------------------------------------------------------

@@ -391,12 +391,6 @@ export function generarExcelCotizacion(r) {
   titulo.eachCell({ includeEmpty: true }, (cell) => { cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; });
   fusionar(titulo, 1, GRID_COLS);
 
-  const subtitulo = ws.addRow(['GESTORIA Y PROYECTOS SOELRB · este análisis sale del estudio, no al revés']);
-  subtitulo.font = { italic: true, size: 10 };
-  subtitulo.height = 30;
-  subtitulo.eachCell({ includeEmpty: true }, (cell) => { cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; });
-  fusionar(subtitulo, 1, GRID_COLS);
-
   ws.addRow([]);
   const seccionInfo = ws.addRow(['INFORMACIÓN DEL ANÁLISIS']);
   seccionInfo.font = { bold: true, color: { argb: COLOR_BLANCO }, size: 11 };
