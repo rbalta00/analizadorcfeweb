@@ -47,6 +47,24 @@ export function fechaVigenciaEs(diasVigencia, base = new Date()) {
   return fechaEstudioEs(d);
 }
 
+// Fecha base de "Estudio del..."/"válida hasta..." -- pedido explicito del usuario,
+// 2026-11-20 ("La fecha del estudio se actualiza al Guardar y al generar PDF/Excel"):
+// antes se anclaba SIEMPRE a creadoEn/entregadaEn (ver resultado.js), asi que un
+// estudio vuelto a guardar o a generar semanas despues seguia imprimiendo su fecha de
+// creacion original, sin forma de saber de un vistazo cual version es la mas
+// reciente. Prioridad, en este orden: `entregadaEn` si el proyecto esta
+// entregado/bloqueada (esa fecha es la de la entrega real, intocable); si no,
+// `fechaActualizacionEstudio` (se pone al Guardar y al generar PDF/Excel, ver
+// app.js); si no existe todavia (proyectos de antes de este cambio), `creadoEn` como
+// hasta hoy. Compartida entre app.js (editor) y vistaPreviaComun.js (las 2 paginas de
+// vista previa en vivo) para que nunca se desincronicen.
+export function fechaBaseVigenciaDeProyecto(proyecto) {
+  if (!proyecto) return undefined;
+  return proyecto.bloqueada
+    ? (proyecto.entregadaEn || proyecto.creadoEn)
+    : (proyecto.fechaActualizacionEstudio || proyecto.creadoEn);
+}
+
 // Texto de cadencia de facturación, derivado del período REAL de este recibo
 // (periodoDias) -- nunca asumir "mensual" a fuerza. Hallazgo real, auditoria
 // 2026-11-18: el texto de "cuánto se paga solo"/"promedio mensual" decía "cada

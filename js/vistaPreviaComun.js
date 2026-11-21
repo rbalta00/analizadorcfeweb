@@ -10,6 +10,7 @@ import { construirResultado } from './resultado.js';
 import { renderSeccion, ordenSeccionesEfectivo, seccionTieneDatos } from './secciones.js';
 import { archivoAImagenComprimida, conDataUrlResuelto, resolverImagenesRemotasEnDom } from './imagenes.js';
 import { COSTOS_RESIDENCIAL, COSTOS_COMERCIAL } from './motor.js';
+import { fechaBaseVigenciaDeProyecto } from './util.js';
 
 // construirResultado() NO acepta proyecto.formulario tal cual -- espera el objeto
 // "input" ya derivado que leerInputCalculo() (app.js) arma leyendo el formulario EN
@@ -33,9 +34,10 @@ export function construirInputDesdeFormulario(f, proyecto) {
   const aplicaIsr = !!f.aplicaIsr;
   const tasaIsrPct = Number(f.tasaIsr ?? 30);
   const vigenciaDias = Number(f.vigenciaDias) || 15;
-  // Mismo fix que app.js (ver resultado.js): ancla "Estudio del..."/"válida hasta..."
-  // a la fecha real de creación/entrega del proyecto, nunca a "hoy".
-  const fechaBaseVigencia = proyecto.entregadaEn || proyecto.creadoEn;
+  // Mismo fix que app.js (ver fechaBaseVigenciaDeProyecto en util.js): ancla "Estudio
+  // del..."/"válida hasta..." a la fecha real de creación/entrega/última actualización
+  // del proyecto, nunca a "hoy".
+  const fechaBaseVigencia = fechaBaseVigenciaDeProyecto(proyecto);
   const inmueble = proyecto.inmueble || null;
   const leido = proyecto.campos || null;
   const historialCrudo = esDom ? (f.historialDom || []) : (f.historialNoDom || []);

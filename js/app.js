@@ -24,7 +24,7 @@ import { leerReciboMultiple } from './leerRecibo.js';
 import { archivoAImagenComprimida, conDataUrlResuelto, resolverImagenesRemotasEnDom } from './imagenes.js';
 import { ErrorDeClasificacion, COSTOS_RESIDENCIAL, COSTOS_COMERCIAL, escalaCostosParaTarifa, recalcularDesdeMateriales, pagoMensualCredito } from './motor.js';
 import { todosLosBloques, bloqueDeSeccion, seccionesDelBloque, BLOQUES_COTIZACION } from './bloques.js';
-import { M, PCT } from './util.js';
+import { M, PCT, fechaEstudioEs, fechaVigenciaEs, fechaBaseVigenciaDeProyecto } from './util.js';
 import { detectarTextosTarifaCruzada, sanearTextosTarifaCruzada, sanearTextosDoctrinaDesactualizada } from './tarifaDoctrina.js';
 import {
   normalizarRpu, rpuDifiere, construirSelloDesdeCampos, diferenciasIdentidadRecibo, diferenciasSinConfirmar,
@@ -3324,9 +3324,11 @@ function leerInputCalculo() {
   const aplicaIsr = $('aplicaIsr').checked;
   const tasaIsrPct = Number($('tasaIsr').value);
   const vigenciaDias = Number($('vigenciaDias').value) || 15;
-  // Ancla "Estudio del..."/"válida hasta..." a la fecha REAL de creación de esta
-  // estudio (o de entrega, si ya se congeló) -- ver resultado.js, nunca a "hoy".
-  const fechaBaseVigencia = proyectoActual ? (proyectoActual.entregadaEn || proyectoActual.creadoEn) : undefined;
+  // Ancla "Estudio del..."/"válida hasta..." a la fecha real de creación/entrega/última
+  // actualización de esta estudio -- ver fechaBaseVigenciaDeProyecto() en util.js,
+  // nunca a "hoy" directo (new Date() sigue siendo el respaldo final dentro de
+  // resultado.js si no hay ninguna fecha capturada).
+  const fechaBaseVigencia = proyectoActual ? fechaBaseVigenciaDeProyecto(proyectoActual) : undefined;
   const historialCrudo = esDom ? leerFormularioRecibo().historialDom : leerFormularioRecibo().historialNoDom;
   const historialManual = historialCrudo.filter(v => v != null).map(Number);
 
@@ -4857,6 +4859,36 @@ function confirmarSinTextoTarifaCruzadaAntesDeExportar(r) {
   return false;
 }
 
+// fechaActualizacionEstudio -- pedido explicito del usuario, 2026-11-20 ("La fecha del
+// estudio se actualiza al Guardar y al generar PDF/Excel"): se pone con la fecha de
+// HOY justo antes de construir cualquier documento del cliente (PDF o Excel), por
+// CUALQUIER ruta -- el boton manual, el enlace profundo del visor del lote de 40
+// inmuebles (que llama estas mismas funciones generarPdfCotizacion/
+// generarExcelCotizacion, ver manejarDescargaPorEnlaceProfundo), o el boton de
+// WhatsApp. EXCEPCION explicita: un estudio ya ENTREGADO (bloqueada, con entregadaEn)
+// nunca cambia su fecha al volver a generar su documento -- esa fecha identifica la
+// entrega real al cliente, se queda intocable.
+//
+// Re-renderiza las secciones (renderSecciones, la misma funcion que ya usa cualquier
+// otro toggle/edicion) porque generarPdfCompletaDesdeVista()/descargarExcelCotizacion()
+// NO leen r.fechaEstudio directo para el cuerpo del documento -- leen el DOM YA
+// RENDERIZADO de #contenedorSecciones (la portada de la seccion 1 imprime "Servicio
+// CFE... Estudio del {r.fechaEstudio}." como texto fijo desde el ultimo renderSecciones()
+// real, normalmente el de la ultima vez que se pulso "Calcular"). Sin este re-render,
+// el ENCABEZADO del PDF (que si lee `r` directo, ver propuesta.js) habria mostrado la
+// fecha nueva pero la PORTADA se habria quedado con la vieja -- justo la inconsistencia
+// que el encargo pide evitar explicitamente ("no deben quedar una fecha en el
+// encabezado y otra distinta en la vigencia").
+function refrescarFechaEstudioAntesDeGenerar() {
+  if (!proyectoActual || !ultimoResultado || proyectoActual.bloqueada) return;
+  proyectoActual.fechaActualizacionEstudio = new Date().toISOString();
+  guardarProyecto(clienteActual, proyectoActual);
+  const fechaBase = new Date(proyectoActual.fechaActualizacionEstudio);
+  ultimoResultado.fechaEstudio = fechaEstudioEs(fechaBase);
+  ultimoResultado.fechaVigencia = fechaVigenciaEs(ultimoResultado.vigenciaDias || 15, fechaBase);
+  renderSecciones(ultimoResultado);
+}
+
 // Genera "Cotización completa" -- extraída a función aparte, 2026-11-20 (pedido:
 // botones "PDF"/"Excel" directo en el visor "Estado del lote de 40 inmuebles",
 // lote40.html/lote40Vista.js), para que el botón manual y el enlace profundo
@@ -4872,6 +4904,7 @@ async function generarPdfCotizacion({ avisarSiNoHayResultado = true } = {}) {
   if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return null;
   confirmarEdicionEnCursoAntesDeExportar();
   if (!confirmarAntesDeGenerarDocumento(true)) return null;
+  refrescarFechaEstudioAntesDeGenerar();
   const boton = $('btnGenerarPdf');
   boton.disabled = true;
   exportandoDocumento = true;
@@ -4916,6 +4949,7 @@ async function generarExcelCotizacion({ avisarSiNoHayResultado = true } = {}) {
   if (!confirmarIdentidadRpuAntesDeExportar(ultimoResultado)) return false;
   if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return false;
   confirmarEdicionEnCursoAntesDeExportar();
+  refrescarFechaEstudioAntesDeGenerar();
   const boton = $('btnGenerarExcel');
   boton.disabled = true;
   exportandoDocumento = true;
@@ -5065,6 +5099,14 @@ async function guardarCotizacionConCliente({ definitiva, proposito } = {}) {
     }
   }
   proyectoActual.cotizacionGuardadaEn = new Date().toISOString();
+  // fechaActualizacionEstudio -- pedido explicito del usuario, 2026-11-20 ("La fecha
+  // del estudio se actualiza al Guardar y al generar PDF/Excel"): se pone con la fecha
+  // de HOY en este guardado manual (nunca en el autoguardado de Calcular, que no pasa
+  // por aqui) para que "Estudio del..."/"válida hasta..." (ver fechaBaseVigenciaDeProyecto
+  // en util.js) reflejen la version mas reciente. Si llegamos aqui con bloqueada=true
+  // es solo el caso de "mover de cliente sin tocar contenido" (permitido mas arriba) --
+  // la fecha de una entregada nunca se toca, se queda su propio entregadaEn.
+  if (!proyectoActual.bloqueada) proyectoActual.fechaActualizacionEstudio = new Date().toISOString();
   let seMovioDeCliente = false;
   if (clienteDestinoId && clienteDestinoId !== clienteActual.id) {
     seMovioDeCliente = true;
@@ -5181,6 +5223,7 @@ $('btnEnviarWhatsapp').addEventListener('click', async () => {
   if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return;
   confirmarEdicionEnCursoAntesDeExportar();
   if (!confirmarSiHayCambiosSinCalcular()) return;
+  refrescarFechaEstudioAntesDeGenerar();
   const r = ultimoResultado;
   const mensaje = `Estudio ${r.titular}\n` +
     `Sistema: ${r.n} paneles (${r.kwp.toFixed(2)} kWp)\n` +
