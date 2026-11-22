@@ -1958,18 +1958,27 @@ function s07(r, _leido, onToggle) {
   // ANUAL (r.gen, r.annualKwh) o repartido dentro de graficas/bloques colapsados --
   // aqui se muestra el mismo par de numeros ya promediados por mes, uno al lado del
   // otro, con la diferencia explicita.
-  const genMensualProm = r.gen / 12;
-  const consumoMensualProm = r.annualKwh / 12;
-  const difMensual = genMensualProm - consumoMensualProm;
-  art.append(subtituloChico(7, 'promedios-mensuales', 'Comparación de promedios mensuales'));
-  art.append(graficoToggle('g07-tarjetas-promedios', 'Tarjetas: comparación de promedios mensuales', tarjetas([
-    [`${genMensualProm.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Generación promedio mensual estimada (con los paneles propuestos)'],
-    [`${consumoMensualProm.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Consumo promedio mensual (de su recibo)'],
-    [`${difMensual >= 0 ? '+' : ''}${difMensual.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, difMensual >= 0 ? 'Excedente promedio mensual estimado' : 'Déficit promedio mensual estimado'],
+  // Presentación en bimestres (2026-11-22, "Presentación en bimestres para recibos
+  // bimestrales"): la presentación sigue al recibo -- si r.esBimestral (periodoDias >=
+  // 45, detectado por el dato, nunca por el nombre de la tarifa), estos promedios se
+  // reparten entre 6 bimestres en vez de 12 meses. El equivalente mensual (bimestre ÷
+  // 2) se muestra también, rotulado explícito, para quien esté acostumbrado a pensar en
+  // meses -- nunca se oculta el dato bimestral real detrás de uno derivado.
+  const nPeriodosAnio = r.esBimestral ? 6 : 12;
+  const genPromPeriodo = r.gen / nPeriodosAnio;
+  const consumoPromPeriodo = r.annualKwh / nPeriodosAnio;
+  const difPeriodo = genPromPeriodo - consumoPromPeriodo;
+  const etiquetaPeriodo = r.esBimestral ? 'bimestral' : 'mensual';
+  const equivMensual = (v) => r.esBimestral ? ` — equivalente mensual (bimestre ÷ 2): ${(v / 2).toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh` : '';
+  art.append(subtituloChico(7, 'promedios-mensuales', `Comparación de promedios ${etiquetaPeriodo}es`));
+  art.append(graficoToggle('g07-tarjetas-promedios', `Tarjetas: comparación de promedios ${etiquetaPeriodo}es`, tarjetas([
+    [`${genPromPeriodo.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `Generación promedio ${etiquetaPeriodo} estimada (con los paneles propuestos)${equivMensual(genPromPeriodo)}`],
+    [`${consumoPromPeriodo.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `Consumo promedio ${etiquetaPeriodo} (de su recibo)${equivMensual(consumoPromPeriodo)}`],
+    [`${difPeriodo >= 0 ? '+' : ''}${difPeriodo.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, (difPeriodo >= 0 ? 'Excedente' : 'Déficit') + ` promedio ${etiquetaPeriodo} estimado`],
   ])));
-  art.append(p(`El consumo promedio mensual sale de ${r.basisConsumo || 'el período facturado'} (ver sección ${refSeccion(5, r)}). La ` +
-    'generación promedio mensual es la misma cifra fija en los 12 meses (criterio de horas-sol, no varía por mes -- ' +
-    'ver aviso abajo). Esta comparación es de PROMEDIOS; para ver mes por mes contra su historial real, baja a la ' +
+  art.append(p(`El consumo promedio ${etiquetaPeriodo} sale de ${r.basisConsumo || 'el período facturado'} (ver sección ${refSeccion(5, r)}). La ` +
+    `generación promedio ${etiquetaPeriodo} es la misma cifra fija en los ${nPeriodosAnio} ${r.esBimestral ? 'bimestres' : 'meses'} (criterio de horas-sol, no varía por período -- ` +
+    `ver aviso abajo). Esta comparación es de PROMEDIOS; para ver ${r.esBimestral ? 'bimestre por bimestre' : 'mes por mes'} contra su historial real, baja a la ` +
     'gráfica de abajo.'));
   art.append(graficoToggle('g07-tarjetas-rendimiento', 'Tarjetas: producción anual y rendimiento', tarjetas([
     [`${r.gen.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, 'Producción anual regional estimada'],
@@ -2027,9 +2036,20 @@ function s07(r, _leido, onToggle) {
     // normalizado a kWh/mes con los DIAS REALES de cada periodo, mismo orden que
     // r.historial) para que ambas barras esten en la misma unidad -- mismo fix que en la
     // seccion 5.
+    //
+    // Presentación en bimestres (2026-11-22): "la presentación sigue al recibo" -- un
+    // revisor comparando este estudio contra un recibo bimestral no encuentra ninguna
+    // cifra mensual impresa ahí (todas son derivadas), así que para r.esBimestral se
+    // hace lo CONTRARIO del fix de arriba: en vez de normalizar el historial hacia
+    // abajo a kWh/mes, se usa el kWh CRUDO del historial (ya es kWh/bimestre, tal cual
+    // el recibo) y se multiplica la generación estimada ×2 para que ambas barras queden
+    // en la unidad del recibo. Mismos datos que la rama mensual, ninguna cifra nueva.
+    const generacionPeriodo = r.esBimestral ? genMensualEstimada * 2 : genMensualEstimada;
+    const consumosPeriodo = r.esBimestral ? r.historial.map(h => h.kwh) : r.consumosMensualesUsados;
+    const unidadPeriodo = r.esBimestral ? 'kWh/bimestre' : 'kWh/mes';
     art.append(grupoGraficosAlternativos('Elige cuál gráfica de generación vs. consumo dejar visible aquí -- las ' +
       'dos explican algo muy similar (no hace falta repetir ambas para el mismo cliente):'));
-    const subtituloHistorialG07 = subtituloChico(7, 'generacion-vs-historial', 'Generación mensual estimada vs. su consumo real facturado');
+    const subtituloHistorialG07 = subtituloChico(7, 'generacion-vs-historial', `Generación ${r.esBimestral ? 'bimestral' : 'mensual'} estimada vs. su consumo real facturado`);
     // Si g07-historial está apagada individualmente, este subtítulo (que la etiqueta)
     // se excluye también del documento del cliente -- revisión v4 del encargo: sin
     // esto, el cliente veía el subtítulo "flotando" sin ninguna gráfica debajo (la
@@ -2039,23 +2059,30 @@ function s07(r, _leido, onToggle) {
     art.append(subtituloHistorialG07);
     const nodoG07Historial = graficoToggle('g07-historial', 'Generación vs. su consumo REAL del historial', barraAgrupada(
       r.historial.map(h => `${h.mes} ${h.anio}`),
-      textoChico('Generación mensual estimada con los paneles propuestos'), r.historial.map(() => genMensualEstimada),
-      textoChico('Su consumo normalizado a kWh/mes ese período'), r.consumosMensualesUsados,
+      textoChico(`Generación ${r.esBimestral ? 'bimestral' : 'mensual'} estimada con los paneles propuestos`), r.historial.map(() => generacionPeriodo),
+      textoChico(r.esBimestral ? `Su consumo real (${unidadPeriodo}) ese período` : 'Su consumo normalizado a kWh/mes ese período'), consumosPeriodo,
     ), { notaAlternativa: 'Alternativa a la gráfica de abajo (generación vs. consumo EXTRAPOLADO) -- esta usa el consumo real de cada período de su historial.' });
     // g07-historial ya NUNCA se marca 'alternativa-pdf-secundaria' -- cuando existe (y
     // no está apagada individualmente), siempre es la que llega al cliente (ver nota
     // arriba).
     art.append(nodoG07Historial);
-    art.append(p(`Cada barra de "consumo normalizado a kWh/mes" parte del dato real impreso en su propio recibo para ` +
-      'ese período, convertido a su equivalente mensual (así un período bimestral no se compara contra una ' +
-      'generación mensual como si fuera el mismo). La generación estimada es la misma para los ' +
-      `${r.historial.length} períodos porque el criterio de horas-sol fijas no varía mes a mes (ver aviso abajo); ` +
-      'compararla contra cada período real muestra en cuáles meses el sistema propuesto generaría más o menos de lo ' +
-      'que ese período concreto consumió.'));
+    art.append(p(r.esBimestral
+      ? `Cada barra de consumo es el dato real impreso en su propio recibo para ese período, en ${unidadPeriodo} -- ` +
+        `tal como lo factura CFE, sin convertirlo a un equivalente mensual. La generación estimada (${unidadPeriodo}) es el ` +
+        `mismo criterio de horas-sol de cada mes, sumado en pares para quedar en la misma unidad que su recibo.`
+      : `Cada barra de "consumo normalizado a kWh/mes" parte del dato real impreso en su propio recibo para ` +
+        'ese período, convertido a su equivalente mensual (así un período bimestral no se compara contra una ' +
+        'generación mensual como si fuera el mismo). La generación estimada es la misma para los ' +
+        `${r.historial.length} períodos porque el criterio de horas-sol fijas no varía mes a mes (ver aviso abajo); ` +
+        'compararla contra cada período real muestra en cuáles meses el sistema propuesto generaría más o menos de lo ' +
+        'que ese período concreto consumió.'));
   }
-  const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
-  const nodoG07Extrapolado = graficoToggle('g07-extrapolado', 'Generación vs. consumo EXTRAPOLADO (los 12 meses)',
-    barraAgrupada(mesesAbrev, textoChico('Generación estimada'), r.rows.map(x => x.generacionKwh), textoChico('Consumo extrapolado'), r.rows.map(x => x.consumoExtrapoladoKwh)),
+  // r.rowsPresentacion (2026-11-22): mismos datos de r.rows, agregados en 6 bimestres
+  // cuando r.esBimestral -- "Bimestre 1".."Bimestre 6" ya vienen en el campo `mes`, por
+  // eso el resto de este bloque no necesita ningún chequeo adicional de esBimestral.
+  const mesesAbrev = r.esBimestral ? r.rowsPresentacion.map(x => x.mes.replace('Bimestre', 'Bim')) : r.rowsPresentacion.map(x => x.mes.slice(0, 3));
+  const nodoG07Extrapolado = graficoToggle('g07-extrapolado', `Generación vs. consumo EXTRAPOLADO (los ${r.esBimestral ? '6 bimestres' : '12 meses'})`,
+    barraAgrupada(mesesAbrev, textoChico('Generación estimada'), r.rowsPresentacion.map(x => x.generacionKwh), textoChico('Consumo extrapolado'), r.rowsPresentacion.map(x => x.consumoExtrapoladoKwh)),
     g07HistorialVisible
       ? { notaAlternativa: 'Alternativa a la gráfica de arriba (generación vs. consumo real del historial) -- esta usa el consumo extrapolado de un año completo, no el historial real.' }
       : {});
@@ -2068,8 +2095,8 @@ function s07(r, _leido, onToggle) {
     nodoG07Extrapolado.classList.add('alternativa-pdf-secundaria');
   }
   art.append(nodoG07Extrapolado);
-  art.append(detalle('Ver detalle', tabla(['Mes', 'Generación estimada', 'Consumo extrapolado'],
-    r.rows.map(x => [x.mes, `${x.generacionKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${x.consumoExtrapoladoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]), { small: true, id: 'g07-detalle-mensual' })));
+  art.append(detalle('Ver detalle', tabla([r.esBimestral ? 'Bimestre' : 'Mes', 'Generación estimada', 'Consumo extrapolado'],
+    r.rowsPresentacion.map(x => [x.mes, `${x.generacionKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${x.consumoExtrapoladoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]), { small: true, id: 'g07-detalle-mensual' })));
   art.append(badgeEstado('supuesto'));
   art.append(avisoCream(r.metodoGeneracion || 'Criterio preliminar de horas-sol fijas (4.5 h/día, 30.5 días/mes), ' +
     'no una simulación con PVGIS ni datos de irradiancia reales del sitio. No hay simulación de sombras exactas ' +
@@ -2144,15 +2171,21 @@ function s09(r, _leido, onToggle) {
 // ---------- 10: cuanto pagaria y ahorraria ----------
 function s10(r, _leido, onToggle) {
   const art = crearSeccion(10, 'Cuánto pagaría y cuánto ahorraría', 'Comparación directa: factura sin solar vs. con solar.', r, onToggle);
+  // Presentación en bimestres (2026-11-22): mismo criterio de s07 -- nPeriodosAnio/
+  // etiquetaPeriodoSingular/etiquetaUnMes se usan aquí para repartir los promedios
+  // anuales y rotular la tabla/párrafos sin tocar ningún total ni cálculo real.
+  const nPeriodosAnio10 = r.esBimestral ? 6 : 12;
+  const unidadSingular = r.esBimestral ? 'bimestre' : 'mes';
+  const unidadAdjetivo = r.esBimestral ? 'bimestral' : 'mensual';
   art.append(graficoToggle('g10-anual', 'Gráfica anual: sin paneles vs. con paneles', barraHorizontal([
     [textoChico('Hoy, sin paneles (al año)'), r.annualbefore, 'var(--cfe-navy,#163b4c)'],
     [textoChico('Con paneles (al año)'), r.annualafter, 'var(--cfe-teal,#21798b)'],
-  ]), { notaAlternativa: `Alternativa más detallada: la misma comparación pero mes a mes, en la sección ${refSeccion(15, r)}.` }));
+  ]), { notaAlternativa: `Alternativa más detallada: la misma comparación pero ${r.esBimestral ? 'bimestre a bimestre' : 'mes a mes'}, en la sección ${refSeccion(15, r)}.` }));
   art.append(graficoToggle('g10-tabla-comparativa', 'Tabla comparativa sin/con sistema', tabla(['Concepto comparable', 'Sin sistema', 'Con sistema estimado'], [
     ['Gasto anual de referencia', M(r.annualbefore), M(r.annualafter)],
-    ['Promedio mensual del año', M(r.annualbefore / 12), M(r.annualafter / 12)],
+    [`Promedio ${unidadAdjetivo} del año`, M(r.annualbefore / nPeriodosAnio10), M(r.annualafter / nPeriodosAnio10)],
     ['Ahorro anual de factura', '—', M(r.ahorroAnual)],
-    ['Ahorro promedio mensual', '—', M(r.ahorroAnual / 12)],
+    [`Ahorro promedio ${unidadAdjetivo}`, '—', M(r.ahorroAnual / nPeriodosAnio10)],
     ['% de ahorro anual', '—', PCT(r.pctAhorro)],
     ['Mantenimiento del primer año', '—', M(r.om1)],
     ['Ahorro neto del primer año', '—', M(r.ahorroAnual - r.om1)],
@@ -2163,16 +2196,18 @@ function s10(r, _leido, onToggle) {
   art.append(bloqueCalculo(10, [
     p(`Análisis mes a mes del año de referencia: para cada mes se simula el pago real (sin paneles) y el pago con ` +
       `el sistema propuesto, usando la MISMA fórmula de facturación de la sección ${refSeccion(3, r)} -- no es un promedio repartido, ` +
-      `es un cálculo independiente por mes con la generación solar y el consumo de ese mes.`),
-    graficoToggle('g10-calc-mensual', 'Tabla mensual detallada', tabla(['Mes', 'Consumo', 'Generación', 'Sin paneles', 'Con paneles', 'Ahorro', '% del mes'], r.rows.map(row => [
-      row.mes, `${Math.round(row.consumoExtrapoladoKwh).toLocaleString('en-US')} kWh`, `${Math.round(row.generacionKwh).toLocaleString('en-US')} kWh`,
-      M(row.pagoSinSolarMxn), M(row.pagoConSolarEstimadoMxn), M(row.ahorroEstimadoMxn),
-      row.pagoSinSolarMxn ? PCT(row.ahorroEstimadoMxn / row.pagoSinSolarMxn) : '—',
-    ]), { small: true, id: 'g10-calc-mensual' })),
-    p(`El % de ahorro no es igual todos los meses: en los meses donde el consumo real es bajo frente a la ` +
+      `es un cálculo independiente por mes con la generación solar y el consumo de ese mes.` +
+      (r.esBimestral ? ` La tabla de abajo agrupa esos 12 meses ya calculados en 6 bimestres (sumando cada par), para que coincida con la periodicidad de su recibo -- ningún mes se recalcula distinto.` : '')),
+    graficoToggle('g10-calc-mensual', r.esBimestral ? 'Tabla bimestral detallada' : 'Tabla mensual detallada',
+      tabla([r.esBimestral ? 'Bimestre' : 'Mes', 'Consumo', 'Generación', 'Sin paneles', 'Con paneles', 'Ahorro', r.esBimestral ? '% del bimestre' : '% del mes'], r.rowsPresentacion.map(row => [
+        row.mes, `${Math.round(row.consumoExtrapoladoKwh).toLocaleString('en-US')} kWh`, `${Math.round(row.generacionKwh).toLocaleString('en-US')} kWh`,
+        M(row.pagoSinSolarMxn), M(row.pagoConSolarEstimadoMxn), M(row.ahorroEstimadoMxn),
+        row.pagoSinSolarMxn ? PCT(row.ahorroEstimadoMxn / row.pagoSinSolarMxn) : '—',
+      ]), { small: true, id: 'g10-calc-mensual' })),
+    p(`El % de ahorro no es igual todos los ${r.esBimestral ? 'bimestres' : 'meses'}: en los ${r.esBimestral ? 'bimestres' : 'meses'} donde el consumo real es bajo frente a la ` +
       `generación de los paneles, el ahorro porcentual también es más bajo -- ${listaConceptos(r.meta.noReducibles)} ` +
-      `se siguen cobrando completos sin importar cuánta energía solar se produzca ese mes (ver sección ${refSeccion(4, r)}). En los ` +
-      `meses de consumo más alto, el sistema cubre una porción mayor del total y el % de ahorro sube.`),
+      `se siguen cobrando completos sin importar cuánta energía solar se produzca ese ${unidadSingular} (ver sección ${refSeccion(4, r)}). En los ` +
+      `${r.esBimestral ? 'bimestres' : 'meses'} de consumo más alto, el sistema cubre una porción mayor del total y el % de ahorro sube.`),
   ], r));
   return art;
 }
@@ -2348,20 +2383,25 @@ function s14(r, _leido, onToggle) {
 
 // ---------- 15: pagos mensuales ----------
 function s15(r, _leido, onToggle) {
-  const art = crearSeccion(15, 'Pagos estimados por mes del año de referencia', '¿Cómo se ve el pago mes a mes, con y sin paneles?', r, onToggle);
-  const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
-  art.append(graficoToggle('g15-mensual', 'Gráfica mensual: sin solar vs. con solar',
-    barraAgrupada(mesesAbrev, textoChico('Sin solar'), r.rows.map(x => x.pagoSinSolarMxn), textoChico('Con solar estimado'), r.rows.map(x => x.pagoConSolarEstimadoMxn), { fmt: M }),
+  const unidadSingular15 = r.esBimestral ? 'bimestre' : 'mes';
+  const art = crearSeccion(15, `Pagos estimados por ${unidadSingular15} del año de referencia`, `¿Cómo se ve el pago ${r.esBimestral ? 'bimestre a bimestre' : 'mes a mes'}, con y sin paneles?`, r, onToggle);
+  const mesesAbrev = r.esBimestral ? r.rowsPresentacion.map(x => x.mes.replace('Bimestre', 'Bim')) : r.rowsPresentacion.map(x => x.mes.slice(0, 3));
+  art.append(graficoToggle('g15-mensual', r.esBimestral ? 'Gráfica bimestral: sin solar vs. con solar' : 'Gráfica mensual: sin solar vs. con solar',
+    barraAgrupada(mesesAbrev, textoChico('Sin solar'), r.rowsPresentacion.map(x => x.pagoSinSolarMxn), textoChico('Con solar estimado'), r.rowsPresentacion.map(x => x.pagoConSolarEstimadoMxn), { fmt: M }),
     { notaAlternativa: `Alternativa más resumida: la misma comparación pero en total anual, en la sección ${refSeccion(10, r)}.` }));
-  art.append(detalle('Ver tabla mes a mes', tabla(['Mes', 'Sin solar', 'Con solar estimado', 'Ahorro estimado'],
-    r.rows.map(x => [x.mes, M(x.pagoSinSolarMxn), M(x.pagoConSolarEstimadoMxn), M(x.ahorroEstimadoMxn)]), { small: true, id: 'g15-detalle-mensual' })));
+  art.append(detalle(`Ver tabla ${r.esBimestral ? 'bimestre a bimestre' : 'mes a mes'}`, tabla([r.esBimestral ? 'Bimestre' : 'Mes', 'Sin solar', 'Con solar estimado', 'Ahorro estimado'],
+    r.rowsPresentacion.map(x => [x.mes, M(x.pagoSinSolarMxn), M(x.pagoConSolarEstimadoMxn), M(x.ahorroEstimadoMxn)]), { small: true, id: 'g15-detalle-mensual' })));
   art.append(p(`Total anual: ${M(r.annualbefore)} sin solar y ${M(r.annualafter)} con solar. Ahorro estimado: ${M(r.ahorroAnual)}.`));
-  art.append(avisoCream('Los meses son un año de referencia climático y de consumo extrapolado, no una fecha ' +
-    'prometida de instalación. No se presentan meses del historial como si ya hubieran operado con paneles.'));
+  art.append(avisoCream(r.esBimestral
+    ? 'Los bimestres son un año de referencia climático y de consumo extrapolado, no una fecha prometida de ' +
+      'instalación. No se presentan períodos del historial como si ya hubieran operado con paneles.'
+    : 'Los meses son un año de referencia climático y de consumo extrapolado, no una fecha ' +
+      'prometida de instalación. No se presentan meses del historial como si ya hubieran operado con paneles.'));
   art.append(bloqueCalculo(15, [
     p(`Esta tabla usa exactamente el mismo cálculo mes a mes de la sección ${refSeccion(10, r)} (misma fórmula de facturación de la ` +
       `sección ${refSeccion(3, r)}, aplicada con el consumo y la generación real de cada mes) -- aquí solo se presentan los pesos en ` +
-      `lugar del porcentaje de ahorro de cada mes. Ver sección ${refSeccion(10, r)} para el detalle fila por fila con el % de ahorro.`),
+      `lugar del porcentaje de ahorro de cada ${unidadSingular15}. Ver sección ${refSeccion(10, r)} para el detalle fila por fila con el % de ahorro.` +
+      (r.esBimestral ? ' La tabla de arriba agrupa esos 12 meses en 6 bimestres (sumando cada par), para que coincida con su recibo.' : '')),
   ], r));
   return art;
 }

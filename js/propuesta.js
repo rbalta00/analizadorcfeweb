@@ -490,13 +490,15 @@ function pagina07(doc, r, numero) {
     'produce, en promedio, cada kWp instalado durante un año. Con el criterio fijo de horas-sol, ese número ' +
     'sale prácticamente igual sin importar el predio o el tamaño del sistema.');
   y = spacer(y, 8);
-  const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
+  // Presentación en bimestres (2026-11-22): r.rowsPresentacion es r.rows agregado en 6
+  // bimestres cuando r.esBimestral, mismos totales -- ver motor.js/resultado.js.
+  const mesesAbrev = r.esBimestral ? r.rowsPresentacion.map(x => x.mes.replace('Bimestre', 'Bim')) : r.rowsPresentacion.map(x => x.mes.slice(0, 3));
   if (graficoIncluido(r, 'g07-extrapolado')) {
-    y = groupedBarChart(doc, y, mesesAbrev, 'Generación estimada', r.rows.map(x => x.generacionKwh), 'Consumo extrapolado', r.rows.map(x => x.consumoExtrapoladoKwh));
+    y = groupedBarChart(doc, y, mesesAbrev, 'Generación estimada', r.rowsPresentacion.map(x => x.generacionKwh), 'Consumo extrapolado', r.rowsPresentacion.map(x => x.consumoExtrapoladoKwh));
     y = spacer(y, 10);
   }
-  y = tablaF(doc, y, 'g07-detalle-mensual', r, ['Mes', 'Generación estimada', 'Consumo extrapolado'],
-    r.rows.map(x => [x.mes, `${x.generacionKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${x.consumoExtrapoladoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]),
+  y = tablaF(doc, y, 'g07-detalle-mensual', r, [r.esBimestral ? 'Bimestre' : 'Mes', 'Generación estimada', 'Consumo extrapolado'],
+    r.rowsPresentacion.map(x => [x.mes, `${x.generacionKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`, `${x.consumoExtrapoladoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`]),
     { widths: [CONTENT_W * 0.34, CONTENT_W * 0.33, CONTENT_W * 0.33], small: true });
   y = spacer(y, 8);
   notice(doc, y, r.metodoGeneracion || 'Criterio preliminar de horas-sol fijas (4.5 h/día, 30.5 días/mes), no ' +
@@ -561,11 +563,13 @@ function pagina10(doc, r, numero) {
     y = spacer(y, 10);
   }
   if (graficoIncluido(r, 'g10-tabla-comparativa')) {
+    const nPeriodosAnio10 = r.esBimestral ? 6 : 12;
+    const unidadAdjetivo10 = r.esBimestral ? 'bimestral' : 'mensual';
     y = tablaF(doc, y, 'g10-tabla-comparativa', r, ['Concepto comparable', 'Sin sistema', 'Con sistema estimado'], [
       ['Gasto anual de referencia', M(r.annualbefore), M(r.annualafter)],
-      ['Promedio mensual del año', M(r.annualbefore / 12), M(r.annualafter / 12)],
+      [`Promedio ${unidadAdjetivo10} del año`, M(r.annualbefore / nPeriodosAnio10), M(r.annualafter / nPeriodosAnio10)],
       ['Ahorro anual de factura', '—', M(r.ahorroAnual)],
-      ['Ahorro promedio mensual', '—', M(r.ahorroAnual / 12)],
+      [`Ahorro promedio ${unidadAdjetivo10}`, '—', M(r.ahorroAnual / nPeriodosAnio10)],
       ['% de ahorro anual', '—', PCT(r.pctAhorro)],
       ['Mantenimiento del primer año', '—', M(r.om1)],
       ['Ahorro neto del primer año', '—', M(r.ahorroAnual - r.om1)],
@@ -674,19 +678,23 @@ function pagina14(doc, r, numero) {
 
 // ---------- Pagina 15: pagos mensuales ----------
 function pagina15(doc, r, numero) {
-  let y = encabezado(doc, numero, 'Pagos estimados por mes del año de referencia', r.titular);
-  const mesesAbrev = r.rows.map(x => x.mes.slice(0, 3));
+  const unidadSingular15 = r.esBimestral ? 'bimestre' : 'mes';
+  let y = encabezado(doc, numero, `Pagos estimados por ${unidadSingular15} del año de referencia`, r.titular);
+  const mesesAbrev = r.esBimestral ? r.rowsPresentacion.map(x => x.mes.replace('Bimestre', 'Bim')) : r.rowsPresentacion.map(x => x.mes.slice(0, 3));
   if (graficoIncluido(r, 'g15-mensual')) {
-    y = groupedBarChart(doc, y, mesesAbrev, 'Sin solar', r.rows.map(x => x.pagoSinSolarMxn), 'Con solar estimado', r.rows.map(x => x.pagoConSolarEstimadoMxn));
+    y = groupedBarChart(doc, y, mesesAbrev, 'Sin solar', r.rowsPresentacion.map(x => x.pagoSinSolarMxn), 'Con solar estimado', r.rowsPresentacion.map(x => x.pagoConSolarEstimadoMxn));
     y = spacer(y, 10);
   }
-  y = tablaF(doc, y, 'g15-detalle-mensual', r, ['Mes', 'Sin solar', 'Con solar estimado', 'Ahorro estimado'],
-    r.rows.map(x => [x.mes, M(x.pagoSinSolarMxn), M(x.pagoConSolarEstimadoMxn), M(x.ahorroEstimadoMxn)]),
+  y = tablaF(doc, y, 'g15-detalle-mensual', r, [r.esBimestral ? 'Bimestre' : 'Mes', 'Sin solar', 'Con solar estimado', 'Ahorro estimado'],
+    r.rowsPresentacion.map(x => [x.mes, M(x.pagoSinSolarMxn), M(x.pagoConSolarEstimadoMxn), M(x.ahorroEstimadoMxn)]),
     { widths: [CONTENT_W * 0.2, CONTENT_W * 0.27, CONTENT_W * 0.27, CONTENT_W * 0.26], small: true });
   y = spacer(y, 8);
   y = bodyX(doc, y, `Total anual: ${M(r.annualbefore)} sin solar y ${M(r.annualafter)} con solar. Ahorro estimado: ${M(r.ahorroAnual)}.`);
-  notice(doc, y, 'Los meses son un año de referencia climático y de consumo extrapolado, no una fecha prometida ' +
-    'de instalación. No se presentan meses del historial como si ya hubieran operado con paneles.');
+  notice(doc, y, r.esBimestral
+    ? 'Los bimestres son un año de referencia climático y de consumo extrapolado, no una fecha prometida de ' +
+      'instalación. No se presentan períodos del historial como si ya hubieran operado con paneles.'
+    : 'Los meses son un año de referencia climático y de consumo extrapolado, no una fecha prometida ' +
+      'de instalación. No se presentan meses del historial como si ya hubieran operado con paneles.');
 }
 
 // ---------- Pagina 16: que tan cerca del 100% ----------

@@ -4,7 +4,7 @@
 // que nunca se desincronicen (ver seccion 13 del encargo: "todas las tarjetas,
 // graficas, tablas y exportaciones deben usar la misma fuente de calculo").
 import {
-  construirInvoice, construirInvoiceDomestica, pisoDeAhorro, flujoMensualAnual,
+  construirInvoice, construirInvoiceDomestica, pisoDeAhorro, flujoMensualAnual, agruparBimestral,
   dimensionarHorasSol, normalizarConsumoMensual, presupuestar, costoInversor, flujo25Anios, R,
   DIAS_MES_REF,
 } from './motor.js';
@@ -158,6 +158,16 @@ export function construirResultado(input) {
 
   const pres = presupuestar(n, kwp, moduloWp, costos);
   const rows = flujoMensualAnual(invoice, dailyKwh, monthlyE, kwp, 1);
+  // Presentacion en bimestres (2026-11-22, "Presentacion en bimestres para recibos
+  // bimestrales"): detectado por el DATO (periodoDias de ESTE recibo), nunca por el
+  // nombre de la tarifa -- un recibo bimestral trae 58-62 dias, uno mensual 28-31 (ver
+  // el mismo criterio ya usado en resultado.js para diasPorPeriodoHistorial, hallazgo
+  // 2026-11-18: PDBT no siempre es bimestral, varia por cliente). `rowsPresentacion` es
+  // la MISMA informacion de `rows`, solo agregada en 6 renglones cuando aplica -- nunca
+  // recalculada -- para que la tabla de proyeccion y el comparativo consumo/generacion
+  // sigan al recibo sin tocar ningun calculo real.
+  const esBimestral = periodoDias >= 45;
+  const rowsPresentacion = esBimestral ? agruparBimestral(rows) : rows;
   const annualbefore = Math.round(rows.reduce((s, x) => s + x.pagoSinSolarMxn, 0) * 100) / 100;
   const annualafter = Math.round(rows.reduce((s, x) => s + x.pagoConSolarEstimadoMxn, 0) * 100) / 100;
   const ahorroAnual = Math.round((annualbefore - annualafter) * 100) / 100;
@@ -238,7 +248,7 @@ export function construirResultado(input) {
     payback, ahorroAnual, pctAhorro, om1, annualbefore, annualafter,
     van: flujo25.van, tir: flujo25.tir, recuperacionAcumulada: flujo25.recuperacionAcumulada,
     flujo25Rows: flujo25.flujo, escalamientoTarifaPct: escalamientoPct,
-    materiales: pres.materiales, rows,
+    materiales: pres.materiales, rows, rowsPresentacion, esBimestral,
     historial: historialParaMostrar, basisConsumo, consumosMensualesUsados: consumosMensuales,
     inmueble: inmueble || null, escenarioVerificado,
     aplicaIsr: !!aplicaIsr, tasaIsrPct: tasaIsrPct || 0, ahorroFiscalIsr, inversionNetaIsr,

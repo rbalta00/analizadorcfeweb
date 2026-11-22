@@ -180,6 +180,34 @@ export function flujoMensualAnual(invoiceFn, consumoDiarioKwh, generacionMensual
   return rows;
 }
 
+// Agrega los 12 renglones MENSUALES ya calculados (flujoMensualAnual) en 6 renglones
+// BIMESTRALES, sumando por pares (1+2, 3+4, ...) -- 2026-11-22, "Presentacion en
+// bimestres para recibos bimestrales". Pura agregacion de numeros YA calculados, no
+// recalcula nada: los totales anuales (suma de los 6 bimestres) son exactamente los
+// mismos que sumar los 12 meses, al centavo -- la agregacion nunca introduce ni quita
+// un centavo. `mes` se renombra a "Bimestre N" para que las tablas/graficas que ya
+// leen ese campo (secciones.js/propuesta.js) no necesiten saber nada de bimestres mas
+// alla de pedir este arreglo en vez del original.
+export function agruparBimestral(rowsMensuales) {
+  const out = [];
+  for (let i = 0; i < rowsMensuales.length; i += 2) {
+    const a = rowsMensuales[i];
+    const b = rowsMensuales[i + 1];
+    out.push({
+      mes: `Bimestre ${out.length + 1}`,
+      dias: a.dias + (b ? b.dias : 0),
+      consumoExtrapoladoKwh: a.consumoExtrapoladoKwh + (b ? b.consumoExtrapoladoKwh : 0),
+      generacionKwh: R(a.generacionKwh + (b ? b.generacionKwh : 0)),
+      energiaAplicadaKwh: a.energiaAplicadaKwh + (b ? b.energiaAplicadaKwh : 0),
+      energiaNetaKwh: a.energiaNetaKwh + (b ? b.energiaNetaKwh : 0),
+      pagoSinSolarMxn: R(a.pagoSinSolarMxn + (b ? b.pagoSinSolarMxn : 0)),
+      pagoConSolarEstimadoMxn: R(a.pagoConSolarEstimadoMxn + (b ? b.pagoConSolarEstimadoMxn : 0)),
+      ahorroEstimadoMxn: R(a.ahorroEstimadoMxn + (b ? b.ahorroEstimadoMxn : 0)),
+    });
+  }
+  return out;
+}
+
 // Tarifa domestica (01/DAC): volumetrica por escalones, sin cargo de demanda.
 // escalones: lista de [limiteKwhONull, tarifaMxnKwh], el ultimo con limite null.
 // cargoFijoBimestral (hallazgo 7, auditoria 2026-11-06): antes no existia ningun
