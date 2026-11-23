@@ -106,7 +106,17 @@ function tarjetaLote40(fila) {
   const { def, cliente, proyecto } = fila;
   const estado = estadoCotizacionLote40(proyecto);
   const docsOk = def.reciboLocalizado && def.verificacionLocalizada;
-  const docsTexto = `${def.reciboLocalizado ? '📄 recibo' : '❌ sin recibo'} · ${def.verificacionLocalizada ? '🔍 verificación' : '❌ sin verificación'}`;
+  // Este texto SOLO describe si el documento fue LOCALIZADO en el filesystem del
+  // usuario durante la recopilacion (lote40.js, catalogado 2026-10-23) -- nunca fue
+  // un link ni carga nada, por eso el usuario reporto "no carga el recibo ni la
+  // verificacion" al intentar abrirlo desde aqui (texto plano, sin <a>). El archivo
+  // real solo existe en Supabase Storage si YA se subio dentro de ESTA cotizacion
+  // (proyecto.archivosRecibo/archivosVerificacion, mismos que muestra la seccion 2/18
+  // del analizador) -- esta app web (sin backend de archivos propio) no tiene forma
+  // de leer `C:\RECIBOS GOBIERNO PUEBLA SFV\...` directo, asi que si el proyecto no
+  // tiene esos archivos subidos todavia, no hay nada que esta pantalla pueda abrir
+  // aunque el documento SI exista en disco.
+  const docsTexto = `${def.reciboLocalizado ? '📄 recibo localizado' : '❌ sin recibo'} · ${def.verificacionLocalizada ? '🔍 verificación localizada' : '❌ sin verificación'}`;
   const div = document.createElement('div');
   div.className = 'tarjeta-cliente';
   if (!proyecto) div.classList.add('fila-pendiente-lote40'); // atenuado SIN tachado -- "no existe todavia", no "se excluyo a proposito"
@@ -132,6 +142,32 @@ function tarjetaLote40(fila) {
     `<span class="nota${docsOk ? '' : ' aviso'}">${docsTexto}</span>` +
     (def.pendientes ? `<span class="nota">⚠️ ${escapeHtml(def.pendientes)}</span>` : '');
   div.append(info);
+  // Links reales para VER el recibo/verificacion ya subidos a esta cotizacion (si
+  // los hay) -- a diferencia de docsTexto arriba (solo describe si el documento
+  // fue localizado en disco), esto SI abre el archivo real (Supabase Storage,
+  // mismo que usa la seccion 2/18 del analizador dentro de index.html). Un
+  // proyecto puede tener el recibo subido y la verificacion no (o viceversa), asi
+  // que se revisan por separado.
+  const archivosRecibo = proyecto?.archivosRecibo || [];
+  const archivosVerificacion = proyecto?.archivosVerificacion || [];
+  archivosRecibo.forEach((a, i) => {
+    const link = document.createElement('a');
+    link.className = 'btn-link';
+    link.textContent = archivosRecibo.length > 1 ? `📄 Ver recibo ${i + 1}` : '📄 Ver recibo';
+    link.href = a.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    div.append(link);
+  });
+  archivosVerificacion.forEach((a, i) => {
+    const link = document.createElement('a');
+    link.className = 'btn-link';
+    link.textContent = archivosVerificacion.length > 1 ? `🔍 Ver verificación ${i + 1}` : '🔍 Ver verificación';
+    link.href = a.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    div.append(link);
+  });
   if (proyecto) {
     // Abre index.html en OTRA pestaña nueva, directo en esa cotización (ver el
     // bloque "?cliente=&proyecto=" en el arranque de app.js) -- no se puede llamar
