@@ -208,6 +208,16 @@ export function crearProyecto(cliente, { nombre } = {}) {
     // pantalla (atenuado) para que Isaac pueda reactivarlo, el estado es lo que decide
     // si queda incluido.
     textosOcultos: {},
+    // edicionManualGuardada: marca un hecho real -- "alguien edito/ocultó un parrafo
+    // de ESTE proyecto a mano y eso ya se guardo" (onEditarTexto/onOcultarTexto,
+    // app.js, puesto en true ahi, NUNCA aqui) -- pedido explicito del usuario,
+    // 2026-11-23, para la palomita del visor del lote de 40. A proposito NO esta en
+    // CAMPOS_EDITORIAL_MACHOTE (mas abajo): crear una cotizacion DESDE un machote
+    // hereda su textosEditados/textosOcultos (texto ya resuelto), pero eso no es una
+    // edicion que el usuario hizo en ESTE proyecto -- sin esta separacion, la
+    // palomita habria salido en casi todos los estudios del lote (la mayoria vienen
+    // de un machote), no solo en los que de verdad se tocaron a mano despues.
+    edicionManualGuardada: false,
     fotoSembrado: null, // {nombre,tipo,url,ruta,ancho,alto} -- subida a Supabase Storage (ver supabase.js/imagenes.js)
     // desde el 2026-11-17 (antes era el data URL JPEG completo, llenaba la cuota de localStorage entre varios
     // estudios -- ver "No se pudo guardar" en guardarTodos()). Es la UNICA imagen activa que se muestra en la

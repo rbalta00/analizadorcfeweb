@@ -77,16 +77,17 @@ function estadoCotizacionLote40(proyecto) {
 }
 
 // Pedido explicito del usuario, 2026-11-23: "ponles una palomita a los analisis que ya
-// se hallan editado y guardado" -- textosEditados/textosOcultos son los campos donde
-// vive CUALQUIER edicion manual de texto/parrafo de la cotizacion (ver clientes.js,
-// crearProyecto()), y como este visor lee directo del mismo localStorage donde ya
-// viven persistidos, cualquier edicion que aparezca ahi YA esta guardada por
-// definicion -- no existe un estado "editado pero sin guardar" separado en este
-// modelo de datos (no hay borrador en memoria que se pierda).
+// se hallan editado y guardado" -- seguimiento mismo dia ("ponle la palomita solo si
+// SI fue editada y guardada"): la primera version revisaba si textosEditados/
+// textosOcultos tenian contenido, pero eso da falso positivo en la mayoria del lote --
+// un proyecto creado DESDE UN MACHOTE hereda el textosEditados completo del machote
+// (aplicarMachoteAProyecto, clientes.js/CAMPOS_EDITORIAL_MACHOTE) sin que el usuario
+// haya tocado nada en ESE proyecto en particular. La palomita ahora lee
+// `proyecto.edicionManualGuardada`, un flag aparte que SOLO se pone en true dentro de
+// onEditarTexto/onOcultarTexto (app.js) -- es decir, solo cuando de verdad ocurrio una
+// edicion a mano en este proyecto despues de creado, nunca por heredar un machote.
 function tieneEdicionGuardada(proyecto) {
-  if (!proyecto) return false;
-  return Object.keys(proyecto.textosEditados || {}).length > 0 ||
-    Object.keys(proyecto.textosOcultos || {}).length > 0;
+  return !!proyecto?.edicionManualGuardada;
 }
 
 function renderTotales(filas) {

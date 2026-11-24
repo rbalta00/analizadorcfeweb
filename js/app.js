@@ -4017,6 +4017,10 @@ function onEditarTexto(id, valor, textoDefecto) {
   } else {
     proyectoActual.textosEditados[id] = valorFinal;
   }
+  // Marca el hecho real "esto se editó a mano" -- a diferencia de textosEditados
+  // mismo, que un proyecto nuevo puede heredar completo de un machote sin que el
+  // usuario haya tocado nada aquí (ver nota de edicionManualGuardada en clientes.js).
+  proyectoActual.edicionManualGuardada = true;
   guardarProyecto(clienteActual, proyectoActual);
   if (ultimoResultado) {
     ultimoResultado.textosEditados = proyectoActual.textosEditados;
@@ -4044,6 +4048,7 @@ function onEditarTexto(id, valor, textoDefecto) {
 function onOcultarTexto(id, oculto) {
   proyectoActual.textosOcultos = proyectoActual.textosOcultos || {};
   if (oculto) proyectoActual.textosOcultos[id] = true; else delete proyectoActual.textosOcultos[id];
+  proyectoActual.edicionManualGuardada = true;
   guardarProyecto(clienteActual, proyectoActual);
   if (ultimoResultado) {
     ultimoResultado.textosOcultos = proyectoActual.textosOcultos;
