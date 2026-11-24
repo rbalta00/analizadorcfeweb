@@ -13,6 +13,11 @@ import { LOTE_40_INMUEBLES, normalizarRpu } from './lote40.js';
 import { ETIQUETAS_TARIFA, ORDEN_TARIFAS } from './tarifas.js';
 import { M } from './util.js';
 import { listarServiciosExtra, eliminarServicioExtra, altaServicioNuevo } from './serviciosExtra.js';
+import {
+  inicializarFormulariosPorTarifa, mostrarFormularioTarifa, leerFormularioTarifa,
+  llenarFormularioTarifaDesdeRecibo, esDomestica as esDomesticaTarifa,
+} from './formulariosPorTarifa.js';
+import { leerRecibo } from './leerRecibo.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -706,6 +711,11 @@ function renderIndependientes(independientes) {
 }
 
 // ---------------- Formulario "Agregar servicio nuevo" ----------------
+// El formulario de captura DEPENDE de la tarifa elegida -- pedido explícito del
+// usuario tras la v3 ("tiene que depender en que tarifa queremos trabajar"): se
+// reusa TAL CUAL formulariosPorTarifa.js, el mismo módulo que ya usa cliente.html
+// (6 secciones propias, una por tarifa, con sus propios cargos/historial/demanda/
+// escalones) -- nunca se inventa un formulario nuevo ni se duplica esa lógica.
 const selectTarifaExtra = document.getElementById('servExtraTarifa');
 for (const t of ORDEN_TARIFAS) {
   const opt = document.createElement('option');
@@ -713,9 +723,13 @@ for (const t of ORDEN_TARIFAS) {
   opt.textContent = ETIQUETAS_TARIFA[t] || t;
   selectTarifaExtra.append(opt);
 }
+inicializarFormulariosPorTarifa('contenedorFormulariosTarifaExtra');
 
 const formServExtra = document.getElementById('formServExtra');
 const mensajeServExtra = document.getElementById('servExtraMensaje');
+const estadoReciboExtra = document.getElementById('servExtraEstadoRecibo');
+const restoFormServExtra = document.getElementById('restoFormServExtra');
+let ultimoLeidoExtra = null; // último extraerCampos() -- se guarda en proyecto.campos y arma el aviso de RPU
 
 function mostrarMensajeServExtra(texto, esError = true) {
   mensajeServExtra.hidden = false;
@@ -723,13 +737,59 @@ function mostrarMensajeServExtra(texto, esError = true) {
   mensajeServExtra.classList.toggle('aviso', esError);
 }
 
+selectTarifaExtra.addEventListener('change', () => {
+  const tarifa = selectTarifaExtra.value;
+  restoFormServExtra.hidden = !tarifa;
+  if (tarifa) mostrarFormularioTarifa(tarifa);
+});
+
 document.getElementById('btnMostrarFormServExtra').addEventListener('click', () => {
   formServExtra.hidden = !formServExtra.hidden;
 });
 document.getElementById('btnCancelarServExtra').addEventListener('click', () => {
   formServExtra.reset();
+  restoFormServExtra.hidden = true;
+  estadoReciboExtra.hidden = true;
   mensajeServExtra.hidden = true;
   formServExtra.hidden = true;
+  ultimoLeidoExtra = null;
+});
+
+// Mismo patrón que procesarArchivosCliente() (clienteForm.js): lee el recibo con el
+// lector de siempre, si trae la tarifa impresa elige esa tarifa por quien lo está
+// dando de alta (y muestra SU formulario antes de llenarlo -- los inputs de una
+// tarifa no elegida ni siquiera existen visibles todavía), y precarga los campos de
+// esa tarifa -- quien da de alta revisa/corrige antes de enviar, igual que un cliente
+// real en cliente.html.
+document.getElementById('servExtraRecibo').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  estadoReciboExtra.hidden = false;
+  estadoReciboExtra.className = 'nota';
+  estadoReciboExtra.textContent = 'Leyendo el recibo (puede tardar hasta 1 minuto)...';
+  try {
+    const campos = await leerRecibo(file);
+    ultimoLeidoExtra = campos;
+    if (campos.tarifa && ORDEN_TARIFAS.includes(campos.tarifa)) {
+      selectTarifaExtra.value = campos.tarifa;
+      selectTarifaExtra.dispatchEvent(new Event('change'));
+    }
+    const tarifaActual = selectTarifaExtra.value;
+    if (tarifaActual) llenarFormularioTarifaDesdeRecibo(tarifaActual, campos);
+    if (campos.titular && !document.getElementById('servExtraNombre').value) {
+      document.getElementById('servExtraNombre').value = campos.titular;
+    }
+    if (campos.no_servicio && !document.getElementById('servExtraRpu').value) {
+      document.getElementById('servExtraRpu').value = campos.no_servicio;
+    }
+    estadoReciboExtra.className = campos.uso_ocr ? 'nota' : 'nota ok';
+    estadoReciboExtra.textContent = campos.uso_ocr
+      ? 'Leído (tuvimos que usar reconocimiento de imagen, revisa los datos con cuidado).'
+      : 'Leído directamente -- revisa los datos abajo antes de dar de alta.';
+  } catch (err) {
+    estadoReciboExtra.className = 'nota aviso';
+    estadoReciboExtra.textContent = 'No se pudo leer el recibo automáticamente: ' + err.message + ' Llena los datos a mano abajo.';
+  }
 });
 
 formServExtra.addEventListener('submit', async (ev) => {
@@ -741,11 +801,15 @@ formServExtra.addEventListener('submit', async (ev) => {
     const nombre = document.getElementById('servExtraNombre').value;
     const rpu = document.getElementById('servExtraRpu').value;
     const tarifa = selectTarifaExtra.value;
+    if (!tarifa) throw new Error('Elige una tarifa antes de dar de alta el servicio.');
+    const dom = esDomesticaTarifa(tarifa);
+    const f = leerFormularioTarifa(tarifa);
     const modo = document.querySelector('input[name="servExtraDestino"]:checked').value;
     const archivoRecibo = document.getElementById('servExtraRecibo').files[0] || null;
     const archivoVerificacion = document.getElementById('servExtraVerificacion').files[0] || null;
-    const loteActual = datosLote40().map((f) => f.def);
-    let resultado = await altaServicioNuevo({ nombre, rpu, tarifa, modo, archivoRecibo, archivoVerificacion, loteActual });
+    const loteActual = datosLote40().map((fila) => fila.def);
+    const datos = { nombre, rpu, tarifa, dom, f, modo, campos: ultimoLeidoExtra, archivoRecibo, archivoVerificacion, loteActual };
+    let resultado = await altaServicioNuevo(datos);
     if (!resultado.ok && resultado.requiereConfirmarVinculo) {
       const e = resultado.existente;
       const vincular = confirm(
@@ -753,12 +817,15 @@ formServExtra.addEventListener('submit', async (ev) => {
         `alta en este tablero.\n\n¿Vincularla aquí como servicio ${modo === 'anexado' ? 'anexado al lote' : 'independiente'}?`
       );
       if (!vincular) { btn.disabled = false; return; }
-      resultado = await altaServicioNuevo({ nombre, rpu, tarifa, modo, archivoRecibo, archivoVerificacion, loteActual, vincularSiExiste: true });
+      resultado = await altaServicioNuevo({ ...datos, vincularSiExiste: true });
     }
     if (!resultado.ok) throw new Error('No se pudo dar de alta el servicio.');
     if (resultado.avisoRpu) alert(resultado.avisoRpu);
     formServExtra.reset();
+    restoFormServExtra.hidden = true;
+    estadoReciboExtra.hidden = true;
     formServExtra.hidden = true;
+    ultimoLeidoExtra = null;
     render();
   } catch (e) {
     mostrarMensajeServExtra(e.message || String(e));

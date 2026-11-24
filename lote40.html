@@ -41,17 +41,31 @@
       <div class="acciones">
         <button id="btnMostrarFormServExtra" class="btn-secundario">➕ Agregar servicio nuevo</button>
       </div>
-      <form id="formServExtra" class="fila" hidden>
-        <label>Nombre del inmueble/servicio<input id="servExtraNombre" type="text" placeholder="Se precarga del recibo si lo dejas vacío" /></label>
-        <label>RPU<input id="servExtraRpu" type="text" placeholder="No. de servicio (12 dígitos)" /></label>
-        <label>Tarifa<select id="servExtraTarifa"></select></label>
+      <form id="formServExtra" hidden>
+        <div class="fila">
+          <label>Nombre del inmueble/servicio<input id="servExtraNombre" type="text" placeholder="Se precarga del recibo si lo dejas vacío" /></label>
+          <label>RPU<input id="servExtraRpu" type="text" placeholder="No. de servicio (12 dígitos)" /></label>
+          <label>Tarifa CFE
+            <select id="servExtraTarifa">
+              <option value="">-- Elige tu tarifa --</option>
+            </select>
+          </label>
+        </div>
         <fieldset>
           <legend>Destino</legend>
           <label><input type="radio" name="servExtraDestino" value="anexado" checked /> Anexar al lote</label>
           <label><input type="radio" name="servExtraDestino" value="independiente" /> Servicio independiente</label>
         </fieldset>
-        <label>Recibo (PDF, opcional -- se lee solo)<input id="servExtraRecibo" type="file" accept="application/pdf" /></label>
-        <label>Verificación en sitio (PDF, opcional)<input id="servExtraVerificacion" type="file" accept="application/pdf" /></label>
+        <div class="fila">
+          <label>Recibo (PDF, opcional -- se lee solo y precarga los campos de abajo)<input id="servExtraRecibo" type="file" accept="application/pdf" /></label>
+          <label>Verificación en sitio (PDF, opcional)<input id="servExtraVerificacion" type="file" accept="application/pdf" /></label>
+        </div>
+        <p id="servExtraEstadoRecibo" class="nota" hidden></p>
+        <div id="restoFormServExtra" hidden>
+          <p class="nota">Los campos de abajo dependen de la tarifa elegida arriba -- si adjuntaste un recibo, ya
+            vienen precargados; revísalos y corrígelos a mano si hace falta antes de dar de alta.</p>
+          <div id="contenedorFormulariosTarifaExtra"></div>
+        </div>
         <div class="acciones">
           <button type="submit" id="btnAltaServExtra" class="btn-secundario">Dar de alta</button>
           <button type="button" id="btnCancelarServExtra" class="btn-secundario">Cancelar</button>

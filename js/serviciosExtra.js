@@ -2,9 +2,13 @@
 // cliente lo amplía) o independientes (fuera del lote) -- pedido explícito del
 // usuario, 2026-11-24, v3 ("REGLA #1: no se toca NADA de lo que ya está hecho").
 // Este módulo es TODO AGREGADO: no modifica LOTE_40_INMUEBLES (lote40.js), ni
-// clientes.js, ni el lector de recibos (leerRecibo.js/recibo.js) -- solo los reusa tal
-// cual, igual que ya reusa el resto de este proyecto (misma filosofía que
-// datosLote40() en lote40Vista.js, que tampoco toca nada ajeno).
+// clientes.js, ni formulariosPorTarifa.js/leerRecibo.js -- solo los reusa tal cual,
+// igual que ya reusa el resto de este proyecto (misma filosofía que datosLote40() en
+// lote40Vista.js, que tampoco toca nada ajeno). El formulario de captura EN SÍ (que
+// depende de la tarifa elegida -- cargos, historial, demanda, escalones) vive en
+// lote40Vista.js reusando formulariosPorTarifa.js (el mismo módulo que ya usa
+// cliente.html) -- este archivo solo recibe `f` ya leído (leerFormularioTarifa) y lo
+// convierte al `formulario` que guarda cualquier proyecto.
 //
 // Persistencia: colección nueva y propia en localStorage (misma técnica que
 // clientes.js/cfe_clientes_v1, pero una llave aparte -- los 40 originales NUNCA viven
@@ -15,13 +19,11 @@
 // renderizar un extra exactamente igual que uno de los 40, sin ninguna rama especial.
 import { normalizarRpu } from './lote40.js';
 import { listarClientes, crearCliente, crearProyecto, guardarProyecto } from './clientes.js';
-import { leerRecibo } from './leerRecibo.js';
 import { supabaseSubirArchivo } from './supabase.js';
 import { escalaCostosParaTarifa } from './motor.js';
 
 const CLAVE_SERVICIOS_EXTRA = 'cfe_servicios_extra_v1';
 export const NOMBRE_CLIENTE_LOTE_40 = '40 inmuebles';
-const DOMESTICAS = new Set(['01', 'DAC']);
 const TARIFAS_SOPORTADAS = new Set(['GDMTO', 'GDMTH', 'GDBT', 'PDBT', '01', 'DAC']);
 
 function uuid() {
@@ -87,62 +89,49 @@ export function buscarRpuExistente(rpuInput, loteActual) {
   return null;
 }
 
-// Convierte `campos` (extraerCampos() de recibo.js, snake_case) al MISMO objeto
-// `formulario` que guarda cualquier proyecto normal -- mismo campo-por-campo que
-// llenarFormularioDesdeReciboCampos()/leerFormulario() (app.js/formularioRecibo.js),
-// pero sin tocar el DOM (esta página no tiene el formulario de index.html). Mismos
-// defaults que aplicarFormulario(null) cuando el recibo no trae un dato (605 Wp, 1.0
-// cobertura, 4.5 h-sol, 4.0% escalamiento, sin ISR) -- para que un extra calculado se
-// comporte exactamente como cualquier cotización nueva de siempre, para CUALQUIER
-// tarifa.
-function formularioDesdeCamposLeidos(campos, { tarifaElegida, nombreEscrito, rpuEscrito }) {
-  const c = campos || {};
-  const tarifaFinal = (c.tarifa && TARIFAS_SOPORTADAS.has(c.tarifa)) ? c.tarifa : tarifaElegida;
-  const esDom = DOMESTICAS.has(tarifaFinal);
-  const base = {
-    titular: c.titular || nombreEscrito || 'Cliente',
-    domicilio: c.domicilio || '',
-    noServicio: c.no_servicio || rpuEscrito || '',
-    tarifa: tarifaFinal,
-    moduloWp: 605, cobertura: 1.0, horasUtiles: 4.5,
-    escalaCostos: escalaCostosParaTarifa(tarifaFinal), escalamiento: 4.0,
-    aplicaIsr: false, tasaIsr: 30,
-    dBasicoKwh: 150, dBasicoRate: 1.140, dInterKwh: 130, dInterRate: 1.385, dExcedRate: 4.054,
-    dDap: 0, dCargoFijo: 0, dPeriodoDias: 60, dPeriodoKwh: 400,
-    historialNoDom: [], historialDom: [],
-    periodoDias: 30, periodoKwh: 1000, dap: 197,
-    cargos: {}, rkDist: 'demanda', rkCap: 'demanda',
-    traeBt: false, btMonto: 0, traeBonus: false, bonusMonto: 0, traeRecargoFp: false, recargoFpMonto: 0,
-  };
-  if (!esDom) {
-    base.periodoDias = c.periodo_dias ?? 30;
-    base.periodoKwh = c.periodo_kwh ?? 1000;
-    base.dap = c.dap ?? 197;
-    const cargos = {
-      suministro: c.suministro ?? 0, distribucion: c.distribucion ?? 0, transmision: c.transmision ?? 0,
-      cenace: c.cenace ?? 0, capacidad: c.capacidad ?? 0, scnmem: c.scnmem ?? 0,
+// Convierte `f` (leerFormularioTarifa(tarifa) de formulariosPorTarifa.js -- el MISMO
+// objeto "envio" que ya arma cliente.html para cualquier tarifa, con sus cargos/
+// historial/demanda ya leídos del formulario PROPIO de esa tarifa, a mano o
+// precargados de un recibo) al objeto `formulario` que guarda cualquier proyecto
+// normal -- mismo mapeo que formularioDesdeEnvio() (app.js, panel interno), replicado
+// aquí sin importar ese archivo. Mismos defaults que aplicarFormulario(null) para lo
+// que `f` no trae (605 Wp, 1.0 cobertura, 4.5 h-sol, 4.0% escalamiento, sin ISR) --
+// para que un extra se comporte exactamente como cualquier cotización nueva, para
+// CUALQUIER tarifa.
+function formularioDesdeFormularioTarifa(f, { tarifa, dom, titular, domicilio, noServicio }) {
+  const esc = f.escalones || {};
+  if (dom) {
+    return {
+      titular: titular || 'Cliente', domicilio: domicilio || '', noServicio: noServicio || '',
+      tarifa,
+      periodoDias: Number(f.periodoDias) || 60, periodoKwh: Number(f.periodoKwh) || 400, dap: Number(f.dap) || 0,
+      cargos: {}, rkDist: 'demanda', rkCap: 'demanda',
+      traeBt: false, btMonto: 0, traeBonus: false, bonusMonto: 0, traeRecargoFp: false, recargoFpMonto: 0,
+      dBasicoKwh: esc.basicoKwh ?? 150, dBasicoRate: esc.basicoRate ?? 1.140,
+      dInterKwh: esc.interKwh ?? 130, dInterRate: esc.interRate ?? 1.385, dExcedRate: esc.excedRate ?? 4.054,
+      dDap: Number(f.dap) || 0, dCargoFijo: 0,
+      dPeriodoDias: Number(f.periodoDias) || 60, dPeriodoKwh: Number(f.periodoKwh) || 400,
+      historialNoDom: [], historialDom: (f.historial || []).filter((v) => v != null).map(Number),
+      moduloWp: 605, cobertura: 1.0, horasUtiles: 4.5, escalaCostos: escalaCostosParaTarifa(tarifa), escalamiento: 4.0,
+      aplicaIsr: false, tasaIsr: 30,
     };
-    if (c.energia_base != null || c.energia_intermedia != null || c.energia_punta != null) {
-      cargos.energiaBase = c.energia_base ?? 0; cargos.energiaIntermedia = c.energia_intermedia ?? 0; cargos.energiaPunta = c.energia_punta ?? 0;
-    } else {
-      cargos.energia = c.energia ?? 0;
-    }
-    base.cargos = cargos;
-    if (c.rate_kw_detectado) {
-      base.rkDist = c.rate_kw_detectado.distribucion > 0 ? 'demanda' : 'mercado';
-      base.rkCap = c.rate_kw_detectado.capacidad > 0 ? 'demanda' : 'mercado';
-    }
-    if (c.bt_monto) { base.traeBt = true; base.btMonto = c.bt_monto; }
-    if (c.bonus_monto) { base.traeBonus = true; base.bonusMonto = Math.abs(c.bonus_monto); }
-    if (c.recargo_fp_monto) { base.traeRecargoFp = true; base.recargoFpMonto = Math.abs(c.recargo_fp_monto); }
-    if (c.historial && c.historial.length) base.historialNoDom = c.historial.slice(-12).map((h) => h.kwh);
-  } else {
-    base.dPeriodoDias = c.periodo_dias ?? 60;
-    base.dPeriodoKwh = c.periodo_kwh ?? 400;
-    base.dDap = c.dap ?? 0;
-    if (c.historial && c.historial.length) base.historialDom = c.historial.slice(-6).map((h) => h.kwh);
   }
-  return base;
+  return {
+    titular: titular || 'Cliente', domicilio: domicilio || '', noServicio: noServicio || '',
+    tarifa,
+    periodoDias: Number(f.periodoDias) || 30, periodoKwh: Number(f.periodoKwh) || 1000, dap: Number(f.dap) || 197,
+    cargos: f.cargos || {},
+    rkDist: f.rateKw?.distribucion ? 'demanda' : 'mercado',
+    rkCap: f.rateKw?.capacidad ? 'demanda' : 'mercado',
+    traeBt: !!f.traeBt, btMonto: Number(f.btMonto) || 0,
+    traeBonus: !!f.traeBonus, bonusMonto: Number(f.bonusMonto) || 0,
+    traeRecargoFp: false, recargoFpMonto: 0,
+    dBasicoKwh: 150, dBasicoRate: 1.140, dInterKwh: 130, dInterRate: 1.385, dExcedRate: 4.054, dDap: 0, dCargoFijo: 0,
+    dPeriodoDias: 60, dPeriodoKwh: 400,
+    historialNoDom: (f.historial || []).filter((v) => v != null).map(Number), historialDom: [],
+    moduloWp: 605, cobertura: 1.0, horasUtiles: 4.5, escalaCostos: escalaCostosParaTarifa(tarifa), escalamiento: 4.0,
+    aplicaIsr: false, tasaIsr: 30,
+  };
 }
 
 function clienteLote40() {
@@ -151,21 +140,22 @@ function clienteLote40() {
   return cliente;
 }
 
-// Alta completa de un servicio nuevo: valida duplicados, opcionalmente lee el/los
-// recibo(s) adjuntos con el MISMO lector que usa cualquier cotización normal
-// (leerRecibo, reusado sin cambios -- funciona igual para las 6 tarifas), crea (o
-// vincula) el proyecto real, sube los documentos adjuntos a la nube igual que
-// cualquier otra cotización, y agrega la entrada a la colección de extras. Nunca
-// toca LOTE_40_INMUEBLES ni ningún proyecto existente salvo el que crea/vincula.
-export async function altaServicioNuevo({ nombre, rpu, tarifa, modo, archivoRecibo, archivoVerificacion, loteActual, vincularSiExiste }) {
+// Alta completa de un servicio nuevo: valida duplicados, crea (o vincula) el proyecto
+// real con el formulario YA LEÍDO del formulario propio de esa tarifa (f =
+// leerFormularioTarifa(tarifa), ver formulariosPorTarifa.js -- la misma lectura que ya
+// usa cliente.html, a mano o precargada de un recibo con llenarFormularioTarifaDesdeRecibo
+// en la capa de DOM, lote40Vista.js), sube los documentos adjuntos a la nube igual que
+// cualquier otra cotización, y agrega la entrada a la colección de extras. Nunca toca
+// LOTE_40_INMUEBLES ni ningún proyecto existente salvo el que crea/vincula. `campos`
+// (extraerCampos(), opcional) solo se usa para el aviso de "el RPU del recibo manda" y
+// para precargar titular/domicilio si el recibo los trae -- la lectura del PDF en sí
+// ya pasó en la capa de DOM antes de llamar esta función.
+export async function altaServicioNuevo({ nombre, rpu, tarifa, dom, f, modo, campos, archivoRecibo, archivoVerificacion, loteActual, vincularSiExiste }) {
   const nombreEscrito = (nombre || '').trim();
   const rpuEscrito = (rpu || '').trim();
   if (!rpuEscrito) throw new Error('Captura el RPU del servicio.');
-  if (!TARIFAS_SOPORTADAS.has(tarifa)) throw new Error('Elige una tarifa válida.');
+  if (!tarifa || !TARIFAS_SOPORTADAS.has(tarifa)) throw new Error('Elige una tarifa válida.');
   if (modo !== 'anexado' && modo !== 'independiente') throw new Error('Elige el destino: anexar al lote o servicio independiente.');
-
-  let campos = null;
-  if (archivoRecibo) campos = await leerRecibo(archivoRecibo);
 
   const rpuDelRecibo = campos?.no_servicio ? normalizarRpu(campos.no_servicio) : null;
   const rpuTecleadoNorm = normalizarRpu(rpuEscrito);
@@ -184,7 +174,6 @@ export async function altaServicioNuevo({ nombre, rpu, tarifa, modo, archivoReci
   }
 
   const nombreFinal = nombreEscrito || campos?.titular || 'Servicio nuevo';
-  const tarifaFinal = (campos?.tarifa && TARIFAS_SOPORTADAS.has(campos.tarifa)) ? campos.tarifa : tarifa;
 
   let cliente, proyecto;
   if (existente && existente.tipo === 'proyecto') {
@@ -193,8 +182,10 @@ export async function altaServicioNuevo({ nombre, rpu, tarifa, modo, archivoReci
   } else {
     cliente = clienteLote40();
     proyecto = crearProyecto(cliente, { nombre: `${rpuFinal} ${nombreFinal}` });
-    proyecto.formulario = formularioDesdeCamposLeidos(campos, { tarifaElegida: tarifaFinal, nombreEscrito: nombreFinal, rpuEscrito: rpuFinal });
-    proyecto.campos = campos;
+    proyecto.formulario = formularioDesdeFormularioTarifa(f, {
+      tarifa, dom, titular: campos?.titular || nombreFinal, domicilio: campos?.domicilio, noServicio: rpuFinal,
+    });
+    proyecto.campos = campos || null;
   }
 
   if (archivoRecibo) proyecto.archivosRecibo = [await supabaseSubirArchivo('cotizaciones', archivoRecibo)];
@@ -205,7 +196,7 @@ export async function altaServicioNuevo({ nombre, rpu, tarifa, modo, archivoReci
   const entry = {
     id: uuid(),
     modo,
-    tarifaDelRecibo: tarifaFinal,
+    tarifaDelRecibo: tarifa,
     inmueble: nombreFinal,
     rpu: rpuFinal,
     rpuAlt: null,
