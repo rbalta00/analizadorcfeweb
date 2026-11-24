@@ -203,6 +203,32 @@ function leerHistorialConsumoPorRango(textoNorm) {
   return filas.length ? filas.reverse() : null;
 }
 
+// Tercer formato de historial, respaldo de los 2 anteriores: la tabla "CONSUMO
+// HISTORICO" de la pagina 2 del formato nuevo de CFE (Periodo | Demanda kW | Consumo
+// total kWh | Factor potencia % | Factor carga % | Precio medio), pero en PDBT las
+// columnas de Factor potencia/Factor carga vienen VACIAS -- cada renglon imprime solo
+// TRES numeros tras el mes/anio (demanda, consumo, precio medio), no los 5 que exige
+// leerHistorialConsumo (que SI espera FP/FC impresos). Hallazgo real 2026-11-24,
+// confirmado contra los recibos reales de Tenencia de la Tierra (221931008575) y CIS
+// Cholula (216000301062): ambos traen el historial completo (13 periodos) impreso en
+// esta tabla, pero ninguno de los 2 lectores anteriores lo reconocia -- salia "sin
+// historial capturado" con el recibo mostrando lo contrario. Solo se usa cuando los 2
+// anteriores ya regresaron null (nunca se mezcla con ellos); mismo criterio de
+// deduplicar por MES+ANIO que leerHistorialConsumo, para no contar 2 veces un mismo
+// periodo si el PDF repite texto.
+function leerHistorialConsumoSinFactor(textoNorm) {
+  const filas = {}, orden = [];
+  const re = /([A-Z]{3})\s*(\d{2})\s+(\d+)\s+([\d,]+)\s+([\d.]+)/g;
+  for (const m of textoNorm.matchAll(re)) {
+    const mesTxt = m[1].toUpperCase(), anioTxt = m[2], kwhTxt = m[4];
+    if (!(mesTxt in MESES)) continue;
+    const clave = `${mesTxt}${anioTxt}`;
+    if (!(clave in filas)) orden.push(clave);
+    filas[clave] = { mes: mesTxt, anio: Number(anioTxt), kwh: num(kwhTxt) };
+  }
+  return orden.length ? orden.map(c => filas[c]) : null;
+}
+
 // Hallazgo 13, auditoria 2026-11-06: el historial se promediaba tal cual sin verificar
 // que los periodos fueran consecutivos -- un hueco real (ej. el propio fixture
 // secfinanzas, que salta de SEP25 a NOV25 sin OCT25) se contaba igual como "historial
@@ -239,6 +265,7 @@ export function extraerCampos(texto, usoOcr = false) {
   const campos = {
     tarifa: null, no_servicio: null, no_medidor: null, multiplicador: null, titular: null, domicilio: null,
     demanda_contratada_kw: null, periodo_dias: null, periodo_kwh: null, periodo_label: null,
+    periodo_fin_mes: null, periodo_fin_anio: null,
     suministro: null, distribucion: null, transmision: null, cenace: null, energia: null,
     capacidad: null, scnmem: null, dap: null, bt_monto: null, bonus_monto: null, recargo_fp_monto: null,
     rate_kw_detectado: null, historial: null, texto_crudo: texto,
@@ -306,6 +333,11 @@ export function extraerCampos(texto, usoOcr = false) {
     if (dias >= 1 && dias <= 100) {
       campos.periodo_dias = dias;
       campos.periodo_label = `${m[1]} ${m[2].toUpperCase()} ${m[3]} al ${m[4]} ${m[5].toUpperCase()} ${m[6]}`;
+      // Mes/anio de CIERRE del periodo facturado actual -- usado en resultado.js
+      // (2026-11-24, cambio 2) para decidir si el ultimo renglon del historial debe
+      // reemplazarse por periodo_kwh: solo cuando de verdad es el mismo periodo.
+      campos.periodo_fin_mes = m[5].toUpperCase();
+      campos.periodo_fin_anio = Number(m[6]);
     }
   }
 
@@ -389,7 +421,7 @@ export function extraerCampos(texto, usoOcr = false) {
     }
   }
 
-  campos.historial = leerHistorialConsumo(norm) || leerHistorialConsumoPorRango(norm);
+  campos.historial = leerHistorialConsumo(norm) || leerHistorialConsumoPorRango(norm) || leerHistorialConsumoSinFactor(norm);
   campos.historial_anual_kwh = null;
   campos.historial_meses_cubiertos = null;
   campos.historial_advertencia_huecos = null;
@@ -490,6 +522,7 @@ export function extraerCampos(texto, usoOcr = false) {
   campos.uso_ocr = usoOcr;
   const ignorar = new Set(['texto_crudo', 'uso_ocr', 'rate_kw_detectado', 'rate_kw_advertencia', 'rate_kw_via_ocr',
     'bt_monto', 'bonus_monto', 'recargo_fp_monto', 'subtotal_resumen', 'iva_resumen', 'total_resumen', 'periodo_label',
+    'periodo_fin_mes', 'periodo_fin_anio',
     'historial', 'historial_advertencia_huecos', 'reconciliacion_diff', 'reconciliacion_advertencia',
     'razon_social_cfdi', 'titular_domicilio_advertencia']);
   if (campos.energia === null && ['energia_base', 'energia_intermedia', 'energia_punta'].some(k => k in campos)) {

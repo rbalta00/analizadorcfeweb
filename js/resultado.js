@@ -102,8 +102,30 @@ export function construirResultado(input) {
   // nada" porque el promedio seguia usando el valor viejo que quedo en la ultima casilla
   // del historial, sin tocar (bug real reportado por el usuario, 2026-11-01: "por que
   // siguen afectando cuando cambio... los kwh del periodo").
+  //
+  // CORREGIDO 2026-11-24 ("historial no reemplazar el ultimo"): lo de arriba solo es
+  // cierto para el formato de tabla MENSUAL "CONSUMO HISTORICO" (su ultimo renglon ES
+  // el periodo facturado, por construccion). En el formato "por rango" (leido del
+  // recibo con fechas "del X al Y") el ultimo renglon es el periodo COMPLETO ANTERIOR
+  // -- el periodo actual nunca viene impreso en esa tabla -- asi que reemplazarlo
+  // SIEMPRE borraba un periodo real (bug confirmado con Paseo Bravo/COBAEP: su
+  // promedio salia movido, 33/34 paneles en vez de los correctos). Se decide
+  // comparando el mes/anio del ULTIMO renglon de `leido.historial` (con fechas, el
+  // mismo que alimenta historialOcr y -- recortado solo por el frente, nunca por la
+  // cola -- la grilla de historialManual via aplicarGridHistorial en
+  // formularioRecibo.js, asi que comparten siempre el mismo ultimo renglon) contra el
+  // mes/anio de CIERRE del periodo facturado actual (`leido.periodo_fin_mes/anio`,
+  // leido del mismo recibo). Sin esa informacion (captura 100% manual, sin recibo
+  // leido -- o un recibo viejo leido antes de que estos 2 campos existieran) se
+  // conserva el comportamiento de siempre: reemplazar siempre.
+  const ultimoHistorialConFecha = (leido && leido.historial && leido.historial.length)
+    ? leido.historial[leido.historial.length - 1] : null;
+  const debeReemplazarUltimoDeHistorial = ultimoHistorialConFecha
+    ? (ultimoHistorialConFecha.mes === leido.periodo_fin_mes &&
+       Number(ultimoHistorialConFecha.anio) === Number(leido.periodo_fin_anio))
+    : true;
   const historialUsado = (historialUsadoCrudo && historialUsadoCrudo.length)
-    ? [...historialUsadoCrudo.slice(0, -1), periodoKwh]
+    ? (debeReemplazarUltimoDeHistorial ? [...historialUsadoCrudo.slice(0, -1), periodoKwh] : historialUsadoCrudo)
     : historialUsadoCrudo;
   const consumosMensuales = (historialUsado && historialUsado.length)
     ? historialUsado.map(kwh => kwh / diasPorPeriodoHistorial * DIAS_MES_REF)

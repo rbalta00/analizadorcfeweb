@@ -28,6 +28,16 @@ import { elegirMejorCandidato, esLecturaPerfecta } from './leerRecibo.js';
 // para ese formato, historial_anual_kwh/meses_cubiertos asumian "cada periodo = 1 mes"
 // (arrastrado del formato mensual) y sobreestimaban el consumo anual casi al doble para
 // un historial bimestral, ademas de marcar cada periodo consecutivo como un "hueco" falso.
+// pdbt, corregido 2026-11-24 ("3er formato de historial, sin FP/FC"): el fixture
+// `recibo_texto_pdbt.txt` (Tenencia de la Tierra, 221931008575) SI trae su tabla
+// "CONSUMO HISTORICO" completa (13 periodos, formato mensual con FP/FC vacios) --
+// `recibo_campos_pdbt.json` traia el ground-truth viejo (historial: null,
+// campos_no_encontrados con los 2 campos de historial) porque esa era la lectura
+// ROTA que se queria arreglar, nunca el comportamiento correcto. Corregido a los 13
+// periodos reales (verificado contra el PDF original: el ultimo renglon, ABR26/5061,
+// coincide exacto con periodo_kwh=5061 y periodo_label="...al 27 ABR 26" -- es
+// literalmente el mismo periodo facturado, consistente con el formato de tabla
+// mensual).
 const CASOS = { abue: false, museo: false, pdbt: false, secfinanzas: true, cobaeb: false }; // valor = uso_ocr real de ese caso
 let fallosTotal = 0;
 
