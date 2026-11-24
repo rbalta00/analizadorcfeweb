@@ -76,6 +76,19 @@ function estadoCotizacionLote40(proyecto) {
   return { clave: 'sin-datos', etiqueta: '⚠️ Sin datos' };
 }
 
+// Pedido explicito del usuario, 2026-11-23: "ponles una palomita a los analisis que ya
+// se hallan editado y guardado" -- textosEditados/textosOcultos son los campos donde
+// vive CUALQUIER edicion manual de texto/parrafo de la cotizacion (ver clientes.js,
+// crearProyecto()), y como este visor lee directo del mismo localStorage donde ya
+// viven persistidos, cualquier edicion que aparezca ahi YA esta guardada por
+// definicion -- no existe un estado "editado pero sin guardar" separado en este
+// modelo de datos (no hay borrador en memoria que se pierda).
+function tieneEdicionGuardada(proyecto) {
+  if (!proyecto) return false;
+  return Object.keys(proyecto.textosEditados || {}).length > 0 ||
+    Object.keys(proyecto.textosOcultos || {}).length > 0;
+}
+
 function renderTotales(filas) {
   const cont = document.getElementById('lote40Totales');
   cont.innerHTML = '';
@@ -105,6 +118,7 @@ function renderTotales(filas) {
 function tarjetaLote40(fila) {
   const { def, cliente, proyecto } = fila;
   const estado = estadoCotizacionLote40(proyecto);
+  const editado = tieneEdicionGuardada(proyecto);
   const docsOk = def.reciboLocalizado && def.verificacionLocalizada;
   // Este texto SOLO describe si el documento fue LOCALIZADO en el filesystem del
   // usuario durante la recopilacion (lote40.js, catalogado 2026-10-23) -- nunca fue
@@ -135,6 +149,7 @@ function tarjetaLote40(fila) {
   info.className = 'tarjeta-cliente-info';
   info.innerHTML = `<strong>${def.id}. ${escapeHtml(def.inmueble)}</strong>` +
     `<span class="chip-etapa ${chipClase}">${estado.etiqueta}</span>` +
+    (editado ? `<span class="chip-etapa chip-etapa-ganado" title="Tiene texto editado a mano, ya guardado en esta cotización">✓ Editado y guardado</span>` : '') +
     `<span class="nota">RPU ${escapeHtml(def.rpu)}${def.rpuAlt ? ` (alt. ${escapeHtml(def.rpuAlt)})` : ''}` +
     (proyecto ? ` · ${escapeHtml(cliente.nombre)} · ${escapeHtml(proyecto.nombre)}` : '') + `</span>` +
     (proyecto ? `<span class="nota">${cifras}actualizado ${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</span>` : '') +
