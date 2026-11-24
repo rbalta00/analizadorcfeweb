@@ -353,28 +353,38 @@ function poblarBotonesTarifa(grupos) {
 // Excel van directo al navegador -- nunca se abre ningun visor dentro de esa ventana.
 const NOMBRE_VENTANA_DESCARGA_MASIVA = 'cfeDescargaMasivaLote40';
 
-function descargarUnoViaVentana(ventana, cliente, proyecto, rpu, tipo) {
+// Navega la ventana reusada a `url` y espera el postMessage de vuelta (ver
+// manejarDescargaPorEnlaceProfundo en app.js) -- regresa el `ev.data` COMPLETO (no
+// solo `ok`), porque el modo &descargar=zip (2026-11-24) trae ademas los Blobs del
+// PDF/Excel en `archivos`. Si nunca llega nada en 35s (margen para un estudio con
+// recibo/verificación/fotos adjuntas, que descarga imágenes remotas antes de armar
+// el PDF), se resuelve como si hubiera fallado en vez de esperar para siempre.
+function navegarVentanaYEsperarMensaje(ventana, url) {
   return new Promise((resolve) => {
     let terminado = false;
     let timer = null;
     const onMessage = (ev) => {
       if (ev.source !== ventana || !ev.data || !ev.data.cfeLote40Descarga) return;
-      finalizar(!!ev.data.ok);
+      finalizar(ev.data);
     };
-    function finalizar(ok) {
+    function finalizar(data) {
       if (terminado) return;
       terminado = true;
       window.removeEventListener('message', onMessage);
       clearTimeout(timer);
-      resolve(ok);
+      resolve(data);
     }
     window.addEventListener('message', onMessage);
-    // 35s de margen -- un estudio con recibo/verificación/fotos adjuntas descarga
-    // imágenes remotas antes de armar el PDF, puede tardar más que uno sin archivos.
-    timer = setTimeout(() => finalizar(false), 35000);
-    ventana.location.href = `index.html?cliente=${encodeURIComponent(cliente.id)}&proyecto=${encodeURIComponent(proyecto.id)}` +
-      `&descargar=${tipo}&prefijoArchivo=${encodeURIComponent(rpu)}&automatizado=1`;
+    timer = setTimeout(() => finalizar({ ok: false }), 35000);
+    ventana.location.href = url;
   });
+}
+
+async function descargarUnoViaVentana(ventana, cliente, proyecto, rpu, tipo) {
+  const url = `index.html?cliente=${encodeURIComponent(cliente.id)}&proyecto=${encodeURIComponent(proyecto.id)}` +
+    `&descargar=${tipo}&prefijoArchivo=${encodeURIComponent(rpu)}&automatizado=1`;
+  const data = await navegarVentanaYEsperarMensaje(ventana, url);
+  return !!data.ok;
 }
 
 function elementoEstadoDescargaMasiva() {
@@ -504,6 +514,87 @@ function exportarCsv() {
   URL.revokeObjectURL(url);
 }
 
+function nombreArchivoSeguro(s) {
+  return String(s ?? '').replace(/[\\/:*?"<>|]+/g, '_').trim();
+}
+
+// Pedido explicito del usuario, 2026-11-24: "descarga todos los pdf y excel en
+// carpetas en un archivo aparte de los 40" -- un solo botón, arriba de todo (no por
+// grupo de tarifa, a diferencia de "Descargar todos los PDF/Excel"), que recorre LOS
+// 40 (los que ya tienen cifras calculadas) y arma UN SOLO archivo .zip con una
+// carpeta por tarifa adentro, el PDF y el Excel de cada inmueble dentro de su
+// carpeta -- en vez de hasta 80 archivos sueltos en Descargas.
+//
+// Usa &descargar=zip (ver generarDocumentosParaZip en app.js): esa ruta NUNCA
+// descarga nada por su cuenta, regresa los Blobs del PDF y del Excel por postMessage
+// -- aquí se van agregando al ZIP (JSZip, vendorizado en lib/jszip.min.js) con
+// `zip.file('<Tarifa>/<rpu> <inmueble>.pdf', blob)`, y solo AL FINAL se descarga el
+// .zip completo, una sola vez.
+async function descargarTodoEnZip() {
+  if (typeof JSZip === 'undefined') {
+    alert('No se pudo cargar la librería para armar el ZIP (JSZip) -- revisa tu conexión y recarga la página.');
+    return;
+  }
+  const grupos = agruparLote40PorTarifa(datosLote40())
+    .map((g) => ({ tarifa: g.tarifa, filas: g.filas.filter((f) => f.proyecto?.ultimaInversionTotal != null) }))
+    .filter((g) => g.filas.length);
+  const total = grupos.reduce((s, g) => s + g.filas.length, 0);
+  if (!total) {
+    alert('Ningún inmueble del lote tiene todavía una cotización calculada -- nada que meter al ZIP.');
+    return;
+  }
+  if (!confirm(`¿Armar un ZIP con el PDF y el Excel de los ${total} inmueble(s) ya calculados (una carpeta por ` +
+    'tarifa)?\n\nSe abre una ventana auxiliar que navega sola por cada cotización y se cierra al terminar -- no la ' +
+    `cierres a mano mientras tanto. Con ${total} inmueble(s) puede tardar varios minutos.`)) return;
+  const ventana = window.open('about:blank', NOMBRE_VENTANA_DESCARGA_MASIVA, 'width=480,height=420');
+  if (!ventana) {
+    alert('El navegador bloqueó la ventana auxiliar de descarga -- permite ventanas emergentes para este sitio e inténtalo de nuevo.');
+    return;
+  }
+  const zip = new JSZip();
+  const estado = elementoEstadoDescargaMasiva();
+  let ok = 0;
+  let i = 0;
+  const fallidos = [];
+  for (const { tarifa, filas } of grupos) {
+    const carpeta = nombreArchivoSeguro(tarifa || 'Sin tarifa capturada');
+    for (const f of filas) {
+      i++;
+      if (estado) {
+        estado.hidden = false;
+        estado.textContent = `⬇ Generando ${i} de ${total} (${f.def.inmueble})…`;
+      }
+      const url = `index.html?cliente=${encodeURIComponent(f.cliente.id)}&proyecto=${encodeURIComponent(f.proyecto.id)}` +
+        '&descargar=zip&automatizado=1';
+      const data = await navegarVentanaYEsperarMensaje(ventana, url);
+      if (data.ok && data.archivos) {
+        const base = nombreArchivoSeguro(`${f.def.rpu} ${f.def.inmueble}`);
+        zip.file(`${carpeta}/${base}.pdf`, data.archivos.pdfBlob);
+        zip.file(`${carpeta}/${base}.xlsx`, data.archivos.excelBlob);
+        ok++;
+      } else {
+        fallidos.push(f.def.inmueble);
+      }
+    }
+  }
+  ventana.close();
+  if (estado) estado.textContent = '📦 Armando el archivo ZIP final…';
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  if (estado) estado.hidden = true;
+  const urlZip = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = urlZip;
+  a.download = `lote_40_inmuebles_PDF_y_Excel_${new Date().toISOString().slice(0, 10)}.zip`;
+  a.click();
+  URL.revokeObjectURL(urlZip);
+  let msg = `Listo: ${ok} de ${total} inmueble(s) con su PDF y Excel dentro del ZIP descargado.`;
+  if (fallidos.length) {
+    msg += `\n\nNo se pudieron generar automáticamente (requieren revisión manual -- descárgalos uno por uno desde su ` +
+      `tarjeta, probablemente hay un aviso pendiente que confirmar):\n${fallidos.map((n) => '• ' + n).join('\n')}`;
+  }
+  alert(msg);
+}
+
 function render() {
   const filas = datosLote40();
   renderTotales(filas);
@@ -512,4 +603,5 @@ function render() {
 
 document.getElementById('btnRefrescarLote40').addEventListener('click', render);
 document.getElementById('btnExportarLote40Csv').addEventListener('click', exportarCsv);
+document.getElementById('btnDescargarZipLote40').addEventListener('click', descargarTodoEnZip);
 render();

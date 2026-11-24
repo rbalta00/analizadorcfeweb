@@ -17,7 +17,7 @@ import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTiene
 import { TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf, generarPdfCompletaDesdeVista } from './propuesta.js';
-import { descargarExcelCotizacion } from './excel.js';
+import { descargarExcelCotizacion, excelCotizacionComoBlob } from './excel.js';
 import { generarGuiaPresentacion } from './resumen.js';
 import { leerFormatoFijo, hayFormatoFijo, fijarFormatoDesde, aplicarFormatoFijoAProyecto, textoVistaPrevia } from './formatoFijo.js';
 import { leerReciboMultiple } from './leerRecibo.js';
@@ -5000,29 +5000,64 @@ $('btnGenerarExcel').addEventListener('click', () => { generarExcelCotizacion();
 // el visor (igual que el botón manual) se llama doc.save() de una vez -- el punto de
 // este enlace es no necesitar un clic extra después de llegar aquí. Para Excel no hace
 // falta nada extra: descargarExcelCotizacion() ya dispara la descarga real por sí sola.
+// &descargar=zip -- pedido explicito del usuario, 2026-11-24: "descarga todos los pdf
+// y excel en carpetas en un archivo aparte de los 40". A diferencia de &descargar=
+// pdf|excel (que SIEMPRE descargan el archivo real de una vez), este modo NUNCA
+// descarga nada aquí -- genera el PDF y el Excel de este estudio y regresa sus Blobs
+// por postMessage, para que quien abrió esta ventana (lote40Vista.js) los vaya
+// metiendo a un único ZIP (con carpetas por tarifa) y descargue ESE un solo archivo
+// al final, en vez de 80 archivos sueltos. Hace la preparación de documentos
+// adjuntos/imágenes UNA sola vez para los dos documentos (a diferencia de llamar
+// generarPdfCotizacion()+generarExcelCotizacion() por separado, que la harían dos
+// veces cada una).
+async function generarDocumentosParaZip() {
+  if (!ultimoResultado) return null;
+  if (!confirmarIdentidadRpuAntesDeExportar(ultimoResultado)) return null;
+  if (!confirmarSinTextoTarifaCruzadaAntesDeExportar(ultimoResultado)) return null;
+  confirmarEdicionEnCursoAntesDeExportar();
+  if (!confirmarAntesDeGenerarDocumento(true)) return null;
+  refrescarFechaEstudioAntesDeGenerar();
+  const r = ultimoResultado;
+  try {
+    await prepararDocumentosAdjuntosParaPdf(r);
+    await resolverImagenesRemotasEnDom();
+    const doc = generarPdfCompletaDesdeVista(r);
+    const pdfBlob = doc.output('blob');
+    const excelBlob = await excelCotizacionComoBlob(r);
+    return { pdfBlob, excelBlob };
+  } catch (err) {
+    console.error('No se pudieron generar los documentos para el ZIP:', err);
+    return null;
+  }
+}
+
 // Devuelve ok=true/false y, si esta pestaña fue ABIERTA por otra (ver "Descargar
-// todos los PDF/Excel" en lote40Vista.js -- una ventana reusada, navegada vía
-// window.open/location.href, NUNCA un <iframe>: este sitio exige login con HTTP
-// Basic Auth, y Chrome por seguridad nunca manda las credenciales ya guardadas a un
-// <iframe> -- la pestaña se queda pegada en blanco para siempre, confirmado en vivo
-// antes de este fix), le avisa a quien la abrió por postMessage en cuanto termina --
-// en una pestaña normal (clic manual en el visor, sin padre ni opener) esto no hace
-// nada, igual que siempre.
+// todos los PDF/Excel"/"Descargar TODO en un ZIP" en lote40Vista.js -- una ventana
+// reusada, navegada vía window.open/location.href, NUNCA un <iframe>: este sitio
+// exige login con HTTP Basic Auth, y Chrome por seguridad nunca manda las
+// credenciales ya guardadas a un <iframe> -- la pestaña se queda pegada en blanco
+// para siempre, confirmado en vivo antes de este fix), le avisa a quien la abrió por
+// postMessage en cuanto termina -- en una pestaña normal (clic manual en el visor,
+// sin padre ni opener) esto no hace nada, igual que siempre.
 async function manejarDescargaPorEnlaceProfundo(tipo) {
   let ok = false;
+  let archivos = null;
   try {
     if (tipo === 'pdf') {
       const resultado = await generarPdfCotizacion({ avisarSiNoHayResultado: false });
       if (resultado) { resultado.doc.save(resultado.nombreArchivo); ok = true; }
     } else if (tipo === 'excel') {
       ok = await generarExcelCotizacion({ avisarSiNoHayResultado: false });
+    } else if (tipo === 'zip') {
+      archivos = await generarDocumentosParaZip();
+      ok = !!archivos;
     }
   } catch (err) {
     console.error('Descarga por enlace profundo falló:', err);
   }
   const destino = window.parent !== window ? window.parent : window.opener;
   if (destino) {
-    try { destino.postMessage({ cfeLote40Descarga: true, ok }, location.origin); } catch (e) { /* ignorar */ }
+    try { destino.postMessage({ cfeLote40Descarga: true, ok, archivos }, location.origin); } catch (e) { /* ignorar */ }
   }
 }
 
@@ -5601,23 +5636,28 @@ $('btnVerificarPdf').addEventListener('click', async () => {
   const parametros = new URLSearchParams(location.search);
   const clienteParam = parametros.get('cliente');
   const proyectoParam = parametros.get('proyecto');
-  // &descargar=pdf|excel (pedido explicito del usuario, 2026-11-20): se lee ANTES del
-  // replaceState de abajo (que limpia toda la query string, incluido este parametro) --
-  // asi el valor sigue disponible en esta variable aunque la URL ya haya quedado limpia,
-  // y un refresh normal de la pagina nunca vuelve a disparar la descarga sola (ver
-  // manejarDescargaPorEnlaceProfundo()).
-  const descargarParam = parametros.get('descargar');
+  // &descargar=pdf|excel|zip (pedido explicito del usuario, 2026-11-20/24): se lee
+  // ANTES del replaceState de abajo (que limpia toda la query string, incluido este
+  // parametro) -- asi el valor sigue disponible en esta variable aunque la URL ya
+  // haya quedado limpia, y un refresh normal de la pagina nunca vuelve a disparar la
+  // descarga sola (ver manejarDescargaPorEnlaceProfundo()). "zip" (2026-11-24) no
+  // descarga nada aqui -- regresa los Blobs del PDF/Excel por postMessage para que
+  // lote40Vista.js los meta a un ZIP con carpetas (ver generarDocumentosParaZip()).
   // &prefijoArchivo=<no. de servicio> y &automatizado=1 -- pedido explicito del
-  // usuario, 2026-11-23: "Descargar todos los PDF/Excel" de una tarifa completa
-  // (lote40Vista.js) abre esta misma pagina, UNA VEZ por cada proyecto, dentro de un
-  // <iframe> oculto. prefijoArchivo deja el no. de servicio al INICIO del nombre del
-  // archivo (ver nombreArchivoProyecto() arriba). automatizado=1 evita que un
-  // confirm()/alert() (ej. "¿generar de todos modos?", candado de identidad de RPU)
-  // deje esa pestaña COLGADA PARA SIEMPRE -- nadie puede hacer clic en un dialogo de
-  // un iframe oculto. En automatizado=1, cualquier aviso que normalmente pediria
-  // confirmar se trata como "no, cancelar" (mas seguro omitir ESE estudio puntual --
-  // se reporta como "no descargado" en el visor -- que exportar algo sin que nadie
-  // vea el aviso real), y cualquier alert() informativo solo se registra en consola.
+  // usuario, 2026-11-23: "Descargar todos los PDF/Excel" de una tarifa completa (o
+  // "Descargar TODO en un ZIP" de los 40, 2026-11-24) abre esta misma pagina, UNA VEZ
+  // por cada proyecto, en una ventana real reusada (lote40Vista.js -- nunca un
+  // <iframe>, ver nota de manejarDescargaPorEnlaceProfundo mas abajo). prefijoArchivo
+  // deja el no. de servicio al INICIO del nombre del archivo (ver
+  // nombreArchivoProyecto() arriba) -- solo aplica a pdf/excel, el modo zip ignora
+  // este parametro porque lote40Vista.js nombra cada archivo DENTRO del zip el mismo.
+  // automatizado=1 evita que un confirm()/alert() (ej. "¿generar de todos modos?",
+  // candado de identidad de RPU) deje esa ventana COLGADA PARA SIEMPRE -- nadie puede
+  // hacer clic en un dialogo de una ventana que nadie esta viendo. En automatizado=1,
+  // cualquier aviso que normalmente pediria confirmar se trata como "no, cancelar"
+  // (mas seguro omitir ESE estudio puntual -- se reporta como "no descargado" en el
+  // visor -- que exportar algo sin que nadie vea el aviso real), y cualquier alert()
+  // informativo solo se registra en consola.
   const prefijoArchivoParam = parametros.get('prefijoArchivo');
   const automatizadoParam = parametros.get('automatizado') === '1';
   // &editar=1 (mismo patron, mismo motivo que &descargar -- pedido explicito del
@@ -5633,7 +5673,7 @@ $('btnVerificarPdf').addEventListener('click', async () => {
     if (cliente && proyecto) {
       history.replaceState(null, '', location.pathname);
       abrirProyecto(clienteParam, proyectoParam);
-      if (descargarParam === 'pdf' || descargarParam === 'excel') {
+      if (descargarParam === 'pdf' || descargarParam === 'excel' || descargarParam === 'zip') {
         if (prefijoArchivoParam) prefijoArchivoDescarga = prefijoArchivoParam;
         if (automatizadoParam) {
           window.confirm = () => false;

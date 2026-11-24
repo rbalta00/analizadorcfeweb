@@ -594,10 +594,19 @@ export function generarExcelCotizacion(r) {
   return wb;
 }
 
-export async function descargarExcelCotizacion(r, nombreArchivo) {
+// Extraído aparte, 2026-11-24 (pedido "descarga todos... en carpetas en un archivo
+// aparte", el ZIP de los 40): el ZIP necesita el Blob del Excel SIN disparar su
+// propia descarga individual (el archivo va dentro del ZIP, no suelto) -- antes esta
+// lógica vivía mezclada dentro de descargarExcelCotizacion(), que ahora solo reusa
+// este helper.
+export async function excelCotizacionComoBlob(r) {
   const wb = generarExcelCotizacion(r);
   const buffer = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+export async function descargarExcelCotizacion(r, nombreArchivo) {
+  const blob = await excelCotizacionComoBlob(r);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

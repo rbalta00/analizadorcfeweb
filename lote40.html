@@ -25,6 +25,11 @@
         para saber de un vistazo cuántas ya se generaron, cuántas faltan, y cuáles traen un pendiente conocido de
         documentación o de identidad/RPU desde antes de esta app. Agrupadas por tarifa.</p>
       <div id="lote40Totales" class="tarjetas-metricas"></div>
+      <div class="acciones">
+        <button id="btnDescargarZipLote40" class="btn-secundario">⬇ Descargar TODO en un ZIP (carpetas por tarifa)</button>
+      </div>
+      <p class="nota">Un solo archivo .zip con una carpeta por tarifa, el PDF y el Excel de cada inmueble ya
+        calculado adentro -- en vez de 80 archivos sueltos en tu carpeta de Descargas.</p>
     </section>
     <section class="tarjeta">
       <p class="nota">Ver solo una tarifa:</p>
@@ -36,8 +41,9 @@
       <p class="nota">Las tarjetas atenuadas son inmuebles sin ninguna cotización creada todavía. Clic en "Abrir"
         para entrar directo a esa cotización -- se abre en una pestaña nueva del Analizador.</p>
       <p class="nota">Cada grupo de tarifa trae sus propios botones "Descargar todos los PDF/Excel" -- bajan directo
-        a tu carpeta de Descargas, uno por uno (sin abrir ninguna pestaña visible), con el número de servicio al
-        inicio del nombre de cada archivo. Solo se descargan los que ya tienen cifras calculadas.</p>
+        a tu carpeta de Descargas, uno por uno (en una ventana auxiliar que navega sola y se cierra al terminar), con
+        el número de servicio al inicio del nombre de cada archivo. Solo se descargan los que ya tienen cifras
+        calculadas.</p>
       <p id="lote40DescargaMasivaEstado" class="nota aviso" hidden></p>
       <div id="lote40Tabla"></div>
     </section>
@@ -47,6 +53,7 @@
     <p class="nota">Esta ventana solo lee los datos que ya están guardados en este navegador -- no modifica nada.</p>
   </footer>
 
+  <script src="lib/jszip.min.js"></script>
   <script type="module" src="js/lote40Vista.js"></script>
 </body>
 </html>

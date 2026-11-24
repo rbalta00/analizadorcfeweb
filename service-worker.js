@@ -3,7 +3,7 @@
 // en esta maquina -- ver web/ESTADO.md. Los datos (historial de cotizaciones) nunca
 // pasan por aqui, viven en localStorage del navegador, no en este cache.
 
-const CACHE_NOMBRE = "cfe-analizador-v132";
+const CACHE_NOMBRE = "cfe-analizador-v133";
 
 const ARCHIVOS_APP_SHELL = [
   "./",
@@ -58,6 +58,7 @@ const ARCHIVOS_APP_SHELL = [
   "lib/tesseract.min.js",
   "lib/tesseract-worker.min.js",
   "lib/exceljs.min.js",
+  "lib/jszip.min.js",
   "assets/icon-192.png",
   "assets/icon-512.png",
   "assets/apple-touch-icon.png",
