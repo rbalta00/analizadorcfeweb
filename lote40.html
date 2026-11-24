@@ -25,11 +25,46 @@
         para saber de un vistazo cuántas ya se generaron, cuántas faltan, y cuáles traen un pendiente conocido de
         documentación o de identidad/RPU desde antes de esta app. Agrupadas por tarifa.</p>
       <div id="lote40Totales" class="tarjetas-metricas"></div>
+      <p id="lote40DesgloseAnexados" class="nota"></p>
       <div class="acciones">
         <button id="btnDescargarZipLote40" class="btn-secundario">⬇ Descargar TODO en un ZIP (carpetas por tarifa)</button>
       </div>
       <p class="nota">Un solo archivo .zip con una carpeta por tarifa, el PDF y el Excel de cada inmueble ya
         calculado adentro -- en vez de 80 archivos sueltos en tu carpeta de Descargas.</p>
+    </section>
+
+    <section class="tarjeta">
+      <h3>➕ Agregar servicio nuevo</h3>
+      <p class="nota">Da de alta un servicio que no es de los 40 originales -- elige si se <b>anexa al lote</b>
+        (el cliente amplió el lote: continúa la numeración 41, 42… y cuenta en el total del lote) o si es un
+        <b>servicio independiente</b> (no toca ningún contador del lote). Funciona igual para las 6 tarifas.</p>
+      <div class="acciones">
+        <button id="btnMostrarFormServExtra" class="btn-secundario">➕ Agregar servicio nuevo</button>
+      </div>
+      <form id="formServExtra" class="fila" hidden>
+        <label>Nombre del inmueble/servicio<input id="servExtraNombre" type="text" placeholder="Se precarga del recibo si lo dejas vacío" /></label>
+        <label>RPU<input id="servExtraRpu" type="text" placeholder="No. de servicio (12 dígitos)" /></label>
+        <label>Tarifa<select id="servExtraTarifa"></select></label>
+        <fieldset>
+          <legend>Destino</legend>
+          <label><input type="radio" name="servExtraDestino" value="anexado" checked /> Anexar al lote</label>
+          <label><input type="radio" name="servExtraDestino" value="independiente" /> Servicio independiente</label>
+        </fieldset>
+        <label>Recibo (PDF, opcional -- se lee solo)<input id="servExtraRecibo" type="file" accept="application/pdf" /></label>
+        <label>Verificación en sitio (PDF, opcional)<input id="servExtraVerificacion" type="file" accept="application/pdf" /></label>
+        <div class="acciones">
+          <button type="submit" id="btnAltaServExtra" class="btn-secundario">Dar de alta</button>
+          <button type="button" id="btnCancelarServExtra" class="btn-secundario">Cancelar</button>
+        </div>
+        <p id="servExtraMensaje" class="nota aviso" hidden></p>
+      </form>
+    </section>
+
+    <section class="tarjeta">
+      <h3>Servicios independientes</h3>
+      <p class="nota">No son del lote de 40 -- viven aparte, sin tocar ningún contador del lote.</p>
+      <div id="lote40IndependientesTotales" class="tarjetas-metricas"></div>
+      <div id="lote40Independientes"></div>
     </section>
     <section class="tarjeta">
       <p class="nota">Ver solo una tarifa:</p>

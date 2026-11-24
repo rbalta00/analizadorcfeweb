@@ -12,6 +12,7 @@ import { listarClientes, crearCliente, crearProyecto } from './clientes.js';
 import { LOTE_40_INMUEBLES, normalizarRpu } from './lote40.js';
 import { ETIQUETAS_TARIFA, ORDEN_TARIFAS } from './tarifas.js';
 import { M } from './util.js';
+import { listarServiciosExtra, eliminarServicioExtra, altaServicioNuevo } from './serviciosExtra.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -38,6 +39,44 @@ function datosLote40() {
     });
     return { def, cliente: match?.cliente || null, proyecto: match?.proyecto || null };
   });
+}
+
+// Servicios nuevos del tablero (anexados al lote o independientes) -- pedido
+// explícito del usuario, 2026-11-24 v3, REGLA #1 ("no se toca nada de lo ya hecho"):
+// cruza la colección NUEVA y aparte `serviciosExtra.js` contra los clientes/proyectos
+// reales, EXACTAMENTE con el mismo criterio de match por RPU/nombre que datosLote40()
+// (arriba) -- nunca modifica LOTE_40_INMUEBLES ni esa función. Regresa `anexados`
+// (numerados 41, 42... en orden de alta, continúan el lote) e `independientes`
+// (numerados 1, 2... dentro de su propio segmento), cada fila con la MISMA forma
+// `{def, cliente, proyecto}` que ya entiende tarjetaLote40()/agruparLote40PorTarifa()
+// más `extraInfo` (la entrada cruda, para el botón "Quitar" y el badge "Anexado").
+function datosServiciosExtra() {
+  const todosProyectos = [];
+  for (const c of listarClientes()) {
+    for (const p of (c.proyectos || [])) todosProyectos.push({ cliente: c, proyecto: p });
+  }
+  const extras = listarServiciosExtra();
+  const anexados = [];
+  const independientes = [];
+  let numeroAnexado = LOTE_40_INMUEBLES.length;
+  let numeroIndependiente = 0;
+  for (const entry of extras) {
+    const rpusDef = [entry.rpu, entry.rpuAlt].filter(Boolean).map(normalizarRpu);
+    const match = todosProyectos.find(({ proyecto: p }) => {
+      const rpuCapturado = normalizarRpu(p.formulario?.noServicio);
+      if (rpuCapturado && rpusDef.includes(rpuCapturado)) return true;
+      return rpusDef.some((r) => r && (p.nombre || '').replace(/\D+/g, '').includes(r));
+    });
+    const def = {
+      id: entry.modo === 'anexado' ? String(++numeroAnexado) : String(++numeroIndependiente),
+      tarifaDelRecibo: entry.tarifaDelRecibo, inmueble: entry.inmueble, rpu: entry.rpu, rpuAlt: entry.rpuAlt,
+      reciboLocalizado: entry.reciboLocalizado, verificacionLocalizada: entry.verificacionLocalizada,
+      estadoDocs: entry.estadoDocs, pendientes: entry.pendientes,
+    };
+    const fila = { def, cliente: match?.cliente || null, proyecto: match?.proyecto || null, extraInfo: entry };
+    if (entry.modo === 'anexado') anexados.push(fila); else independientes.push(fila);
+  }
+  return { anexados, independientes };
 }
 
 // Tarifa EFECTIVA de un inmueble, para agrupar -- pedido explicito del usuario,
@@ -116,7 +155,13 @@ function renderTotales(filas) {
 // app para listas de clientes/proyectos, que si es responsivo) en vez de una tabla
 // ancha -- una tabla de 10 columnas apretaba tanto el texto largo ("pendiente
 // conocido") que se partia letra por letra en una pantalla normal.
-function tarjetaLote40(fila) {
+// opts (2026-11-24, servicios nuevos del tablero -- REGLA #1, solo agrega):
+// {badge} agrega una insignia visible junto al título (ej. "Anexado"); {onQuitar}
+// agrega un botón "Quitar" que la llama. Las llamadas YA EXISTENTES de esta función
+// (los 40 originales) nunca pasan un segundo argumento -- opts queda `{}`, así que
+// ninguno de los 2 bloques nuevos de abajo se ejecuta y la tarjeta de un inmueble del
+// lote sale exactamente igual que siempre.
+function tarjetaLote40(fila, opts = {}) {
   const { def, cliente, proyecto } = fila;
   const estado = estadoCotizacionLote40(proyecto);
   const fechaEdicion = fechaUltimaEdicionManual(proyecto);
@@ -150,6 +195,7 @@ function tarjetaLote40(fila) {
   info.className = 'tarjeta-cliente-info';
   info.innerHTML = `<strong>${def.id}. ${escapeHtml(def.inmueble)}</strong>` +
     `<span class="chip-etapa ${chipClase}">${estado.etiqueta}</span>` +
+    (opts.badge ? `<span class="chip-etapa chip-etapa-negociando" title="Servicio nuevo del tablero, no es uno de los 40 originales">${escapeHtml(opts.badge)}</span>` : '') +
     (fechaEdicion
       ? `<span class="chip-etapa chip-etapa-ganado" title="Última edición manual de texto en esta cotización, ya guardada">✓ Editado ${escapeHtml(new Date(fechaEdicion).toLocaleDateString('es-MX'))} ${escapeHtml(new Date(fechaEdicion).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }))}</span>`
       : '') +
@@ -263,6 +309,21 @@ function tarjetaLote40(fila) {
     });
     div.append(aCrear);
   }
+  // Botón "Quitar" -- solo para servicios nuevos del tablero (anexados o
+  // independientes, opts.onQuitar). Quita SOLO la entrada del tablero (serviciosExtra.js);
+  // el proyecto real NUNCA se borra (pedido explícito del usuario).
+  if (opts.onQuitar) {
+    const aQuitar = document.createElement('a');
+    aQuitar.className = 'btn-link';
+    aQuitar.textContent = '🗑 Quitar del tablero';
+    aQuitar.href = '#';
+    aQuitar.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      if (!confirm(`¿Quitar "${def.inmueble}" de este tablero?\n\nSolo se quita la entrada -- su cotización (si existe) NO se borra.`)) return;
+      opts.onQuitar();
+    });
+    div.append(aQuitar);
+  }
   return div;
 }
 
@@ -302,7 +363,7 @@ function poblarBotonesTarifa(grupos) {
   const btnTodas = document.createElement('button');
   btnTodas.className = `btn-secundario btn-filtro-tarifa${filtroTarifaActual === null ? ' activo' : ''}`;
   btnTodas.textContent = `Todas (${total})`;
-  btnTodas.addEventListener('click', () => { filtroTarifaActual = null; renderTabla(datosLote40()); });
+  btnTodas.addEventListener('click', () => { filtroTarifaActual = null; render(); });
   cont.append(btnTodas);
 
   for (const { tarifa, etiqueta, filas } of grupos) {
@@ -311,7 +372,7 @@ function poblarBotonesTarifa(grupos) {
     btn.className = `btn-secundario btn-filtro-tarifa${filtroTarifaActual === tarifa ? ' activo' : ''}`;
     btn.textContent = `${tarifa} (${filas.length})`;
     btn.title = etiqueta;
-    btn.addEventListener('click', () => { filtroTarifaActual = tarifa; renderTabla(datosLote40()); });
+    btn.addEventListener('click', () => { filtroTarifaActual = tarifa; render(); });
     cont.append(btn);
   }
 }
@@ -446,10 +507,16 @@ function botonesDescargaMasivaGrupo(filasGrupo, tituloGrupo) {
   return cont;
 }
 
-function renderTabla(filas) {
+// filasAnexadas (2026-11-24, servicios nuevos del tablero): los servicios "anexados
+// al lote" se agregan a la MISMA lista agrupada por tarifa, inmediatamente después de
+// los 40 originales de su grupo (con la insignia "Anexado" y su propio botón
+// "Quitar"), continuando la numeración 41, 42... -- pero NUNCA entran a `filas`
+// (los 40 fijos, intactos) ni a renderTotales(), así que "de 40 originales" sigue
+// leyendo exactamente lo mismo que siempre.
+function renderTabla(filas, filasAnexadas = []) {
   const cont = document.getElementById('lote40Tabla');
   cont.innerHTML = '';
-  const grupos = agruparLote40PorTarifa(filas);
+  const grupos = agruparLote40PorTarifa([...filas, ...filasAnexadas]);
   poblarBotonesTarifa(grupos);
   const gruposAMostrar = filtroTarifaActual ? grupos.filter((g) => g.tarifa === filtroTarifaActual) : grupos;
 
@@ -457,7 +524,10 @@ function renderTabla(filas) {
     const titulo = `${tarifa ? `Tarifa ${tarifa} — ${etiqueta}` : etiqueta} (${filasGrupo.length})`;
     const lista = document.createElement('div');
     lista.className = 'lista-clientes';
-    for (const f of filasGrupo) lista.append(tarjetaLote40(f));
+    for (const f of filasGrupo) {
+      const opts = f.extraInfo ? { badge: 'Anexado', onQuitar: () => { eliminarServicioExtra(f.extraInfo.id); render(); } } : {};
+      lista.append(tarjetaLote40(f, opts));
+    }
 
     // El grupo catch-all "Sin tarifa capturada todavia" se queda colapsado por
     // defecto (ver entrada anterior, 2026-11-14) -- pedido explicito del usuario
@@ -595,10 +665,115 @@ async function descargarTodoEnZip() {
   alert(msg);
 }
 
+// Desglose del lote (2026-11-24, servicios nuevos del tablero): aparte de
+// renderTotales() (que sigue leyendo SOLO los 40 originales, sin cambio), un renglón
+// nuevo que deja claro cuántos anexados hay y que no se confunden con los 40.
+function renderDesgloseLote(anexados) {
+  const el = document.getElementById('lote40DesgloseAnexados');
+  if (!anexados.length) { el.textContent = ''; return; }
+  const calculados = anexados.filter((f) => f.proyecto?.ultimaInversionTotal != null).length;
+  el.textContent = `Lote: 40 originales + ${anexados.length} anexado(s) = 40+${anexados.length} · ` +
+    `Anexados calculados: ${calculados} de ${anexados.length}.`;
+}
+
+function renderIndependientesTotales(independientes) {
+  const cont = document.getElementById('lote40IndependientesTotales');
+  cont.innerHTML = '';
+  const calculados = independientes.filter((f) => f.proyecto?.ultimaInversionTotal != null).length;
+  const m = document.createElement('div');
+  m.className = 'metrica';
+  m.innerHTML = `<div class="valor">${independientes.length}</div><div class="etiqueta">Independientes · ${calculados} calculado(s)</div>`;
+  cont.append(m);
+}
+
+function renderIndependientes(independientes) {
+  const cont = document.getElementById('lote40Independientes');
+  cont.innerHTML = '';
+  renderIndependientesTotales(independientes);
+  if (!independientes.length) {
+    const p = document.createElement('p');
+    p.className = 'nota';
+    p.textContent = 'Ningún servicio independiente dado de alta todavía.';
+    cont.append(p);
+    return;
+  }
+  const lista = document.createElement('div');
+  lista.className = 'lista-clientes';
+  for (const f of independientes) {
+    lista.append(tarjetaLote40(f, { onQuitar: () => { eliminarServicioExtra(f.extraInfo.id); render(); } }));
+  }
+  cont.append(lista);
+}
+
+// ---------------- Formulario "Agregar servicio nuevo" ----------------
+const selectTarifaExtra = document.getElementById('servExtraTarifa');
+for (const t of ORDEN_TARIFAS) {
+  const opt = document.createElement('option');
+  opt.value = t;
+  opt.textContent = ETIQUETAS_TARIFA[t] || t;
+  selectTarifaExtra.append(opt);
+}
+
+const formServExtra = document.getElementById('formServExtra');
+const mensajeServExtra = document.getElementById('servExtraMensaje');
+
+function mostrarMensajeServExtra(texto, esError = true) {
+  mensajeServExtra.hidden = false;
+  mensajeServExtra.textContent = texto;
+  mensajeServExtra.classList.toggle('aviso', esError);
+}
+
+document.getElementById('btnMostrarFormServExtra').addEventListener('click', () => {
+  formServExtra.hidden = !formServExtra.hidden;
+});
+document.getElementById('btnCancelarServExtra').addEventListener('click', () => {
+  formServExtra.reset();
+  mensajeServExtra.hidden = true;
+  formServExtra.hidden = true;
+});
+
+formServExtra.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const btn = document.getElementById('btnAltaServExtra');
+  btn.disabled = true;
+  mensajeServExtra.hidden = true;
+  try {
+    const nombre = document.getElementById('servExtraNombre').value;
+    const rpu = document.getElementById('servExtraRpu').value;
+    const tarifa = selectTarifaExtra.value;
+    const modo = document.querySelector('input[name="servExtraDestino"]:checked').value;
+    const archivoRecibo = document.getElementById('servExtraRecibo').files[0] || null;
+    const archivoVerificacion = document.getElementById('servExtraVerificacion').files[0] || null;
+    const loteActual = datosLote40().map((f) => f.def);
+    let resultado = await altaServicioNuevo({ nombre, rpu, tarifa, modo, archivoRecibo, archivoVerificacion, loteActual });
+    if (!resultado.ok && resultado.requiereConfirmarVinculo) {
+      const e = resultado.existente;
+      const vincular = confirm(
+        `Ya existe una cotización con ese RPU en "${e.cliente.nombre}" → "${e.proyecto.nombre}", pero no está dada de ` +
+        `alta en este tablero.\n\n¿Vincularla aquí como servicio ${modo === 'anexado' ? 'anexado al lote' : 'independiente'}?`
+      );
+      if (!vincular) { btn.disabled = false; return; }
+      resultado = await altaServicioNuevo({ nombre, rpu, tarifa, modo, archivoRecibo, archivoVerificacion, loteActual, vincularSiExiste: true });
+    }
+    if (!resultado.ok) throw new Error('No se pudo dar de alta el servicio.');
+    if (resultado.avisoRpu) alert(resultado.avisoRpu);
+    formServExtra.reset();
+    formServExtra.hidden = true;
+    render();
+  } catch (e) {
+    mostrarMensajeServExtra(e.message || String(e));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 function render() {
   const filas = datosLote40();
+  const { anexados, independientes } = datosServiciosExtra();
   renderTotales(filas);
-  renderTabla(filas);
+  renderDesgloseLote(anexados);
+  renderTabla(filas, anexados);
+  renderIndependientes(independientes);
 }
 
 document.getElementById('btnRefrescarLote40').addEventListener('click', render);
