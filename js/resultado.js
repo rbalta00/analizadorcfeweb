@@ -159,14 +159,20 @@ export function construirResultado(input) {
   const pres = presupuestar(n, kwp, moduloWp, costos);
   const rows = flujoMensualAnual(invoice, dailyKwh, monthlyE, kwp, 1);
   // Presentacion en bimestres (2026-11-22, "Presentacion en bimestres para recibos
-  // bimestrales"): detectado por el DATO (periodoDias de ESTE recibo), nunca por el
+  // bimestrales"; 2026-11-24 v2, "PDBT: deteccion POR TARIFA"): para el resto de
+  // tarifas sigue detectado por el DATO (periodoDias de ESTE recibo), nunca por el
   // nombre de la tarifa -- un recibo bimestral trae 58-62 dias, uno mensual 28-31 (ver
   // el mismo criterio ya usado en resultado.js para diasPorPeriodoHistorial, hallazgo
-  // 2026-11-18: PDBT no siempre es bimestral, varia por cliente). `rowsPresentacion` es
-  // la MISMA informacion de `rows`, solo agregada en 6 renglones cuando aplica -- nunca
-  // recalculada -- para que la tabla de proyeccion y el comparativo consumo/generacion
-  // sigan al recibo sin tocar ningun calculo real.
-  const esBimestral = periodoDias >= 45;
+  // 2026-11-18: PDBT no siempre es bimestral, varia por cliente). Pero en PDBT
+  // especificamente, Isaac decidio (2026-11-24) que la presentacion SIEMPRE es
+  // bimestral, sin importar los dias del recibo -- un PDBT de 32 dias (recibo mensual,
+  // ej. Tenencia de la Tierra) debe salir igual de bimestral que uno de 62, para que
+  // los estudios de la misma tarifa no salgan con presentaciones distintas. 01, DAC,
+  // GDMTH, GDMTO y GDBT conservan exactamente la deteccion por dias, sin cambio.
+  // `rowsPresentacion` es la MISMA informacion de `rows`, solo agregada en 6 renglones
+  // cuando aplica -- nunca recalculada -- para que la tabla de proyeccion y el
+  // comparativo consumo/generacion sigan al recibo sin tocar ningun calculo real.
+  const esBimestral = tarifa === 'PDBT' ? true : periodoDias >= 45;
   const rowsPresentacion = esBimestral ? agruparBimestral(rows) : rows;
   const annualbefore = Math.round(rows.reduce((s, x) => s + x.pagoSinSolarMxn, 0) * 100) / 100;
   const annualafter = Math.round(rows.reduce((s, x) => s + x.pagoConSolarEstimadoMxn, 0) * 100) / 100;
