@@ -76,18 +76,18 @@ function estadoCotizacionLote40(proyecto) {
   return { clave: 'sin-datos', etiqueta: '⚠️ Sin datos' };
 }
 
-// Pedido explicito del usuario, 2026-11-23: "ponles una palomita a los analisis que ya
-// se hallan editado y guardado" -- seguimiento mismo dia ("ponle la palomita solo si
-// SI fue editada y guardada"): la primera version revisaba si textosEditados/
+// Pedido explicito del usuario, 2026-11-23, en 3 vueltas el mismo dia: (1) "ponles una
+// palomita a los analisis que ya se hallan editado y guardado", (2) "ponle la palomita
+// solo si SI fue editada y guardada" (una primera version revisaba si textosEditados/
 // textosOcultos tenian contenido, pero eso da falso positivo en la mayoria del lote --
-// un proyecto creado DESDE UN MACHOTE hereda el textosEditados completo del machote
-// (aplicarMachoteAProyecto, clientes.js/CAMPOS_EDITORIAL_MACHOTE) sin que el usuario
-// haya tocado nada en ESE proyecto en particular. La palomita ahora lee
-// `proyecto.edicionManualGuardada`, un flag aparte que SOLO se pone en true dentro de
-// onEditarTexto/onOcultarTexto (app.js) -- es decir, solo cuando de verdad ocurrio una
-// edicion a mano en este proyecto despues de creado, nunca por heredar un machote.
-function tieneEdicionGuardada(proyecto) {
-  return !!proyecto?.edicionManualGuardada;
+// un proyecto creado DESDE UN MACHOTE hereda ese texto completo sin que el usuario haya
+// tocado nada en ESE proyecto en particular), y (3) "mejor para saber ponle... la ultima
+// hora y el dia de edicion ultimo" -- en vez de solo si/no, mostrar la fecha/hora real
+// para que el usuario pueda compararla contra lo que el recuerda haber editado.
+// `proyecto.ultimaEdicionManualEn` (clientes.js) es un ISO timestamp que SOLO se pone
+// dentro de onEditarTexto/onOcultarTexto (app.js) -- nunca al heredar un machote.
+function fechaUltimaEdicionManual(proyecto) {
+  return proyecto?.ultimaEdicionManualEn || null;
 }
 
 function renderTotales(filas) {
@@ -119,7 +119,7 @@ function renderTotales(filas) {
 function tarjetaLote40(fila) {
   const { def, cliente, proyecto } = fila;
   const estado = estadoCotizacionLote40(proyecto);
-  const editado = tieneEdicionGuardada(proyecto);
+  const fechaEdicion = fechaUltimaEdicionManual(proyecto);
   const docsOk = def.reciboLocalizado && def.verificacionLocalizada;
   // Este texto SOLO describe si el documento fue LOCALIZADO en el filesystem del
   // usuario durante la recopilacion (lote40.js, catalogado 2026-10-23) -- nunca fue
@@ -150,7 +150,9 @@ function tarjetaLote40(fila) {
   info.className = 'tarjeta-cliente-info';
   info.innerHTML = `<strong>${def.id}. ${escapeHtml(def.inmueble)}</strong>` +
     `<span class="chip-etapa ${chipClase}">${estado.etiqueta}</span>` +
-    (editado ? `<span class="chip-etapa chip-etapa-ganado" title="Tiene texto editado a mano, ya guardado en esta cotización">✓ Editado y guardado</span>` : '') +
+    (fechaEdicion
+      ? `<span class="chip-etapa chip-etapa-ganado" title="Última edición manual de texto en esta cotización, ya guardada">✓ Editado ${escapeHtml(new Date(fechaEdicion).toLocaleDateString('es-MX'))} ${escapeHtml(new Date(fechaEdicion).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }))}</span>`
+      : '') +
     `<span class="nota">RPU ${escapeHtml(def.rpu)}${def.rpuAlt ? ` (alt. ${escapeHtml(def.rpuAlt)})` : ''}` +
     (proyecto ? ` · ${escapeHtml(cliente.nombre)} · ${escapeHtml(proyecto.nombre)}` : '') + `</span>` +
     (proyecto ? `<span class="nota">${cifras}actualizado ${new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')}</span>` : '') +
@@ -357,16 +359,18 @@ function csvEscape(v) {
 function exportarCsv() {
   const grupos = agruparLote40PorTarifa(datosLote40());
   const lineas = [['#', 'Inmueble', 'Tarifa', 'RPU', 'RPU alterno', 'Recibo localizado', 'Verificación localizada', 'Pendiente de documentación',
-    'Cliente en esta app', 'Cotización en esta app', 'Estado de la cotización', 'Inversión', 'Ahorro anual', 'Actualizado', 'Definitiva'].join(',')];
+    'Cliente en esta app', 'Cotización en esta app', 'Estado de la cotización', 'Inversión', 'Ahorro anual', 'Actualizado', 'Última edición manual', 'Definitiva'].join(',')];
   for (const { tarifa, filas } of grupos) {
     for (const { def, cliente, proyecto } of filas) {
       const estado = estadoCotizacionLote40(proyecto);
+      const fechaEdicion = fechaUltimaEdicionManual(proyecto);
       lineas.push([
         def.id, csvEscape(def.inmueble), csvEscape(tarifa || ''), def.rpu, csvEscape(def.rpuAlt || ''),
         def.reciboLocalizado ? 'Sí' : 'No', def.verificacionLocalizada ? 'Sí' : 'No', csvEscape(def.pendientes || ''),
         csvEscape(cliente?.nombre || ''), csvEscape(proyecto?.nombre || ''), csvEscape(estado.etiqueta),
         proyecto?.ultimaInversionTotal ?? '', proyecto?.ultimoAhorroAnual ?? '',
         proyecto ? csvEscape(new Date(proyecto.actualizadoEn).toLocaleDateString('es-MX')) : '',
+        fechaEdicion ? csvEscape(new Date(fechaEdicion).toLocaleString('es-MX')) : '',
         proyecto?.definitiva ? 'Sí' : 'No',
       ].join(','));
     }
