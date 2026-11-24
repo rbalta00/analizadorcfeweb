@@ -238,6 +238,11 @@ fieldset label { flex-direction: row; align-items: center; font-size: 0.85rem; }
    estilo normal de btn-secundario (borde, sin relleno). */
 .btn-filtro-tarifa { padding: 7px 14px; font-size: 0.85rem; }
 .btn-filtro-tarifa.activo { background: var(--teal); color: #fff; }
+/* "Descargar todos los PDF/Excel" de un grupo de tarifa, visor del lote de 40 --
+   pedido explicito del usuario, 2026-11-23. Dentro del encabezado de cada grupo, no
+   de toda la pantalla -- se queda compacto y pegado a la izquierda, no centrado. */
+.botones-descarga-masiva-lote40 { text-align: left; margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+.botones-descarga-masiva-lote40 button { padding: 7px 14px; font-size: 0.85rem; }
 a.btn-secundario { display: inline-flex; align-items: center; text-decoration: none; }
 .acciones-pdf { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .btn-link {

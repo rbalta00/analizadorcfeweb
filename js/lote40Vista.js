@@ -316,6 +316,126 @@ function poblarBotonesTarifa(grupos) {
   }
 }
 
+// Pedido explicito del usuario, 2026-11-23: "ponle la opcion descargar todos los pdf
+// de gdmto y todos los excel y asi pdbt y gdmth igual directo a descargas sin abrilo
+// con el numero de servicio al inicio de cada nombre" -- un boton por grupo de
+// tarifa (GDMTO/PDBT/GDMTH/cualquier otra, todas igual, no hardcodeado por tarifa)
+// que descarga TODOS los PDF o TODOS los Excel ya calculados de ese grupo, uno por
+// uno, sin que el usuario tenga que dar clic "⬇ PDF"/"⬇ Excel" inmueble por inmueble.
+//
+// Como "Cotización completa"/"Excel" solo saben generarse leyendo el DOM YA
+// RENDERIZADO de index.html (ver nota de generarPdfCotizacion en app.js), no hay
+// forma de generarlos desde esta pagina sin abrir index.html de verdad.
+//
+// INTENTO ORIGINAL DESCARTADO, dejado documentado para no repetir el error: la
+// primera version de esto abria index.html dentro de un <iframe> OCULTO -- se probo
+// en vivo contra la produccion real y la pestaña se quedaba pegada en "about:blank"
+// para siempre. Causa real: este sitio exige login con HTTP Basic Auth (header
+// `WWW-Authenticate: Basic`, confirmado con curl), y Chrome por diseño de seguridad
+// NUNCA reenvia credenciales de Basic Auth ya guardadas a un <iframe> (para que una
+// pagina no pueda robar una sesion ajena embebiendola oculta) -- la navegacion del
+// iframe simplemente nunca arranca, sin ningun error visible. Un <a target="_blank">
+// o un window.open() normal (ventana de primer nivel) SI reusa las credenciales
+// guardadas sin pedirlas de nuevo -- por eso los botones individuales "⬇ PDF"/
+// "⬇ Excel" de cada tarjeta siempre funcionaron bien.
+//
+// Por eso esto reusa UNA SOLA ventana real (window.open, igual que "📋 Abrir"/
+// "✏️ Editar" ya hacen) en vez de un iframe -- se abre una vez al empezar el grupo y
+// se navega otra vez por cada proyecto (misma ventana, nunca una nueva por archivo),
+// cerrandose sola al terminar todo el grupo. Mismo enlace profundo &descargar=pdf|excel
+// que ya usan los botones individuales, con dos parametros nuevos: &prefijoArchivo=<RPU>
+// (deja el no. de servicio al INICIO del nombre del archivo, el pedido explicito de
+// esta vez) y &automatizado=1 (evita que un confirm()/alert() -- ej. "¿generar de
+// todos modos?", candado de identidad de RPU -- deje esa ventana colgada para
+// siempre: nadie puede hacer clic en el dialogo de una ventana que nadie esta
+// viendo, asi que en automatizado=1 cualquier aviso se trata como cancelar, ver
+// arrancar()/manejarDescargaPorEnlaceProfundo en app.js). doc.save()/la descarga del
+// Excel van directo al navegador -- nunca se abre ningun visor dentro de esa ventana.
+const NOMBRE_VENTANA_DESCARGA_MASIVA = 'cfeDescargaMasivaLote40';
+
+function descargarUnoViaVentana(ventana, cliente, proyecto, rpu, tipo) {
+  return new Promise((resolve) => {
+    let terminado = false;
+    let timer = null;
+    const onMessage = (ev) => {
+      if (ev.source !== ventana || !ev.data || !ev.data.cfeLote40Descarga) return;
+      finalizar(!!ev.data.ok);
+    };
+    function finalizar(ok) {
+      if (terminado) return;
+      terminado = true;
+      window.removeEventListener('message', onMessage);
+      clearTimeout(timer);
+      resolve(ok);
+    }
+    window.addEventListener('message', onMessage);
+    // 35s de margen -- un estudio con recibo/verificación/fotos adjuntas descarga
+    // imágenes remotas antes de armar el PDF, puede tardar más que uno sin archivos.
+    timer = setTimeout(() => finalizar(false), 35000);
+    ventana.location.href = `index.html?cliente=${encodeURIComponent(cliente.id)}&proyecto=${encodeURIComponent(proyecto.id)}` +
+      `&descargar=${tipo}&prefijoArchivo=${encodeURIComponent(rpu)}&automatizado=1`;
+  });
+}
+
+function elementoEstadoDescargaMasiva() {
+  return document.getElementById('lote40DescargaMasivaEstado');
+}
+
+async function descargarTodosDeGrupo(filasGrupo, tipo, tituloGrupo) {
+  const pendientes = filasGrupo.filter((f) => f.proyecto?.ultimaInversionTotal != null);
+  const etiquetaTipo = tipo === 'pdf' ? 'PDF' : 'Excel';
+  if (!pendientes.length) {
+    alert(`${tituloGrupo}: ningún inmueble de este grupo tiene todavía una cotización calculada -- nada que descargar.`);
+    return;
+  }
+  if (!confirm(`¿Descargar ${pendientes.length} ${etiquetaTipo} de "${tituloGrupo}" directo a tu carpeta de Descargas?\n\n` +
+    'Se abre una ventana auxiliar que navega sola por cada cotización y se cierra al terminar -- no la cierres a mano ' +
+    'mientras tanto, y puede tardar varios segundos por cada archivo.')) return;
+  // Se abre AQUI, sincrono dentro del propio clic -- un window.open() disparado despues
+  // de un await (ej. dentro del for de abajo) pierde el "gesto del usuario" y la mayoria
+  // de navegadores lo bloquea como pop-up no solicitado.
+  const ventana = window.open('about:blank', NOMBRE_VENTANA_DESCARGA_MASIVA, 'width=480,height=420');
+  if (!ventana) {
+    alert('El navegador bloqueó la ventana auxiliar de descarga -- permite ventanas emergentes para este sitio e inténtalo de nuevo.');
+    return;
+  }
+  const estado = elementoEstadoDescargaMasiva();
+  let ok = 0;
+  const fallidos = [];
+  for (let i = 0; i < pendientes.length; i++) {
+    const f = pendientes[i];
+    if (estado) {
+      estado.hidden = false;
+      estado.textContent = `⬇ Descargando ${etiquetaTipo} ${i + 1} de ${pendientes.length} (${f.def.inmueble})…`;
+    }
+    const exito = await descargarUnoViaVentana(ventana, f.cliente, f.proyecto, f.def.rpu, tipo);
+    if (exito) ok++; else fallidos.push(f.def.inmueble);
+  }
+  ventana.close();
+  if (estado) estado.hidden = true;
+  let msg = `Listo: ${ok} de ${pendientes.length} ${etiquetaTipo} de "${tituloGrupo}" descargados a tu carpeta de Descargas.`;
+  if (fallidos.length) {
+    msg += `\n\nNo se pudieron descargar automáticamente (requieren revisión manual -- ábrelos uno por uno desde su ` +
+      `tarjeta, probablemente hay un aviso pendiente que confirmar):\n${fallidos.map((n) => '• ' + n).join('\n')}`;
+  }
+  alert(msg);
+}
+
+function botonesDescargaMasivaGrupo(filasGrupo, tituloGrupo) {
+  const cont = document.createElement('div');
+  cont.className = 'acciones botones-descarga-masiva-lote40';
+  const btnPdf = document.createElement('button');
+  btnPdf.className = 'btn-secundario';
+  btnPdf.textContent = '⬇ Descargar todos los PDF';
+  btnPdf.addEventListener('click', () => descargarTodosDeGrupo(filasGrupo, 'pdf', tituloGrupo));
+  const btnExcel = document.createElement('button');
+  btnExcel.className = 'btn-secundario';
+  btnExcel.textContent = '⬇ Descargar todos los Excel';
+  btnExcel.addEventListener('click', () => descargarTodosDeGrupo(filasGrupo, 'excel', tituloGrupo));
+  cont.append(btnPdf, btnExcel);
+  return cont;
+}
+
 function renderTabla(filas) {
   const cont = document.getElementById('lote40Tabla');
   cont.innerHTML = '';
@@ -345,7 +465,7 @@ function renderTabla(filas) {
       wrap.className = 'grupo-proyectos';
       const h4 = document.createElement('h4');
       h4.textContent = titulo;
-      wrap.append(h4, lista);
+      wrap.append(h4, botonesDescargaMasivaGrupo(filasGrupo, titulo), lista);
       cont.append(wrap);
     }
   }

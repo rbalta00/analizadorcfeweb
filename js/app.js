@@ -4514,9 +4514,19 @@ function mostrarPdfEnVisor(doc, nombreArchivo) {
   visor.scrollIntoView({ behavior: 'smooth' });
 }
 
+// prefijoArchivoDescarga: puesto por el enlace profundo &prefijoArchivo=<no. de servicio>
+// (ver arrancar() más abajo) -- pedido explicito del usuario, 2026-11-23, para que
+// "Descargar todos los PDF/Excel" de una tarifa completa (lote40Vista.js) pueda dejar
+// el número de servicio al INICIO del nombre de cada archivo, sin depender de que
+// proyecto.nombre ya lo traiga (la mayoría del lote sí sigue la convención "<rpu>
+// <inmueble>", pero no es garantizado para cualquier cotización). null en el uso
+// normal (botón manual dentro de esta misma pantalla) -- el nombre no cambia en nada.
+let prefijoArchivoDescarga = null;
+
 function nombreArchivoProyecto(prefijo, extension = 'pdf') {
   const base = `${clienteActual.nombre}_${proyectoActual.nombre}`.replace(/[^a-z0-9]+/gi, '_');
-  return `${prefijo}_${base}.${extension}`;
+  const prefijoServicio = prefijoArchivoDescarga ? `${prefijoArchivoDescarga.replace(/[^a-z0-9]+/gi, '_')}_` : '';
+  return `${prefijoServicio}${prefijo}_${base}.${extension}`;
 }
 
 // Confirma antes de exportar si el formulario tiene cambios desde el ultimo "Calcular" -- sin
@@ -4990,12 +5000,29 @@ $('btnGenerarExcel').addEventListener('click', () => { generarExcelCotizacion();
 // el visor (igual que el botón manual) se llama doc.save() de una vez -- el punto de
 // este enlace es no necesitar un clic extra después de llegar aquí. Para Excel no hace
 // falta nada extra: descargarExcelCotizacion() ya dispara la descarga real por sí sola.
+// Devuelve ok=true/false y, si esta pestaña fue ABIERTA por otra (ver "Descargar
+// todos los PDF/Excel" en lote40Vista.js -- una ventana reusada, navegada vía
+// window.open/location.href, NUNCA un <iframe>: este sitio exige login con HTTP
+// Basic Auth, y Chrome por seguridad nunca manda las credenciales ya guardadas a un
+// <iframe> -- la pestaña se queda pegada en blanco para siempre, confirmado en vivo
+// antes de este fix), le avisa a quien la abrió por postMessage en cuanto termina --
+// en una pestaña normal (clic manual en el visor, sin padre ni opener) esto no hace
+// nada, igual que siempre.
 async function manejarDescargaPorEnlaceProfundo(tipo) {
-  if (tipo === 'pdf') {
-    const resultado = await generarPdfCotizacion({ avisarSiNoHayResultado: false });
-    if (resultado) resultado.doc.save(resultado.nombreArchivo);
-  } else if (tipo === 'excel') {
-    await generarExcelCotizacion({ avisarSiNoHayResultado: false });
+  let ok = false;
+  try {
+    if (tipo === 'pdf') {
+      const resultado = await generarPdfCotizacion({ avisarSiNoHayResultado: false });
+      if (resultado) { resultado.doc.save(resultado.nombreArchivo); ok = true; }
+    } else if (tipo === 'excel') {
+      ok = await generarExcelCotizacion({ avisarSiNoHayResultado: false });
+    }
+  } catch (err) {
+    console.error('Descarga por enlace profundo falló:', err);
+  }
+  const destino = window.parent !== window ? window.parent : window.opener;
+  if (destino) {
+    try { destino.postMessage({ cfeLote40Descarga: true, ok }, location.origin); } catch (e) { /* ignorar */ }
   }
 }
 
@@ -5580,6 +5607,19 @@ $('btnVerificarPdf').addEventListener('click', async () => {
   // y un refresh normal de la pagina nunca vuelve a disparar la descarga sola (ver
   // manejarDescargaPorEnlaceProfundo()).
   const descargarParam = parametros.get('descargar');
+  // &prefijoArchivo=<no. de servicio> y &automatizado=1 -- pedido explicito del
+  // usuario, 2026-11-23: "Descargar todos los PDF/Excel" de una tarifa completa
+  // (lote40Vista.js) abre esta misma pagina, UNA VEZ por cada proyecto, dentro de un
+  // <iframe> oculto. prefijoArchivo deja el no. de servicio al INICIO del nombre del
+  // archivo (ver nombreArchivoProyecto() arriba). automatizado=1 evita que un
+  // confirm()/alert() (ej. "¿generar de todos modos?", candado de identidad de RPU)
+  // deje esa pestaña COLGADA PARA SIEMPRE -- nadie puede hacer clic en un dialogo de
+  // un iframe oculto. En automatizado=1, cualquier aviso que normalmente pediria
+  // confirmar se trata como "no, cancelar" (mas seguro omitir ESE estudio puntual --
+  // se reporta como "no descargado" en el visor -- que exportar algo sin que nadie
+  // vea el aviso real), y cualquier alert() informativo solo se registra en consola.
+  const prefijoArchivoParam = parametros.get('prefijoArchivo');
+  const automatizadoParam = parametros.get('automatizado') === '1';
   // &editar=1 (mismo patron, mismo motivo que &descargar -- pedido explicito del
   // usuario, 2026-11-20): botón "✏️ Editar" del visor del lote de 40
   // (lote40Vista.js), para reabrir un estudio directo en el formulario de captura
@@ -5594,6 +5634,11 @@ $('btnVerificarPdf').addEventListener('click', async () => {
       history.replaceState(null, '', location.pathname);
       abrirProyecto(clienteParam, proyectoParam);
       if (descargarParam === 'pdf' || descargarParam === 'excel') {
+        if (prefijoArchivoParam) prefijoArchivoDescarga = prefijoArchivoParam;
+        if (automatizadoParam) {
+          window.confirm = () => false;
+          window.alert = (msg) => console.warn('[descarga automatizada] aviso suprimido:', msg);
+        }
         manejarDescargaPorEnlaceProfundo(descargarParam);
       } else if (editarParam === '1') {
         const tab = $('tabCaptura');
