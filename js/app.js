@@ -334,7 +334,30 @@ $('btnEnviarFormularioWhatsapp').addEventListener('click', () => {
   window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank');
 });
 
+// Barra de navegación del topbar -- pedido explicito del usuario, 2026-11-24: "hazlo
+// como una pagina web donde puedo cambiar de paginas por medio de botones". Vive en
+// el <header>, fuera de las 7 pantallas, asi que nunca hay que repetirla -- solo se
+// marca cual boton corresponde a la pantalla activa (o ninguno, en las 2 pantallas
+// contextuales que dependen de un cliente/estudio especifico: Proyectos y Cliente).
+function marcarNavPaginaActiva(idPantalla) {
+  document.querySelectorAll('#topbarNav button[data-pagina]').forEach((btn) => {
+    btn.classList.toggle('topbar-nav-activo', btn.dataset.pagina === idPantalla);
+  });
+}
+document.querySelectorAll('#topbarNav button[data-pagina]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    ({
+      pantallaClientes: mostrarPantallaClientes,
+      pantallaEnvios: mostrarPantallaEnvios,
+      pantallaDashboard: mostrarPantallaDashboard,
+      pantallaDefinitivasPorTarifa: mostrarPantallaDefinitivasPorTarifa,
+      pantallaCotizadorMachote: mostrarPantallaCotizadorMachote,
+    })[btn.dataset.pagina]?.();
+  });
+});
+
 function mostrarPantallaClientes() {
+  marcarNavPaginaActiva('pantallaClientes');
   $('pantallaClientes').hidden = false;
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
@@ -552,6 +575,7 @@ async function renderListaEnvios() {
 }
 
 function mostrarPantallaEnvios() {
+  marcarNavPaginaActiva('pantallaEnvios');
   $('pantallaClientes').hidden = true;
   $('pantallaDashboard').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
@@ -705,6 +729,7 @@ function exportarDashboardCsv() {
 }
 
 function mostrarPantallaDashboard() {
+  marcarNavPaginaActiva('pantallaDashboard');
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
   $('pantallaDefinitivasPorTarifa').hidden = true;
@@ -760,6 +785,7 @@ function renderDefinitivasPorTarifa() {
 }
 
 function mostrarPantallaDefinitivasPorTarifa() {
+  marcarNavPaginaActiva('pantallaDefinitivasPorTarifa');
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
@@ -1202,6 +1228,7 @@ $('inputBuscarProyecto').addEventListener('input', renderListaProyectos);
 $('selectOrdenProyectos').addEventListener('change', renderListaProyectos);
 
 function mostrarPantallaProyectos(clienteId) {
+  marcarNavPaginaActiva(null); // pantalla contextual (depende de un cliente) -- ningun boton del nav queda marcado
   clienteActual = obtenerCliente(clienteId);
   if (!clienteActual) { mostrarPantallaClientes(); return; }
   proyectoActual = null; ultimoResultado = null; ultimoLeido = null; ultimoInputJSON = null;
@@ -1889,6 +1916,7 @@ function renderPanelVerificarMachote(tarifa) {
 }
 
 function mostrarPantallaCotizadorMachote() {
+  marcarNavPaginaActiva('pantallaCotizadorMachote');
   $('pantallaClientes').hidden = true;
   $('pantallaEnvios').hidden = true;
   $('pantallaDashboard').hidden = true;
@@ -2257,6 +2285,7 @@ function abrirProyecto(clienteId, proyectoId, { camposIniciales } = {}) {
   $('pantallaCotizadorMachote').hidden = true;
   $('pantallaProyectos').hidden = true;
   $('pantallaCliente').hidden = false;
+  marcarNavPaginaActiva(null); // pantalla contextual (depende de un cliente/estudio) -- ningun boton del nav queda marcado
   $('clienteNombreBarra').value = clienteActual.nombre;
   $('clienteTipoBarra').textContent = etiquetaTipo(clienteActual.tipo);
   fijarTitulo(`${proyectoActual.nombre} — ${clienteActual.nombre}`);
@@ -5857,4 +5886,5 @@ $('btnVerificarPdf').addEventListener('click', async () => {
   }
   renderListaClientes();
   fijarTitulo('Clientes');
+  marcarNavPaginaActiva('pantallaClientes'); // la pantalla Clientes ya es la visible por defecto en el HTML -- nunca pasa por mostrarPantallaClientes() en este arranque
 })();

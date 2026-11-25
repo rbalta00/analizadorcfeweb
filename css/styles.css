@@ -59,6 +59,10 @@ body {
   border-radius: 8px; padding: 7px 12px; font-size: 0.85rem; font-weight: 600; cursor: pointer;
 }
 .btn-refrescar:hover { background: rgba(255,255,255,0.12); }
+.topbar-nav { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+.topbar-nav .btn-refrescar { font-size: 0.8rem; padding: 6px 10px; }
+.topbar-nav-activo { background: var(--gold); color: #1a1f24; border-color: var(--gold); }
+.topbar-nav-activo:hover { background: var(--gold); }
 /* .btn-refrescar reusado como enlace "volver" en paginas aparte (lote40.html,
    vista-previa.html, vista-previa-compartida.html) -- <a> necesita estas 2 reglas que
    <button> ya trae por defecto, para verse igual. */

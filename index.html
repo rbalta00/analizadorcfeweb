@@ -19,6 +19,21 @@
       <button id="btnInstalar" class="btn-instalar">📥 Instalar en esta PC</button>
       <span id="estadoInstalado" class="estado-instalado" hidden>✓ Instalada en este dispositivo</span>
     </div>
+    <!-- Pedido explicito del usuario, 2026-11-24: "hazlo como una pagina web donde
+         puedo cambiar de paginas por medio de botones" -- antes, para ir de "Dashboard"
+         a "Envíos" (o cualquier otra pantalla) había que regresar primero a "Clientes" y
+         buscar el botón correcto ahí. Esta barra vive en el <header>, fuera de las 7
+         pantallas (<main id="pantallaX">) que se muestran/ocultan -- por eso es visible
+         siempre, sin tener que repetirla en cada una. El botón de la pantalla activa se
+         marca con topbar-nav-activo (ver marcarNavPaginaActiva() en app.js). -->
+    <nav class="topbar-nav" id="topbarNav">
+      <button type="button" data-pagina="pantallaClientes" class="btn-refrescar">👥 Clientes</button>
+      <button type="button" data-pagina="pantallaEnvios" class="btn-refrescar">📥 Envíos</button>
+      <button type="button" data-pagina="pantallaDashboard" class="btn-refrescar">🕐 Dashboard</button>
+      <button type="button" data-pagina="pantallaDefinitivasPorTarifa" class="btn-refrescar">✅ Definitivas por tarifa</button>
+      <button type="button" data-pagina="pantallaCotizadorMachote" class="btn-refrescar">🧭 Cotizador por machote</button>
+      <a href="lote40.html" target="_blank" class="btn-refrescar">🏢 Lote de 40 ↗</a>
+    </nav>
   </header>
 
   <!-- ================= PANTALLA: CLIENTES ================= -->
