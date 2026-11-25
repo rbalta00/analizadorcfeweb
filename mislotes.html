@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Mis lotes — Analizador FV CFE</title>
+  <meta name="description" content="Crea tus propios lotes de inmuebles (nombre + RPU esperados) y cruza cada uno contra tus cotizaciones reales, para saber cuántos ya tienen estudio y cuántos faltan." />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <meta name="theme-color" content="#164c3b" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>📦 Mis lotes</h1>
+    <p class="subtitulo">GESTORIA Y PROYECTOS SOELRB — tus propios lotes de inmuebles, con metas que tú capturas</p>
+    <div class="topbar-acciones">
+      <a href="index.html" class="btn-refrescar">← Volver al Analizador</a>
+      <a href="lote40.html" class="btn-refrescar">🏢 Lote de 40 ↗</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="tarjeta" id="seccionListaLotes">
+      <h2>Tus lotes</h2>
+      <p class="nota">Un lote es una lista de inmuebles que esperas cubrir (nombre + RPU) -- distinta del "Lote de 40
+        inmuebles" (ese es fijo, de un contrato en particular). Aquí puedes crear tantos lotes propios como
+        necesites: cada uno cruza su propia lista contra tus cotizaciones reales guardadas en este navegador, por
+        RPU, para saber de un vistazo cuántos ya tienen estudio y cuántos faltan -- aunque todavía no hayas creado
+        la cotización de ninguno.</p>
+      <div class="fila">
+        <label>Nombre del lote nuevo
+          <input type="text" id="inputNombreLoteNuevo" placeholder="Ej. Lote Atlixco 2026" />
+        </label>
+      </div>
+      <div class="acciones">
+        <button type="button" id="btnCrearLote" class="btn-primario">+ Crear lote</button>
+      </div>
+      <div id="listaLotes" class="lista-clientes"></div>
+    </section>
+
+    <section class="tarjeta" id="seccionDetalleLote" hidden>
+      <button type="button" id="btnVolverListaLotes" class="btn-refrescar">← Tus lotes</button>
+      <h2 id="tituloLoteActivo"></h2>
+      <div class="acciones">
+        <button type="button" id="btnRenombrarLote" class="btn-secundario">✏️ Renombrar lote</button>
+        <button type="button" id="btnExportarLoteCsv" class="btn-secundario">⬇️ Exportar a CSV</button>
+        <button type="button" id="btnEliminarLote" class="btn-secundario">🗑 Eliminar este lote</button>
+      </div>
+
+      <h3>Agregar inmueble a este lote</h3>
+      <p class="nota">El RPU es lo que cruza este inmueble contra tus cotizaciones reales -- si todavía no lo
+        sabes, puedes dejarlo en blanco y agregarlo después editando el inmueble (✏️).</p>
+      <div class="fila">
+        <label>Nombre del inmueble
+          <input type="text" id="inputNombreInmuebleNuevo" placeholder="Ej. Escuela Primaria Benito Juárez" />
+        </label>
+        <label>RPU (número de servicio)
+          <input type="text" id="inputRpuInmuebleNuevo" placeholder="Opcional por ahora" />
+        </label>
+      </div>
+      <div class="acciones">
+        <button type="button" id="btnAgregarInmueble" class="btn-secundario">+ Agregar inmueble</button>
+      </div>
+
+      <div id="totalesLote" class="tarjetas-metricas"></div>
+      <p class="nota">Las tarjetas atenuadas son inmuebles sin ninguna cotización creada todavía. "+ Crear" abre
+        una cotización en blanco bajo un cliente con el mismo nombre de este lote (se crea solo, si no existe
+        todavía), lista para capturar su recibo.</p>
+      <div id="tablaLote"></div>
+    </section>
+  </main>
+
+  <footer class="pie-cliente">
+    <p class="nota">Esta ventana solo lee los datos que ya están guardados en este navegador -- tus lotes propios
+      viven aparte de tus clientes/cotizaciones, no se suben a la nube junto con ellos.</p>
+  </footer>
+
+  <script type="module" src="js/mislotesVista.js"></script>
+</body>
+</html>

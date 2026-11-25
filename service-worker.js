@@ -3,13 +3,14 @@
 // en esta maquina -- ver web/ESTADO.md. Los datos (historial de cotizaciones) nunca
 // pasan por aqui, viven en localStorage del navegador, no en este cache.
 
-const CACHE_NOMBRE = "cfe-analizador-v144";
+const CACHE_NOMBRE = "cfe-analizador-v145";
 
 const ARCHIVOS_APP_SHELL = [
   "./",
   "index.html",
   "cliente.html",
   "lote40.html",
+  "mislotes.html",
   "manifest.json",
   "css/styles.css",
   "css/vista-previa.css",
@@ -48,6 +49,8 @@ const ARCHIVOS_APP_SHELL = [
   "js/pdfComponents.js",
   "js/nube.js",
   "js/lote40.js",
+  "js/lotesPropios.js",
+  "js/mislotesVista.js",
   "js/serviciosExtra.js",
   "js/excel.js",
   "js/formatoFijo.js",
