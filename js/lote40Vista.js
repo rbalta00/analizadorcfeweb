@@ -657,6 +657,16 @@ function nombreArchivoSeguro(s) {
   return String(s ?? '').replace(/[\\/:*?"<>|]+/g, '_').trim();
 }
 
+// Bug real reportado por el usuario, 2026-11-24 ("no termina de generar el zip"): el PDF/Excel/
+// adjuntos que entran al ZIP del lote 40 ya vienen comprimidos de origen (jsPDF/ExcelJS/JPG/PNG)
+// -- comprimirlos OTRA VEZ con DEFLATE (el default de JSZip) no ahorra casi nada de tamaño pero
+// SÍ le exige a JSZip retener a la vez las entradas sin comprimir, los búferes de compresión y el
+// blob de salida, todo en el hilo principal -- con decenas de inmuebles de varios MB cada uno, la
+// pestaña agota su memoria y Chrome la mata con "Out of Memory" antes de poder descargar nada.
+// `STORE` (sin comprimir) para TODO, sin excepciones -- incluido resumen.txt (pesa unos KB, la
+// diferencia de tamaño final es despreciable frente al ahorro real de memoria).
+const OPCIONES_ZIP_SIN_COMPRIMIR = { compression: 'STORE' };
+
 // Pedido explicito del usuario, 2026-11-24: "descarga todos los pdf y excel en
 // carpetas en un archivo aparte de los 40" -- un solo botón, arriba de todo (no por
 // grupo de tarifa, a diferencia de "Descargar todos los PDF/Excel"), que recorre LOS
@@ -749,7 +759,7 @@ async function agregarAdjuntosAlZip(zip, carpetaBase, subcarpeta, archivos) {
     const blob = await blobDeArchivoAdjunto(a);
     if (!blob) continue;
     const base = nombreArchivoSeguro(a.nombre?.replace(/\.[a-z0-9]+$/i, '') || `${subcarpeta}_${i + 1}`);
-    zip.file(`${carpetaBase}/${subcarpeta}/${base}${extensionDeArchivo(a, blob)}`, blob);
+    zip.file(`${carpetaBase}/${subcarpeta}/${base}${extensionDeArchivo(a, blob)}`, blob, OPCIONES_ZIP_SIN_COMPRIMIR);
   }
 }
 
@@ -823,6 +833,14 @@ async function guardarAnalisisEnCache(cliente, proyecto, pdfBlob, excelBlob, bas
   }
 }
 
+// Bug real reportado por el usuario, 2026-11-24 ("no termina de generar el zip"): un solo JSZip
+// con los 40 inmuebles (PDF+Excel+adjuntos de cada uno, varios MB cada uno) agotaba la memoria
+// de la pestaña -- Chrome la mataba con "Out of Memory" antes de poder descargar nada. Dos
+// arreglos juntos: (1) OPCIONES_ZIP_SIN_COMPRIMIR (arriba) -- nada de esto se beneficia de
+// comprimirse otra vez; (2) un ZIP POR TARIFA en vez de uno gigante -- la memoria pico ahora es
+// la del grupo más grande, no la del lote entero, y cada ZIP se descarga en cuanto está listo
+// (si una tarifa falla después, las que ya se armaron no se pierden). Con una sola tarifa con
+// datos, el resultado visible es el mismo de siempre: un solo ZIP.
 async function descargarTodoEnZip() {
   if (typeof JSZip === 'undefined') {
     alert('No se pudo cargar la librería para armar el ZIP (JSZip) -- revisa tu conexión y recarga la página.');
@@ -842,19 +860,23 @@ async function descargarTodoEnZip() {
   const todasLasFilas = grupos.flatMap((g) => g.filas);
   const yaListos = todasLasFilas.filter((f) => f.proyecto.analisisGenerado?.fingerprint === fingerprintProyecto(f.proyecto)).length;
   const porGenerar = total - yaListos;
-  if (!confirm(`¿Armar un ZIP con el PDF, el Excel, el resumen y los documentos adjuntos de los ${total} ` +
-    `inmueble(s) con datos capturados (una carpeta por tarifa, una subcarpeta por inmueble)?\n\n${yaListos} ya ` +
+  const numZips = grupos.length;
+  if (!confirm(`¿Armar ${numZips === 1 ? 'un ZIP' : `${numZips} ZIP (uno por tarifa)`} con el PDF, el Excel, el ` +
+    `resumen y los documentos adjuntos de los ${total} inmueble(s) con datos capturados?\n\n${yaListos} ya ` +
     `tienen su análisis generado de antes (se reusan tal cual, al instante) y ${porGenerar} se van a generar de ` +
     'nuevo (cambiaron desde la última vez, o es la primera vez) -- sin abrir ni navegar ninguna cotización.')) return;
   const { generarPdfCompletaDesdeVista } = await import('./propuesta.js');
-  const zip = new JSZip();
   const estado = elementoEstadoDescargaMasiva();
-  let ok = 0;
-  let reusados = 0;
+  const hoy = new Date().toISOString().slice(0, 10);
   let i = 0;
   const fallidos = [];
+  const zipsDescargados = [];
   for (const { tarifa, filas } of grupos) {
-    const carpetaTarifa = nombreArchivoSeguro(tarifa || 'Sin tarifa capturada');
+    const etiquetaTarifa = tarifa || 'Sin tarifa capturada';
+    const carpetaTarifa = nombreArchivoSeguro(etiquetaTarifa);
+    const zip = new JSZip();
+    let okGrupo = 0;
+    let reusadosGrupo = 0;
     for (const f of filas) {
       i++;
       const carpeta = `${carpetaTarifa}/${nombreArchivoSeguro(`${f.def.rpu} ${f.def.inmueble}`)}`;
@@ -868,7 +890,7 @@ async function descargarTodoEnZip() {
           estado.textContent = `📄 Usando análisis ya generado ${i} de ${total} (${f.def.inmueble})…`;
         }
         [pdfBlob, excelBlob] = await Promise.all([blobDeArchivoAdjunto(cache.pdf), blobDeArchivoAdjunto(cache.excel)]);
-        if (pdfBlob && excelBlob) reusados++;
+        if (pdfBlob && excelBlob) reusadosGrupo++;
       }
       try {
         // Siempre se construye `r` (barato, es solo el calculo del motor -- no
@@ -891,29 +913,49 @@ async function descargarTodoEnZip() {
           excelBlob = await excelCotizacionComoBlob(r);
           await guardarAnalisisEnCache(f.cliente, f.proyecto, pdfBlob, excelBlob, base, huella);
         }
-        zip.file(`${carpeta}/${base}.pdf`, pdfBlob);
-        zip.file(`${carpeta}/${base}.xlsx`, excelBlob);
-        zip.file(`${carpeta}/resumen.txt`, textoResumenInmueble(f, r));
+        zip.file(`${carpeta}/${base}.pdf`, pdfBlob, OPCIONES_ZIP_SIN_COMPRIMIR);
+        zip.file(`${carpeta}/${base}.xlsx`, excelBlob, OPCIONES_ZIP_SIN_COMPRIMIR);
+        zip.file(`${carpeta}/resumen.txt`, textoResumenInmueble(f, r), OPCIONES_ZIP_SIN_COMPRIMIR);
         await agregarAdjuntosAlZip(zip, carpeta, 'recibo', f.proyecto.archivosRecibo);
         await agregarAdjuntosAlZip(zip, carpeta, 'verificacion', f.proyecto.archivosVerificacion);
-        ok++;
+        okGrupo++;
       } catch (err) {
         console.error(`No se pudo generar el análisis de "${f.def.inmueble}":`, err);
         fallidos.push(f.def.inmueble);
+      } finally {
+        // Soltar las referencias de este inmueble antes de seguir con el siguiente --
+        // no son estas variables locales las que retienen memoria real (van de todos
+        // modos a salir de alcance), sino los Blobs que ya quedaron dentro de `zip`
+        // hasta que generateAsync() los procese -- justo por eso el ZIP es POR TARIFA
+        // y no uno solo con los 40, para que ese pico de memoria nunca sea el del lote
+        // entero.
+        pdfBlob = null;
+        excelBlob = null;
       }
     }
+    if (!okGrupo) continue; // nada que descargar en este grupo (todos fallaron)
+    if (estado) {
+      estado.hidden = false;
+      estado.textContent = `📦 Armando el ZIP de ${etiquetaTarifa}… 0%`;
+    }
+    const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' }, (meta) => {
+      if (estado) estado.textContent = `📦 Armando el ZIP de ${etiquetaTarifa}… ${Math.round(meta.percent)}%`;
+    });
+    const urlZip = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = urlZip;
+    a.download = `lote_40_inmuebles_${carpetaTarifa}_${hoy}.zip`;
+    a.click();
+    // Revocar con un margen breve, no de inmediato -- dar tiempo a que el navegador
+    // termine de leer el Blob para la descarga antes de invalidar su URL.
+    setTimeout(() => URL.revokeObjectURL(urlZip), 4000);
+    zipsDescargados.push({ tarifa: etiquetaTarifa, ok: okGrupo, reusados: reusadosGrupo });
   }
-  if (estado) estado.textContent = '📦 Armando el archivo ZIP final…';
-  const zipBlob = await zip.generateAsync({ type: 'blob' });
   if (estado) estado.hidden = true;
-  const urlZip = URL.createObjectURL(zipBlob);
-  const a = document.createElement('a');
-  a.href = urlZip;
-  a.download = `lote_40_inmuebles_analisis_${new Date().toISOString().slice(0, 10)}.zip`;
-  a.click();
-  URL.revokeObjectURL(urlZip);
-  let msg = `Listo: ${ok} de ${total} inmueble(s) con su PDF, Excel, resumen y documentos adjuntos dentro del ` +
-    `ZIP descargado (${reusados} reusados de análisis ya generados, ${ok - reusados} generados de nuevo).`;
+  let msg = zipsDescargados.length
+    ? `Listo: se ${zipsDescargados.length === 1 ? 'descargó 1 ZIP' : `descargaron ${zipsDescargados.length} ZIP (uno por tarifa)`}:\n` +
+      zipsDescargados.map((z) => `• ${z.tarifa}: ${z.ok} inmueble(s) (${z.reusados} reusados, ${z.ok - z.reusados} generados de nuevo)`).join('\n')
+    : 'No se pudo generar ningún ZIP -- revisa los inmuebles fallidos.';
   if (fallidos.length) {
     msg += `\n\nNo se pudo generar el análisis de estos (revísalos abriendo su cotización directamente):\n` +
       fallidos.map((n) => '• ' + n).join('\n');
