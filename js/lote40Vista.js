@@ -19,6 +19,15 @@ import {
 } from './formulariosPorTarifa.js';
 import { leerRecibo } from './leerRecibo.js';
 
+// Bug real reportado por el usuario, 2026-11-24: "No se pudo leer el recibo
+// automáticamente: Cannot read properties of undefined (reading 'getDocument')" al
+// adjuntar un PDF en "Agregar servicio nuevo" -- leerRecibo()/pdftext.js llaman
+// `window.pdfjsLib.getDocument(...)`, pero lote40.html nunca cargó lib/pdf.min.js (ni
+// configuró su worker) porque esta pagina se armó aparte de index.html/cliente.html, que
+// sí lo tienen. Mismo patrón que app.js/clienteForm.js -- sin esto, pdfjsLib ni siquiera
+// existe en esta página.
+window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

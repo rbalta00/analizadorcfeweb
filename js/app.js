@@ -14,7 +14,7 @@ import {
   agregarSeccionPersonalizada, actualizarSeccionPersonalizada, eliminarSeccionPersonalizada,
 } from './clientes.js';
 import { renderSeccion, TITULOS_SECCIONES, seccionesActivasEnOrden, seccionTieneDatos, ordenSeccionesEfectivo, detectarCamposDinamicosConvertibles } from './secciones.js';
-import { TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa } from './textosGlobales.js';
+import { TARIFAS_PLANTILLA, resumenPlantillasPorTarifa, guardarPlantillaTarifa, eliminarPlantillaTarifa, aplicarPlantillaTarifa } from './textosGlobales.js';
 import { construirResultado } from './resultado.js';
 import { generarPdf, generarPdfCompletaDesdeVista } from './propuesta.js';
 import { descargarExcelCotizacion, excelCotizacionComoBlob } from './excel.js';
@@ -4201,6 +4201,28 @@ function renderPlantillasTarifa(r) {
         : `Reemplaza la plantilla de ${tarifa} con los ${nEditados} texto(s)/tabla(s) editados de ESTE proyecto.`;
       btnGuardar.addEventListener('click', () => onGuardarPlantillaTarifa(tarifa));
       fila.append(btnGuardar);
+      // Bug real reportado por el usuario, 2026-11-24 (caso: "40 inmuebles" ->
+      // Universidad Tecnológica de Xicotepec de Juárez, GDMTH): guardarPlantillaTarifa()
+      // SÍ guarda el snapshot completo (secciones/gráficas/tablas apagadas, bloques de
+      // "cómo se calculó", pasos) desde 2026-11-12, y secciones.js SÍ cae a esta
+      // plantilla para la REDACCIÓN de cada párrafo/celda en tiempo de render (ver
+      // leerPlantillaTarifa() mas arriba) -- pero nada volvia a copiar la parte
+      // ESTRUCTURAL (seccionesExcluidas/graficosExcluidos/calculosActivos/tablas
+      // ocultas/pasos) sobre un proyecto YA EXISTENTE que se quedó fuera de sincronía
+      // (ej. uno de los 40 inmuebles capturado antes de guardar esta plantilla, o
+      // corregido a mano sin pasar por "Cotizar con machote"). aplicarPlantillaTarifa()
+      // ya existía en textosGlobales.js desde esa misma correccion, completa y correcta,
+      // pero nunca se conectó a ningun botón -- quedó como codigo muerto. Este botón
+      // cierra ese hueco para cualquier estudio, no solo para este caso puntual.
+      if (n) {
+        const btnAplicar = document.createElement('button');
+        btnAplicar.type = 'button';
+        btnAplicar.className = 'btn-bloque-rapido';
+        btnAplicar.textContent = '📥 Aplicar esta plantilla a mi estudio actual';
+        btnAplicar.title = `Reemplaza en ESTE proyecto los textos/tablas editados, las secciones/gráficas/tablas apagadas, los bloques de "cómo se calculó" y los pasos, con los de la plantilla de ${tarifa} -- tarifa, cargos, identidad y consumo de este cliente NO se tocan.`;
+        btnAplicar.addEventListener('click', () => onAplicarPlantillaTarifa(tarifa));
+        fila.append(btnAplicar);
+      }
     }
     if (n) {
       const btnEliminar = document.createElement('button');
@@ -4239,6 +4261,19 @@ function onGuardarPlantillaTarifa(tarifa) {
     alert(`Se guardó la plantilla de ${tarifa}, pero se omitieron ${omitidos} texto(s) que mencionaban el titular/domicilio/número de servicio de esta cotización -- no tiene sentido que otra cotización de la misma tarifa arranque con los datos de este inmueble.`);
   }
   if (ultimoResultado) renderSecciones(ultimoResultado);
+}
+
+function onAplicarPlantillaTarifa(tarifa) {
+  if (!confirm(`¿Aplicar la plantilla de ${tarifa} sobre este estudio? Se reemplazan los textos/tablas editados, las secciones/gráficas/tablas apagadas, los bloques "cómo se calculó" y los pasos con los de la plantilla de ${tarifa} -- cualquier redacción propia de ESTE estudio que no esté en la plantilla se pierde. Tarifa, cargos, identidad y consumo de este cliente NO se tocan, se quedan tal cual ya los tengas capturados.`)) return;
+  aplicarPlantillaTarifa(proyectoActual, tarifa);
+  guardarProyecto(clienteActual, proyectoActual);
+  if (ultimoResultado) {
+    ultimoResultado.calculosActivos = proyectoActual.calculosActivos || todosLosBloques();
+    ultimoResultado.textosEditados = recuperarTextosEditadosOrfanados(proyectoActual.textosEditados || {}, ultimoResultado);
+    ultimoResultado.textosOcultos = proyectoActual.textosOcultos || {};
+  }
+  _reflejarPasoEnResultado();
+  renderSelectorPasos();
 }
 
 function onEliminarPlantillaTarifa(tarifa) {
