@@ -5,10 +5,13 @@
 // dia: "que me abra en una ventana independiente", para poder tener el analizador y
 // este visor abiertos al mismo tiempo en pestañas/ventanas distintas sin que se pisen.
 // Lee el MISMO localStorage (mismo origen que index.html) via clientes.js -- de
-// solo lectura en casi todo, con UNA excepcion explicita: el boton "+ Crear" de un
+// solo lectura en casi todo, con DOS excepciones explicitas: el boton "+ Crear" de un
 // inmueble "— Sin crear" (ver tarjetaLote40/crearProyectoPendiente mas abajo,
-// 2026-11-20) SI escribe un proyecto nuevo en blanco, pedido explicito del usuario.
-import { listarClientes, crearCliente, crearProyecto } from './clientes.js';
+// 2026-11-20) SI escribe un proyecto nuevo en blanco, pedido explicito del usuario; y
+// el cache de analisis generado (proyecto.analisisGenerado, ver descargarTodoEnZip()
+// mas abajo, 2026-11-24) SI escribe sobre un proyecto YA existente para guardar el
+// PDF/Excel que acaba de generar, tambien pedido explicito del usuario.
+import { listarClientes, crearCliente, crearProyecto, guardarProyecto } from './clientes.js';
 import { LOTE_40_INMUEBLES, normalizarRpu } from './lote40.js';
 import { ETIQUETAS_TARIFA, ORDEN_TARIFAS } from './tarifas.js';
 import { M, PCT } from './util.js';
@@ -20,6 +23,7 @@ import {
 import { leerRecibo } from './leerRecibo.js';
 import { construirRDesdeProyecto, renderEnContenedor, prepararImagenesParaDocumentos } from './vistaPreviaComun.js';
 import { excelCotizacionComoBlob } from './excel.js';
+import { supabaseSubirArchivo, supabaseEliminarArchivo } from './supabase.js';
 
 // Bug real reportado por el usuario, 2026-11-24: "No se pudo leer el recibo
 // automáticamente: Cannot read properties of undefined (reading 'getDocument')" al
@@ -749,6 +753,76 @@ async function agregarAdjuntosAlZip(zip, carpetaBase, subcarpeta, archivos) {
   }
 }
 
+// Pedido explicito del usuario, mismo dia, seguimiento inmediato de la descarga en
+// ZIP: "deberiamos tener un pdf ya generado ahi en el servicio... que solo se
+// elimine si generamos de nuevo otro por algun cambio" + "cuando te pida descargar
+// todo ya lo tengas generado" + "si genero otro pues se guarda ese". El PDF/Excel de
+// cada inmueble se guarda en Supabase Storage (proyecto.analisisGenerado) la PRIMERA
+// vez que se genera -- las siguientes veces que se pida el ZIP, si nada cambio desde
+// entonces, se reusa tal cual (instantaneo, sin volver a renderizar/generar nada).
+// Solo se regenera (y se reemplaza el archivo guardado) el inmueble que de verdad
+// cambio.
+//
+// "Nada cambio" se decide con una huella del CONTENIDO real del proyecto (motor.js
+// es una funcion pura de esos datos) -- NUNCA con `proyecto.actualizadoEn`: esa
+// fecha se actualiza en CUALQUIER guardado (incluido el que hace este mismo cache
+// para persistir su propia huella), así que usarla como huella se invalidaria sola
+// en el instante de guardarse. Se excluyen a propósito `actualizadoEn`/`creadoEn`
+// (bookkeeping, no afecta el PDF) y `analisisGenerado` (el cache no puede incluirse
+// a si mismo). `VERSION_FORMATO_ANALISIS` es una valvula de escape manual -- si algún
+// día cambia de verdad cómo se genera el PDF/Excel (no el contenido del proyecto) y
+// hace falta invalidar TODOS los cache de golpe, basta subir este número.
+const VERSION_FORMATO_ANALISIS = 1;
+
+function fingerprintProyecto(proyecto) {
+  const { actualizadoEn, creadoEn, analisisGenerado, ...resto } = proyecto;
+  const texto = VERSION_FORMATO_ANALISIS + '|' + JSON.stringify(resto);
+  let h = 0;
+  for (let i = 0; i < texto.length; i++) h = (h * 31 + texto.charCodeAt(i)) | 0;
+  return h.toString(36);
+}
+
+// Sube el PDF/Excel recien generado a Supabase Storage, actualiza
+// proyecto.analisisGenerado con la huella actual, y borra (mejor esfuerzo, sin
+// bloquear ni tronar si falla) los archivos viejos que haya reemplazado. Guarda el
+// proyecto de verdad (localStorage, NUNCA la nube completa -- guardarProyecto() es
+// puro localStorage, ver import arriba) para que el cache sobreviva cerrar esta
+// pagina. Si el proyecto esta bloqueada (definitiva), guardarProyecto() se niega a
+// guardar -- el cache simplemente no persiste para esa, aceptable (una definitiva ya
+// congelada no deberia necesitar regenerarse).
+async function guardarAnalisisEnCache(cliente, proyecto, pdfBlob, excelBlob, base, huella) {
+  const viejo = proyecto.analisisGenerado;
+  try {
+    const pdfFile = new File([pdfBlob], `${base}.pdf`, { type: 'application/pdf' });
+    const excelFile = new File([excelBlob], `${base}.xlsx`,
+      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    // Promise.allSettled, NO Promise.all -- bug real encontrado probando esto en vivo:
+    // con Promise.all, si UNA de las 2 subidas falla (pasó de verdad: el bucket
+    // "recibos" solo aceptaba pdf/jpeg/png/webp, el .xlsx se rechazaba con 415 hasta
+    // que se agregó su mime type al bucket), la OTRA subida que SÍ había tenido éxito
+    // se descartaba sin limpiar -- quedaba huérfana en Supabase Storage para siempre,
+    // sin ninguna referencia que la borrara después.
+    const [pdfRes, excelRes] = await Promise.allSettled([
+      supabaseSubirArchivo('analisis-cache', pdfFile),
+      supabaseSubirArchivo('analisis-cache', excelFile),
+    ]);
+    if (pdfRes.status === 'rejected' || excelRes.status === 'rejected') {
+      if (pdfRes.status === 'fulfilled') supabaseEliminarArchivo(pdfRes.value.ruta).catch(() => {});
+      if (excelRes.status === 'fulfilled') supabaseEliminarArchivo(excelRes.value.ruta).catch(() => {});
+      throw (pdfRes.status === 'rejected' ? pdfRes.reason : excelRes.reason);
+    }
+    proyecto.analisisGenerado = { pdf: pdfRes.value, excel: excelRes.value, fingerprint: huella, generadoEn: new Date().toISOString() };
+    guardarProyecto(cliente, proyecto);
+    if (viejo?.pdf?.ruta) supabaseEliminarArchivo(viejo.pdf.ruta).catch(() => {});
+    if (viejo?.excel?.ruta) supabaseEliminarArchivo(viejo.excel.ruta).catch(() => {});
+  } catch (err) {
+    // No es fatal para el ZIP en curso -- el PDF/Excel recien generado ya esta en
+    // `pdfBlob`/`excelBlob` y de todos modos se mete al ZIP; solo no quedo guardado
+    // para la proxima vez.
+    console.error(`No se pudo guardar en caché el análisis de "${proyecto.nombre}":`, err);
+  }
+}
+
 async function descargarTodoEnZip() {
   if (typeof JSZip === 'undefined') {
     alert('No se pudo cargar la librería para armar el ZIP (JSZip) -- revisa tu conexión y recarga la página.');
@@ -762,37 +836,61 @@ async function descargarTodoEnZip() {
     alert('Ningún inmueble del lote tiene todavía una cotización con datos capturados -- nada que meter al ZIP.');
     return;
   }
+  // Pre-chequeo: solo la huella (puro JSON del proyecto, no construye `r` ni
+  // renderiza nada) -- barato, se usa para avisar de antemano cuántos ya están listos
+  // (instantáneos) y cuántos se van a generar de nuevo (cambiaron, o es la primera vez).
+  const todasLasFilas = grupos.flatMap((g) => g.filas);
+  const yaListos = todasLasFilas.filter((f) => f.proyecto.analisisGenerado?.fingerprint === fingerprintProyecto(f.proyecto)).length;
+  const porGenerar = total - yaListos;
   if (!confirm(`¿Armar un ZIP con el PDF, el Excel, el resumen y los documentos adjuntos de los ${total} ` +
-    'inmueble(s) con datos capturados (una carpeta por tarifa, una subcarpeta por inmueble)? Se arma sin abrir ni ' +
-    `navegar a ninguna cotización -- con ${total} inmueble(s) puede tardar varios minutos (genera cada PDF/Excel ` +
-    'de verdad, solo que sin moverte de esta pantalla).')) return;
+    `inmueble(s) con datos capturados (una carpeta por tarifa, una subcarpeta por inmueble)?\n\n${yaListos} ya ` +
+    `tienen su análisis generado de antes (se reusan tal cual, al instante) y ${porGenerar} se van a generar de ` +
+    'nuevo (cambiaron desde la última vez, o es la primera vez) -- sin abrir ni navegar ninguna cotización.')) return;
   const { generarPdfCompletaDesdeVista } = await import('./propuesta.js');
   const zip = new JSZip();
   const estado = elementoEstadoDescargaMasiva();
   let ok = 0;
+  let reusados = 0;
   let i = 0;
   const fallidos = [];
   for (const { tarifa, filas } of grupos) {
     const carpetaTarifa = nombreArchivoSeguro(tarifa || 'Sin tarifa capturada');
     for (const f of filas) {
       i++;
-      if (estado) {
-        estado.hidden = false;
-        estado.textContent = `📦 Generando ${i} de ${total} (${f.def.inmueble})…`;
+      const carpeta = `${carpetaTarifa}/${nombreArchivoSeguro(`${f.def.rpu} ${f.def.inmueble}`)}`;
+      const base = nombreArchivoSeguro(`${f.def.rpu} ${f.def.inmueble}`);
+      const huella = fingerprintProyecto(f.proyecto);
+      const cache = f.proyecto.analisisGenerado;
+      let pdfBlob = null, excelBlob = null;
+      if (cache && cache.fingerprint === huella) {
+        if (estado) {
+          estado.hidden = false;
+          estado.textContent = `📄 Usando análisis ya generado ${i} de ${total} (${f.def.inmueble})…`;
+        }
+        [pdfBlob, excelBlob] = await Promise.all([blobDeArchivoAdjunto(cache.pdf), blobDeArchivoAdjunto(cache.excel)]);
+        if (pdfBlob && excelBlob) reusados++;
       }
       try {
+        // Siempre se construye `r` (barato, es solo el calculo del motor -- no
+        // renderiza ni genera nada todavia) porque el resumen.txt lo necesita sin
+        // importar si el PDF/Excel vinieron del cache o se van a generar de nuevo.
         const r = construirRDesdeProyecto(f.proyecto);
         if (!r) throw new Error('construirRDesdeProyecto regresó null');
-        const carpeta = `${carpetaTarifa}/${nombreArchivoSeguro(`${f.def.rpu} ${f.def.inmueble}`)}`;
-        // Renderiza ESTE inmueble en el contenedor oculto (reemplaza lo que haya del
-        // anterior -- renderEnContenedor limpia el innerHTML primero) y prepara sus
-        // imagenes/adjuntos ANTES de generar, exactamente como hace el editor.
-        renderEnContenedor(r, 'contenedorSecciones');
-        await prepararImagenesParaDocumentos(r);
-        const doc = generarPdfCompletaDesdeVista(r);
-        const pdfBlob = doc.output('blob');
-        const excelBlob = await excelCotizacionComoBlob(r);
-        const base = nombreArchivoSeguro(`${f.def.rpu} ${f.def.inmueble}`);
+        if (!pdfBlob || !excelBlob) {
+          if (estado) {
+            estado.hidden = false;
+            estado.textContent = `📦 Generando ${i} de ${total} (${f.def.inmueble})…`;
+          }
+          // Renderiza ESTE inmueble en el contenedor oculto (reemplaza lo que haya del
+          // anterior -- renderEnContenedor limpia el innerHTML primero) y prepara sus
+          // imagenes/adjuntos ANTES de generar, exactamente como hace el editor.
+          renderEnContenedor(r, 'contenedorSecciones');
+          await prepararImagenesParaDocumentos(r);
+          const doc = generarPdfCompletaDesdeVista(r);
+          pdfBlob = doc.output('blob');
+          excelBlob = await excelCotizacionComoBlob(r);
+          await guardarAnalisisEnCache(f.cliente, f.proyecto, pdfBlob, excelBlob, base, huella);
+        }
         zip.file(`${carpeta}/${base}.pdf`, pdfBlob);
         zip.file(`${carpeta}/${base}.xlsx`, excelBlob);
         zip.file(`${carpeta}/resumen.txt`, textoResumenInmueble(f, r));
@@ -815,7 +913,7 @@ async function descargarTodoEnZip() {
   a.click();
   URL.revokeObjectURL(urlZip);
   let msg = `Listo: ${ok} de ${total} inmueble(s) con su PDF, Excel, resumen y documentos adjuntos dentro del ` +
-    'ZIP descargado.';
+    `ZIP descargado (${reusados} reusados de análisis ya generados, ${ok - reusados} generados de nuevo).`;
   if (fallidos.length) {
     msg += `\n\nNo se pudo generar el análisis de estos (revísalos abriendo su cotización directamente):\n` +
       fallidos.map((n) => '• ' + n).join('\n');

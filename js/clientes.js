@@ -236,6 +236,12 @@ export function crearProyecto(cliente, { nombre } = {}) {
     // -- el sembrador se alinea solo al techo en vez de sembrar siempre sin rotar (ver panelesEnTecho en sembrador.js).
     archivosRecibo: null, // array de {nombre,tipo,url,ruta} -- archivos originales subidos a Supabase Storage (ver supabase.js)
     archivosVerificacion: null, // igual forma que archivosRecibo, para el documento de verificacion en sitio (evidencia adjunta, no se lee)
+    // analisisGenerado: {pdf:{nombre,tipo,url,ruta}, excel:{...}, fingerprint, generadoEn} -- cache del PDF/Excel
+    // completo de ESTE proyecto, pedido explicito del usuario 2026-11-24 ("un pdf ya generado ahi... que solo se
+    // elimine si generamos de nuevo otro por algun cambio"). Lo llena/reemplaza descargarTodoEnZip() (lote40Vista.js)
+    // la primera vez que genera este analisis -- las siguientes veces, si `fingerprint` sigue coincidiendo con el
+    // contenido actual del proyecto, se reusa el PDF/Excel ya subido en vez de volver a generarlo.
+    analisisGenerado: null,
     // definitiva: marca manual (boton "Marcar como definitiva y guardar", app.js) para distinguir la version
     // final de una cotizacion de versiones de prueba/comparacion -- pedido explicito del usuario, 2026-11-05. Se
     // muestra como insignia "✅ Definitiva" en el historial de cotizaciones del cliente (tarjetaProyecto).
