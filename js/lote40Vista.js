@@ -18,7 +18,8 @@ import {
   llenarFormularioTarifaDesdeRecibo, esDomestica as esDomesticaTarifa,
 } from './formulariosPorTarifa.js';
 import { leerRecibo } from './leerRecibo.js';
-import { construirRDesdeProyecto } from './vistaPreviaComun.js';
+import { construirRDesdeProyecto, renderEnContenedor, prepararImagenesParaDocumentos } from './vistaPreviaComun.js';
+import { excelCotizacionComoBlob } from './excel.js';
 
 // Bug real reportado por el usuario, 2026-11-24: "No se pudo leer el recibo
 // automáticamente: Cannot read properties of undefined (reading 'getDocument')" al
@@ -658,24 +659,27 @@ function nombreArchivoSeguro(s) {
 // 40 y arma UN SOLO archivo .zip con una carpeta por tarifa, y dentro de esa, una
 // subcarpeta por inmueble -- en vez de archivos sueltos en Descargas.
 //
-// REESCRITO el mismo dia, mismo pedido en seguimiento: el primer intento abria una
-// ventana auxiliar y la navegaba, una cotizacion a la vez, a la pagina COMPLETA de
-// cada proyecto (index.html?...&descargar=zip) para generar su PDF/Excel leyendo el
-// DOM ya renderizado -- es la unica forma de que ese PDF salga fiel a pantalla (con
-// ediciones/plantillas), pero el usuario pidio explicitamente que el ZIP NO tuviera
-// que ir "a cada cotizacion una por una". En su lugar: nada de ventana ni navegacion.
-// Por cada inmueble se arma `r` DIRECTO en memoria con construirRDesdeProyecto()
-// (vistaPreviaComun.js -- el mismo helper ya usado por las vistas previas, que solo
-// lee proyecto.formulario y corre el motor, sin tocar el DOM) y se escribe un
-// resumen.txt con las cifras ya calculadas (igual que el resto de la app) -- junto
-// con el recibo y la verificacion en sitio que el proyecto YA tenga adjuntos
-// (archivosRecibo/archivosVerificacion, descargados directo de su URL de Supabase
-// Storage, el mismo fetch() que ya usa convertirArchivosParaPdf en
-// vistaPreviaComun.js). Sin PDF/Excel completo de 25+ paginas por inmueble -- quien
-// quiera eso de un inmueble en particular sigue teniendo los botones "⬇ PDF"/
-// "⬇ Excel" de su propia tarjeta, o "Descargar todos los PDF/Excel" por grupo de
-// tarifa (sin tocar, siguen navegando uno por uno porque ESOS si generan el PDF
-// completo).
+// REESCRITO dos veces el mismo dia, mismo pedido en seguimiento:
+// 1) El primer intento abria una ventana auxiliar y la navegaba, una cotizacion a la
+//    vez, a la pagina COMPLETA de cada proyecto (index.html?...&descargar=zip) para
+//    generar su PDF/Excel leyendo el DOM ya renderizado -- el usuario pidio
+//    explicitamente que el ZIP NO tuviera que ir "a cada cotizacion una por una".
+// 2) El segundo intento quito la navegacion pero TAMBIEN quito el PDF/Excel completo
+//    (solo un resumen.txt + los adjuntos) -- el usuario aclaro que SI quiere el PDF y
+//    el Excel completos de cada inmueble, solo que sin tener que navegar.
+// Solucion final: el PDF/Excel completo se genera DENTRO de esta misma pagina, sin
+// abrir ni navegar ninguna otra -- `#contenedorSecciones` (lote40.html, oculto con
+// `display:none`, nunca visible) se reusa para renderizar un inmueble a la vez con
+// `renderEnContenedor()` (vistaPreviaComun.js, el mismo helper que ya usan las
+// vistas previas), se preparan sus imagenes/adjuntos con
+// `prepararImagenesParaDocumentos()`, y se llama DIRECTO a
+// `generarPdfCompletaDesdeVista()` (propuesta.js) y `excelCotizacionComoBlob()`
+// (excel.js) -- las MISMAS funciones que usa el editor, nunca una copia, leyendo ese
+// mismo DOM oculto. Se mantiene ademas el resumen.txt (texto plano, rapido de abrir)
+// y los adjuntos reales (recibo/verificacion) como ya se tenian. Quien quiera el PDF/
+// Excel de un solo inmueble en particular sigue teniendo los botones "⬇ PDF"/"⬇ Excel"
+// de su propia tarjeta, o "Descargar todos los PDF/Excel" por grupo de tarifa (sin
+// tocar, esos SI siguen navegando uno por uno -- ver mas abajo).
 function textoResumenInmueble(f, r) {
   const lineas = [
     `${f.def.inmueble}`,
@@ -707,8 +711,8 @@ function textoResumenInmueble(f, r) {
     `Cotización definitiva: ${f.proyecto?.definitiva ? 'Sí' : 'No'}`,
     `Última actualización: ${f.proyecto ? new Date(f.proyecto.actualizadoEn).toLocaleString('es-MX') : '—'}`,
     '',
-    'Este resumen se armó directo de los datos ya capturados en esta app -- no es el análisis completo en PDF ' +
-      '(para eso, abre la cotización o usa "Descargar todos los PDF" del grupo de su tarifa).');
+    'Resumen rápido de referencia -- el análisis completo (con todas las secciones, gráficas y tablas) está en ' +
+      'el PDF y el Excel que vienen junto a este archivo, en esta misma carpeta.');
   return lineas.join('\n');
 }
 
@@ -758,9 +762,11 @@ async function descargarTodoEnZip() {
     alert('Ningún inmueble del lote tiene todavía una cotización con datos capturados -- nada que meter al ZIP.');
     return;
   }
-  if (!confirm(`¿Armar un ZIP con el resumen y los documentos adjuntos de los ${total} inmueble(s) con datos ` +
-    'capturados (una carpeta por tarifa, una subcarpeta por inmueble)? Se arma directo de lo ya guardado en esta ' +
-    'app, sin abrir ninguna cotización.')) return;
+  if (!confirm(`¿Armar un ZIP con el PDF, el Excel, el resumen y los documentos adjuntos de los ${total} ` +
+    'inmueble(s) con datos capturados (una carpeta por tarifa, una subcarpeta por inmueble)? Se arma sin abrir ni ' +
+    `navegar a ninguna cotización -- con ${total} inmueble(s) puede tardar varios minutos (genera cada PDF/Excel ` +
+    'de verdad, solo que sin moverte de esta pantalla).')) return;
+  const { generarPdfCompletaDesdeVista } = await import('./propuesta.js');
   const zip = new JSZip();
   const estado = elementoEstadoDescargaMasiva();
   let ok = 0;
@@ -772,18 +778,29 @@ async function descargarTodoEnZip() {
       i++;
       if (estado) {
         estado.hidden = false;
-        estado.textContent = `📦 Agregando ${i} de ${total} (${f.def.inmueble})…`;
+        estado.textContent = `📦 Generando ${i} de ${total} (${f.def.inmueble})…`;
       }
       try {
         const r = construirRDesdeProyecto(f.proyecto);
         if (!r) throw new Error('construirRDesdeProyecto regresó null');
         const carpeta = `${carpetaTarifa}/${nombreArchivoSeguro(`${f.def.rpu} ${f.def.inmueble}`)}`;
+        // Renderiza ESTE inmueble en el contenedor oculto (reemplaza lo que haya del
+        // anterior -- renderEnContenedor limpia el innerHTML primero) y prepara sus
+        // imagenes/adjuntos ANTES de generar, exactamente como hace el editor.
+        renderEnContenedor(r, 'contenedorSecciones');
+        await prepararImagenesParaDocumentos(r);
+        const doc = generarPdfCompletaDesdeVista(r);
+        const pdfBlob = doc.output('blob');
+        const excelBlob = await excelCotizacionComoBlob(r);
+        const base = nombreArchivoSeguro(`${f.def.rpu} ${f.def.inmueble}`);
+        zip.file(`${carpeta}/${base}.pdf`, pdfBlob);
+        zip.file(`${carpeta}/${base}.xlsx`, excelBlob);
         zip.file(`${carpeta}/resumen.txt`, textoResumenInmueble(f, r));
         await agregarAdjuntosAlZip(zip, carpeta, 'recibo', f.proyecto.archivosRecibo);
         await agregarAdjuntosAlZip(zip, carpeta, 'verificacion', f.proyecto.archivosVerificacion);
         ok++;
       } catch (err) {
-        console.error(`No se pudo armar el resumen de "${f.def.inmueble}":`, err);
+        console.error(`No se pudo generar el análisis de "${f.def.inmueble}":`, err);
         fallidos.push(f.def.inmueble);
       }
     }
@@ -794,12 +811,13 @@ async function descargarTodoEnZip() {
   const urlZip = URL.createObjectURL(zipBlob);
   const a = document.createElement('a');
   a.href = urlZip;
-  a.download = `lote_40_inmuebles_resumen_${new Date().toISOString().slice(0, 10)}.zip`;
+  a.download = `lote_40_inmuebles_analisis_${new Date().toISOString().slice(0, 10)}.zip`;
   a.click();
   URL.revokeObjectURL(urlZip);
-  let msg = `Listo: ${ok} de ${total} inmueble(s) con su resumen y documentos adjuntos dentro del ZIP descargado.`;
+  let msg = `Listo: ${ok} de ${total} inmueble(s) con su PDF, Excel, resumen y documentos adjuntos dentro del ` +
+    'ZIP descargado.';
   if (fallidos.length) {
-    msg += `\n\nNo se pudo armar el resumen de estos (revísalos abriendo su cotización directamente):\n` +
+    msg += `\n\nNo se pudo generar el análisis de estos (revísalos abriendo su cotización directamente):\n` +
       fallidos.map((n) => '• ' + n).join('\n');
   }
   alert(msg);

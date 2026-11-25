@@ -103,9 +103,17 @@
     <p class="nota">Esta ventana solo lee los datos que ya están guardados en este navegador -- no modifica nada.</p>
   </footer>
 
+  <!-- Contenedor OCULTO (nunca visible) donde "Descargar TODO en un ZIP" renderiza cada
+       inmueble, uno a la vez, para poder generar su PDF/Excel completo exactamente igual
+       que el editor -- sin abrir ni navegar a ninguna otra pagina (ver
+       prepararImagenesParaDocumentos/renderEnContenedor en vistaPreviaComun.js). -->
+  <div id="contenedorSecciones" style="display:none"></div>
+
   <script src="lib/jszip.min.js"></script>
   <script src="lib/pdf.min.js"></script>
   <script src="lib/tesseract.min.js"></script>
+  <script src="lib/jspdf.umd.min.js"></script>
+  <script src="lib/exceljs.min.js"></script>
   <script type="module" src="js/lote40Vista.js"></script>
 </body>
 </html>

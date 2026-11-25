@@ -157,11 +157,15 @@ async function convertirArchivosParaPdf(archivos) {
   return out;
 }
 
-// Genera el PDF real (generarPdfCompletaDesdeVista, la MISMA funcion que usa el
-// editor, nunca una copia) y lo muestra en un iframe dentro de `visorId`, con boton de
-// descarga. Requiere que `r` ya se haya renderizado en #contenedorSecciones (lee ese
-// DOM directo, igual que el editor).
-export async function generarYMostrarPdf(r, nombreArchivoBase, visorId = 'visorVistaPrevia') {
+// Extraido de generarYMostrarPdf() 2026-11-24 (ZIP de los 40, "descarga directa sin
+// navegar a cada cotizacion"): este paso de preparacion de imagenes (adjuntos/foto del
+// sembrado/fotos del inmueble, todas resueltas a algo que jsPDF/excel.js puedan leer)
+// es exactamente lo mismo que necesita el Excel ademas del PDF -- antes vivia pegado
+// dentro de generarYMostrarPdf, que ademas monta un iframe/boton de descarga en un
+// `visorId` (pensado para mostrar UN estudio en pantalla, no para generar 40 de
+// corrido sin ningun visor). Requiere que `r` ya se haya renderizado en
+// #contenedorSecciones (lee ese DOM directo, igual que el editor).
+export async function prepararImagenesParaDocumentos(r) {
   r._archivosReciboImgs = await convertirArchivosParaPdf(r.archivosRecibo);
   r._archivosVerificacionImgs = await convertirArchivosParaPdf(r.archivosVerificacion);
   // fotoSembrado/fotosInmueble viven en Supabase Storage desde el 2026-11-17 (ver
@@ -181,6 +185,14 @@ export async function generarYMostrarPdf(r, nombreArchivoBase, visorId = 'visorV
   // (renderEnContenedor) antes de llamar esto; sin resolver aqui tambien, cualquier <img>
   // con una URL de Supabase Storage se perderia en silencio del PDF (ver imagenes.js).
   await resolverImagenesRemotasEnDom();
+}
+
+// Genera el PDF real (generarPdfCompletaDesdeVista, la MISMA funcion que usa el
+// editor, nunca una copia) y lo muestra en un iframe dentro de `visorId`, con boton de
+// descarga. Requiere que `r` ya se haya renderizado en #contenedorSecciones (lee ese
+// DOM directo, igual que el editor).
+export async function generarYMostrarPdf(r, nombreArchivoBase, visorId = 'visorVistaPrevia') {
+  await prepararImagenesParaDocumentos(r);
   const { generarPdfCompletaDesdeVista } = await import('./propuesta.js');
   const doc = generarPdfCompletaDesdeVista(r);
   const blobUrl = doc.output('bloburl');
