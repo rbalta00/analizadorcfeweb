@@ -1027,6 +1027,12 @@ function tarjetaProyecto(p) {
     }
     const fila = document.createElement('div');
     fila.className = 'selector-mover-cliente acciones-envio';
+    // Bug real reportado por el usuario, 2026-11-24: "no deja elegir, aparece pero se
+    // va directo a abrirlo" -- el click para ABRIR el <select> (no solo los botones)
+    // tambien burbujeaba hasta el listener de la tarjeta completa (abrirProyecto), que
+    // navegaba de inmediato. stopPropagation en los botones no bastaba porque nunca se
+    // puso en el select mismo. Un solo listener en toda la fila la blinda completa.
+    fila.addEventListener('click', (ev) => ev.stopPropagation());
     const sel = document.createElement('select');
     sel.innerHTML = otros.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)} (${escapeHtml(etiquetaTipo(c.tipo))})</option>`).join('');
     const btnConfirmar = document.createElement('button');
