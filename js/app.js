@@ -1020,11 +1020,12 @@ function tarjetaProyecto(p) {
   btnMover.addEventListener('click', (e) => {
     e.stopPropagation();
     if (div.querySelector('.selector-mover-cliente')) return; // ya esta abierto
+    // Ya no se bloquea cuando no hay OTRO cliente todavía -- el selector siempre
+    // trae "+ Crear carpeta (cliente) nueva..." (bug real encontrado probando esto en
+    // vivo: antes de agregar esa opcion, este candado tenia sentido; ahora dejaba el
+    // boton 📁 completamente inservible para el caso mas comun de todos, "solo tengo 1
+    // cliente y quiero mandar esta estudio a uno nuevo").
     const otros = listarClientes().filter((c) => c.id !== clienteActual.id);
-    if (!otros.length) {
-      alert('No hay otro cliente todavía -- crea uno primero desde "← Clientes".');
-      return;
-    }
     const fila = document.createElement('div');
     fila.className = 'selector-mover-cliente acciones-envio';
     // Bug real reportado por el usuario, 2026-11-24: "no deja elegir, aparece pero se
@@ -1034,7 +1035,29 @@ function tarjetaProyecto(p) {
     // puso en el select mismo. Un solo listener en toda la fila la blinda completa.
     fila.addEventListener('click', (ev) => ev.stopPropagation());
     const sel = document.createElement('select');
-    sel.innerHTML = otros.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)} (${escapeHtml(etiquetaTipo(c.tipo))})</option>`).join('');
+    sel.innerHTML = otros.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)} (${escapeHtml(etiquetaTipo(c.tipo))})</option>`).join('')
+      + '<option value="__nuevo__">+ Crear carpeta (cliente) nueva...</option>';
+    // "Crear carpeta nueva" -- pedido explicito del usuario, 2026-11-24, mismo patron
+    // ya usado en el selector de "Guardar estudio" (poblarSelectClienteGuardar/
+    // btnCrearClienteGuardar): mini-formulario inline, nunca un prompt() nativo.
+    const filaNueva = document.createElement('div');
+    filaNueva.className = 'fila-nuevo-cliente-envio';
+    // Si no hay NINGUN otro cliente, "+ Crear carpeta nueva..." es la unica opcion del
+    // select -- nunca dispara un 'change' (no hay a que cambiar), asi que el mini-
+    // formulario debe nacer visible, no esperar a un evento que nunca va a llegar.
+    filaNueva.hidden = otros.length > 0;
+    const inputNombreNuevo = document.createElement('input');
+    inputNombreNuevo.type = 'text';
+    inputNombreNuevo.placeholder = 'Nombre de la carpeta/cliente nueva';
+    const inputTipoNuevo = document.createElement('input');
+    inputTipoNuevo.type = 'text';
+    inputTipoNuevo.setAttribute('list', 'listaTiposCliente');
+    inputTipoNuevo.placeholder = 'Gobierno, Particular, u otro...';
+    filaNueva.append(inputNombreNuevo, inputTipoNuevo);
+    sel.addEventListener('change', () => {
+      filaNueva.hidden = sel.value !== '__nuevo__';
+      if (!filaNueva.hidden) inputNombreNuevo.focus();
+    });
     const btnConfirmar = document.createElement('button');
     btnConfirmar.type = 'button';
     btnConfirmar.className = 'btn-bloque-rapido';
@@ -1045,9 +1068,18 @@ function tarjetaProyecto(p) {
     btnCancelar.textContent = '✕ Cancelar';
     btnConfirmar.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      const destinoId = sel.value;
-      const destinoNombre = otros.find((c) => c.id === destinoId)?.nombre || '';
-      if (!confirm(`¿Mover "${p.nombre}" al cliente "${destinoNombre}"? No cambia nada de su contenido ni su nombre, solo con qué cliente queda guardada.`)) return;
+      let destinoId = sel.value;
+      let destinoNombre;
+      if (destinoId === '__nuevo__') {
+        const nombreNuevo = inputNombreNuevo.value.trim();
+        if (!nombreNuevo) { alert('Falta el nombre de la carpeta/cliente nueva.'); return; }
+        const nuevo = crearCliente({ nombre: nombreNuevo, tipo: inputTipoNuevo.value.trim() });
+        destinoId = nuevo.id;
+        destinoNombre = nuevo.nombre;
+      } else {
+        destinoNombre = otros.find((c) => c.id === destinoId)?.nombre || '';
+        if (!confirm(`¿Mover "${p.nombre}" al cliente "${destinoNombre}"? No cambia nada de su contenido ni su nombre, solo con qué cliente queda guardada.`)) return;
+      }
       const destino = moverProyecto(clienteActual.id, destinoId, p);
       if (!destino) { alert('No se pudo mover la estudio -- revisa el espacio disponible.'); return; }
       // moverProyecto() regresa el cliente DESTINO -- clienteActual (el origen, cuya
@@ -1057,9 +1089,22 @@ function tarjetaProyecto(p) {
       // esto en vivo antes de pushearlo).
       clienteActual = obtenerCliente(clienteActual.id);
       renderListaProyectos();
+      // Pedido explicito del usuario, 2026-11-24: "ponle algo para pasar de una pagina
+      // a otra y regresar" -- tras mover, no hay forma rapida de ir a ver la carpeta
+      // destino sin salir a "← Clientes" y buscarla a mano. Aviso con un link directo;
+      // "← Clientes" (ya existente en esa pantalla) sirve para regresar.
+      const aviso = $('estadoMoverProyecto');
+      aviso.hidden = false;
+      aviso.innerHTML = '';
+      aviso.append(document.createTextNode(`✓ "${p.nombre}" se movió a "${destinoNombre}". `));
+      const linkIr = document.createElement('a');
+      linkIr.href = '#';
+      linkIr.textContent = `Ir a "${destinoNombre}" →`;
+      linkIr.addEventListener('click', (evIr) => { evIr.preventDefault(); mostrarPantallaProyectos(destinoId); });
+      aviso.append(linkIr);
     });
     btnCancelar.addEventListener('click', (ev) => { ev.stopPropagation(); fila.remove(); });
-    fila.append(sel, btnConfirmar, btnCancelar);
+    fila.append(sel, filaNueva, btnConfirmar, btnCancelar);
     div.append(fila);
   });
   div.append(btnMover);
@@ -1179,6 +1224,7 @@ function mostrarPantallaProyectos(clienteId) {
   $('selectTarifaNuevoProyecto').value = '';
   $('listaMuestrasNuevoProyecto').innerHTML = '';
   $('estadoNuevoProyectoDesdeDefinitiva').className = 'nota';
+  $('estadoMoverProyecto').hidden = true; // no arrastrar el aviso de "movido a..." de otro cliente
   revisarDuplicadoCliente();
   renderListaProyectos();
   $('btnNuevoDesdeFormatoFijo').hidden = !hayFormatoFijo();
