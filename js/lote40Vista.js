@@ -23,6 +23,54 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// Documentos EFECTIVOS de un inmueble (2026-11-24): la insignia/estado de recibo y
+// verificación ya no sale SOLO de la lista fija de recopilación (LOTE_40_INMUEBLES,
+// que refleja documentos localizados en el filesystem fuera de esta app, no lo que el
+// proyecto real ya tiene cargado) -- caso real: IESE (#30) ya tenía su recibo cargado
+// en su proyecto (la cotización está calculada con él, inversión/ahorro reales), pero
+// la tarjeta seguía diciendo "sin recibo" porque la recopilación catalogó por error
+// el recibo de otra institución (IEDEP) en esa carpeta. Ahora se cruzan las 2 fuentes:
+// la recopilación (def.reciboLocalizado/verificacionLocalizada, SIN TOCAR) y lo que
+// el proyecto vinculado ya tiene (archivosRecibo/archivosVerificacion), con el recibo
+// exigiendo ADEMÁS que el RPU que el PROPIO proyecto capturó (formulario.noServicio)
+// coincida con el rpu/rpuAlt de ESTA tarjeta -- un recibo subido que en realidad
+// pertenece a otro servicio (mismo patrón del caso IEDEP) nunca debe marcar como
+// localizado el de este inmueble. Nunca muta LOTE_40_INMUEBLES: si nada cambia
+// (lo más común, los 2 documentos ya venían true, o ninguna fuente nueva los rescata)
+// regresa el MISMO objeto `def` de siempre, intacto -- solo arma uno nuevo cuando el
+// estado efectivo de verdad difiere de la recopilación.
+function defConDocsEfectivos(def, proyecto, rpusDef) {
+  const rpuProyecto = proyecto ? normalizarRpu(proyecto.formulario?.noServicio) : null;
+  const reciboDelProyecto = !!(proyecto && (proyecto.archivosRecibo || []).length && rpuProyecto && rpusDef.includes(rpuProyecto));
+  const verificacionDelProyecto = !!(proyecto && (proyecto.archivosVerificacion || []).length);
+  const reciboEfectivo = def.reciboLocalizado || reciboDelProyecto;
+  const verificacionEfectiva = def.verificacionLocalizada || verificacionDelProyecto;
+  if (reciboEfectivo === def.reciboLocalizado && verificacionEfectiva === def.verificacionLocalizada) {
+    return def;
+  }
+  if (reciboEfectivo && verificacionEfectiva) {
+    // Ambos efectivos: el aviso de "falta" desaparece por completo (pedido explícito
+    // del usuario) -- se reemplaza por el mismo texto estándar que ya usan los demás
+    // inmuebles con ambos documentos localizados desde la recopilación.
+    return {
+      ...def, reciboLocalizado: true, verificacionLocalizada: true,
+      estadoDocs: 'Recibo y verificación localizados',
+      pendientes: 'Validar histórico, fechas, consumos y contenido técnico; documentos localizados no equivalen a proyecto completo.',
+    };
+  }
+  // Parcialmente resuelto (no ocurre hoy en el lote real -- ningún inmueble tiene los
+  // 2 documentos faltantes en la recopilación a la vez -- cubierto por correctitud):
+  // arma el texto genérico de lo que SIGUE faltando.
+  const faltantes = [];
+  if (!reciboEfectivo) faltantes.push('Falta recibo del RPU esperado.');
+  if (!verificacionEfectiva) faltantes.push('Falta verificación en sitio.');
+  return {
+    ...def, reciboLocalizado: reciboEfectivo, verificacionLocalizada: verificacionEfectiva,
+    estadoDocs: 'Documentación inicial incompleta',
+    pendientes: faltantes.join(' '),
+  };
+}
+
 // Cruza LOTE_40_INMUEBLES (lista fija, ver lote40.js) contra TODOS los clientes/
 // proyectos reales guardados en este navegador, por RPU -- no depende de que esten
 // bajo un cliente con un nombre en particular.
@@ -31,8 +79,8 @@ function datosLote40() {
   for (const c of listarClientes()) {
     for (const p of (c.proyectos || [])) todosProyectos.push({ cliente: c, proyecto: p });
   }
-  return LOTE_40_INMUEBLES.map((def) => {
-    const rpusDef = [def.rpu, def.rpuAlt].filter(Boolean).map(normalizarRpu);
+  return LOTE_40_INMUEBLES.map((defOriginal) => {
+    const rpusDef = [defOriginal.rpu, defOriginal.rpuAlt].filter(Boolean).map(normalizarRpu);
     // Match principal por el RPU capturado en el formulario; si el proyecto nunca
     // llego a capturar RPU (ej. se creo pero no se le subio el recibo todavia), se
     // intenta tambien contra el nombre del proyecto -- la convencion de esta misma
@@ -42,7 +90,8 @@ function datosLote40() {
       if (rpuCapturado && rpusDef.includes(rpuCapturado)) return true;
       return rpusDef.some((r) => r && (p.nombre || '').replace(/\D+/g, '').includes(r));
     });
-    return { def, cliente: match?.cliente || null, proyecto: match?.proyecto || null };
+    const proyecto = match?.proyecto || null;
+    return { def: defConDocsEfectivos(defOriginal, proyecto, rpusDef), cliente: match?.cliente || null, proyecto };
   });
 }
 
