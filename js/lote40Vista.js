@@ -11,13 +11,14 @@
 import { listarClientes, crearCliente, crearProyecto } from './clientes.js';
 import { LOTE_40_INMUEBLES, normalizarRpu } from './lote40.js';
 import { ETIQUETAS_TARIFA, ORDEN_TARIFAS } from './tarifas.js';
-import { M } from './util.js';
+import { M, PCT } from './util.js';
 import { listarServiciosExtra, eliminarServicioExtra, altaServicioNuevo } from './serviciosExtra.js';
 import {
   inicializarFormulariosPorTarifa, mostrarFormularioTarifa, leerFormularioTarifa,
   llenarFormularioTarifaDesdeRecibo, esDomestica as esDomesticaTarifa,
 } from './formulariosPorTarifa.js';
 import { leerRecibo } from './leerRecibo.js';
+import { construirRDesdeProyecto } from './vistaPreviaComun.js';
 
 // Bug real reportado por el usuario, 2026-11-24: "No se pudo leer el recibo
 // automáticamente: Cannot read properties of undefined (reading 'getDocument')" al
@@ -654,76 +655,152 @@ function nombreArchivoSeguro(s) {
 // Pedido explicito del usuario, 2026-11-24: "descarga todos los pdf y excel en
 // carpetas en un archivo aparte de los 40" -- un solo botón, arriba de todo (no por
 // grupo de tarifa, a diferencia de "Descargar todos los PDF/Excel"), que recorre LOS
-// 40 (los que ya tienen cifras calculadas) y arma UN SOLO archivo .zip con una
-// carpeta por tarifa adentro, el PDF y el Excel de cada inmueble dentro de su
-// carpeta -- en vez de hasta 80 archivos sueltos en Descargas.
+// 40 y arma UN SOLO archivo .zip con una carpeta por tarifa, y dentro de esa, una
+// subcarpeta por inmueble -- en vez de archivos sueltos en Descargas.
 //
-// Usa &descargar=zip (ver generarDocumentosParaZip en app.js): esa ruta NUNCA
-// descarga nada por su cuenta, regresa los Blobs del PDF y del Excel por postMessage
-// -- aquí se van agregando al ZIP (JSZip, vendorizado en lib/jszip.min.js) con
-// `zip.file('<Tarifa>/<rpu> <inmueble>.pdf', blob)`, y solo AL FINAL se descarga el
-// .zip completo, una sola vez.
+// REESCRITO el mismo dia, mismo pedido en seguimiento: el primer intento abria una
+// ventana auxiliar y la navegaba, una cotizacion a la vez, a la pagina COMPLETA de
+// cada proyecto (index.html?...&descargar=zip) para generar su PDF/Excel leyendo el
+// DOM ya renderizado -- es la unica forma de que ese PDF salga fiel a pantalla (con
+// ediciones/plantillas), pero el usuario pidio explicitamente que el ZIP NO tuviera
+// que ir "a cada cotizacion una por una". En su lugar: nada de ventana ni navegacion.
+// Por cada inmueble se arma `r` DIRECTO en memoria con construirRDesdeProyecto()
+// (vistaPreviaComun.js -- el mismo helper ya usado por las vistas previas, que solo
+// lee proyecto.formulario y corre el motor, sin tocar el DOM) y se escribe un
+// resumen.txt con las cifras ya calculadas (igual que el resto de la app) -- junto
+// con el recibo y la verificacion en sitio que el proyecto YA tenga adjuntos
+// (archivosRecibo/archivosVerificacion, descargados directo de su URL de Supabase
+// Storage, el mismo fetch() que ya usa convertirArchivosParaPdf en
+// vistaPreviaComun.js). Sin PDF/Excel completo de 25+ paginas por inmueble -- quien
+// quiera eso de un inmueble en particular sigue teniendo los botones "⬇ PDF"/
+// "⬇ Excel" de su propia tarjeta, o "Descargar todos los PDF/Excel" por grupo de
+// tarifa (sin tocar, siguen navegando uno por uno porque ESOS si generan el PDF
+// completo).
+function textoResumenInmueble(f, r) {
+  const lineas = [
+    `${f.def.inmueble}`,
+    `RPU: ${f.def.rpu}${f.def.rpuAlt ? ' (alterno: ' + f.def.rpuAlt + ')' : ''}`,
+    `Cliente en esta app: ${f.cliente?.nombre || '—'}`,
+    `Cotización: ${f.proyecto?.nombre || '—'}`,
+    '',
+    `Tarifa: ${r.tarifa}${r.esDomestica ? ' (doméstica)' : ''}`,
+    `Titular en el recibo: ${r.titular || '—'}`,
+    `Domicilio: ${r.domicilio || '—'}`,
+    `No. de servicio: ${r.noServicio || '—'}`,
+    `Fecha del estudio: ${r.fechaEstudio || '—'}`,
+    '',
+    `Consumo del período: ${r.periodoKwh ?? '—'} kWh en ${r.periodoDias ?? '—'} días`,
+    `Pago recurrente del período (sin paneles): ${M(r.pagoRecurrentePeriodo)}`,
+    '',
+    `Paneles calculados: ${r.n} (${r.kwp} kWp, módulo ${r.moduloWp} Wp)`,
+    `Inversión total: ${M(r.investment)}`,
+    `Ahorro anual estimado: ${M(r.ahorroAnual)} (${PCT(r.pctAhorro)} del recibo)`,
+    `Recuperación estimada: ${r.payback != null ? r.payback.toFixed(1) + ' años' : 'no calculable'}`,
+    `VAN / TIR a 25 años: ${r.van != null ? M(r.van) : '—'} / ${r.tir ? PCT(r.tir) : 'no calculable'}`,
+  ];
+  if (r.escenarioVerificado) {
+    lineas.push('', `Escenario con los paneles de la verificación en sitio (${r.escenarioVerificado.n} paneles): ` +
+      `inversión ${M(r.escenarioVerificado.investment)}, ahorro anual ${M(r.escenarioVerificado.ahorroAnual)}.`);
+  }
+  lineas.push('',
+    `Estado de los documentos de este inmueble: ${f.def.estadoDocs || (f.def.pendientes || 'Sin pendientes conocidos')}`,
+    `Cotización definitiva: ${f.proyecto?.definitiva ? 'Sí' : 'No'}`,
+    `Última actualización: ${f.proyecto ? new Date(f.proyecto.actualizadoEn).toLocaleString('es-MX') : '—'}`,
+    '',
+    'Este resumen se armó directo de los datos ya capturados en esta app -- no es el análisis completo en PDF ' +
+      '(para eso, abre la cotización o usa "Descargar todos los PDF" del grupo de su tarifa).');
+  return lineas.join('\n');
+}
+
+// Descarga un archivo adjunto (recibo/verificación, {nombre,tipo,url,ruta}) directo
+// de su URL en Supabase Storage -- mismo fetch() que ya usa convertirArchivosParaPdf
+// en vistaPreviaComun.js, nunca navega ni abre ninguna pagina.
+async function blobDeArchivoAdjunto(a) {
+  if (!a?.url) return null;
+  try {
+    const resp = await fetch(a.url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.blob();
+  } catch (err) {
+    console.error(`No se pudo descargar el adjunto "${a?.nombre}":`, err);
+    return null;
+  }
+}
+
+function extensionDeArchivo(a, blob) {
+  const delNombre = /\.[a-z0-9]+$/i.exec(a?.nombre || '')?.[0];
+  if (delNombre) return delNombre;
+  if (blob?.type === 'application/pdf') return '.pdf';
+  if (blob?.type?.startsWith('image/')) return '.' + blob.type.split('/')[1];
+  return '';
+}
+
+async function agregarAdjuntosAlZip(zip, carpetaBase, subcarpeta, archivos) {
+  for (let i = 0; i < (archivos || []).length; i++) {
+    const a = archivos[i];
+    const blob = await blobDeArchivoAdjunto(a);
+    if (!blob) continue;
+    const base = nombreArchivoSeguro(a.nombre?.replace(/\.[a-z0-9]+$/i, '') || `${subcarpeta}_${i + 1}`);
+    zip.file(`${carpetaBase}/${subcarpeta}/${base}${extensionDeArchivo(a, blob)}`, blob);
+  }
+}
+
 async function descargarTodoEnZip() {
   if (typeof JSZip === 'undefined') {
     alert('No se pudo cargar la librería para armar el ZIP (JSZip) -- revisa tu conexión y recarga la página.');
     return;
   }
   const grupos = agruparLote40PorTarifa(datosLote40())
-    .map((g) => ({ tarifa: g.tarifa, filas: g.filas.filter((f) => f.proyecto?.ultimaInversionTotal != null) }))
+    .map((g) => ({ tarifa: g.tarifa, filas: g.filas.filter((f) => f.proyecto?.formulario) }))
     .filter((g) => g.filas.length);
   const total = grupos.reduce((s, g) => s + g.filas.length, 0);
   if (!total) {
-    alert('Ningún inmueble del lote tiene todavía una cotización calculada -- nada que meter al ZIP.');
+    alert('Ningún inmueble del lote tiene todavía una cotización con datos capturados -- nada que meter al ZIP.');
     return;
   }
-  if (!confirm(`¿Armar un ZIP con el PDF y el Excel de los ${total} inmueble(s) ya calculados (una carpeta por ` +
-    'tarifa)?\n\nSe abre una ventana auxiliar que navega sola por cada cotización y se cierra al terminar -- no la ' +
-    `cierres a mano mientras tanto. Con ${total} inmueble(s) puede tardar varios minutos.`)) return;
-  const ventana = window.open('about:blank', NOMBRE_VENTANA_DESCARGA_MASIVA, 'width=480,height=420');
-  if (!ventana) {
-    alert('El navegador bloqueó la ventana auxiliar de descarga -- permite ventanas emergentes para este sitio e inténtalo de nuevo.');
-    return;
-  }
+  if (!confirm(`¿Armar un ZIP con el resumen y los documentos adjuntos de los ${total} inmueble(s) con datos ` +
+    'capturados (una carpeta por tarifa, una subcarpeta por inmueble)? Se arma directo de lo ya guardado en esta ' +
+    'app, sin abrir ninguna cotización.')) return;
   const zip = new JSZip();
   const estado = elementoEstadoDescargaMasiva();
   let ok = 0;
   let i = 0;
   const fallidos = [];
   for (const { tarifa, filas } of grupos) {
-    const carpeta = nombreArchivoSeguro(tarifa || 'Sin tarifa capturada');
+    const carpetaTarifa = nombreArchivoSeguro(tarifa || 'Sin tarifa capturada');
     for (const f of filas) {
       i++;
       if (estado) {
         estado.hidden = false;
-        estado.textContent = `⬇ Generando ${i} de ${total} (${f.def.inmueble})…`;
+        estado.textContent = `📦 Agregando ${i} de ${total} (${f.def.inmueble})…`;
       }
-      const url = `index.html?cliente=${encodeURIComponent(f.cliente.id)}&proyecto=${encodeURIComponent(f.proyecto.id)}` +
-        '&descargar=zip&automatizado=1';
-      const data = await navegarVentanaYEsperarMensaje(ventana, url);
-      if (data.ok && data.archivos) {
-        const base = nombreArchivoSeguro(`${f.def.rpu} ${f.def.inmueble}`);
-        zip.file(`${carpeta}/${base}.pdf`, data.archivos.pdfBlob);
-        zip.file(`${carpeta}/${base}.xlsx`, data.archivos.excelBlob);
+      try {
+        const r = construirRDesdeProyecto(f.proyecto);
+        if (!r) throw new Error('construirRDesdeProyecto regresó null');
+        const carpeta = `${carpetaTarifa}/${nombreArchivoSeguro(`${f.def.rpu} ${f.def.inmueble}`)}`;
+        zip.file(`${carpeta}/resumen.txt`, textoResumenInmueble(f, r));
+        await agregarAdjuntosAlZip(zip, carpeta, 'recibo', f.proyecto.archivosRecibo);
+        await agregarAdjuntosAlZip(zip, carpeta, 'verificacion', f.proyecto.archivosVerificacion);
         ok++;
-      } else {
+      } catch (err) {
+        console.error(`No se pudo armar el resumen de "${f.def.inmueble}":`, err);
         fallidos.push(f.def.inmueble);
       }
     }
   }
-  ventana.close();
   if (estado) estado.textContent = '📦 Armando el archivo ZIP final…';
   const zipBlob = await zip.generateAsync({ type: 'blob' });
   if (estado) estado.hidden = true;
   const urlZip = URL.createObjectURL(zipBlob);
   const a = document.createElement('a');
   a.href = urlZip;
-  a.download = `lote_40_inmuebles_PDF_y_Excel_${new Date().toISOString().slice(0, 10)}.zip`;
+  a.download = `lote_40_inmuebles_resumen_${new Date().toISOString().slice(0, 10)}.zip`;
   a.click();
   URL.revokeObjectURL(urlZip);
-  let msg = `Listo: ${ok} de ${total} inmueble(s) con su PDF y Excel dentro del ZIP descargado.`;
+  let msg = `Listo: ${ok} de ${total} inmueble(s) con su resumen y documentos adjuntos dentro del ZIP descargado.`;
   if (fallidos.length) {
-    msg += `\n\nNo se pudieron generar automáticamente (requieren revisión manual -- descárgalos uno por uno desde su ` +
-      `tarjeta, probablemente hay un aviso pendiente que confirmar):\n${fallidos.map((n) => '• ' + n).join('\n')}`;
+    msg += `\n\nNo se pudo armar el resumen de estos (revísalos abriendo su cotización directamente):\n` +
+      fallidos.map((n) => '• ' + n).join('\n');
   }
   alert(msg);
 }
