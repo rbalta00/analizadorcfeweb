@@ -9,6 +9,7 @@ import { bloqueDeSeccion, seccionesDelBloque } from './bloques.js';
 import { COMERCIAL } from './comercial.js';
 import { REQUISITOS_PRESUPUESTO_REAL } from './notas.js';
 import { leerPlantillaTarifa } from './textosGlobales.js';
+import { textoTieneCifraOConclusionSinToken } from './clientes.js';
 import { beneficioCosto, R } from './motor.js';
 import { razonCargosPuedenDisminuir, aclaracionPalabrasSimplesPdbt } from './tarifaDoctrina.js';
 
@@ -332,7 +333,18 @@ function campoEditableConId(tag, cls, textoDefecto, id) {
   // default ciego para TODAS las tarifas -- que ademas fue la causa de un bug real
   // encontrado el mismo dia (una direccion de un inmueble quedo guardada como
   // predeterminado global y se colaba en cotizaciones de otros inmuebles).
-  const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id);
+  // Bug real reportado por el usuario, 2026-11-24 (seguimiento del fix de PDBT
+  // bimestral): guardarPlantillaTarifa() (textosGlobales.js) ya filtra desde el
+  // 2026-11-16 cualquier texto con una cifra/monto congelado sin token {{...}} ANTES
+  // de guardarlo en la plantilla -- pero esa limpieza solo corre al GUARDAR; una
+  // plantilla guardada ANTES de ese fix puede seguir cargando una cifra vieja
+  // congelada (ej. "...facturado cada mes, no cada mes, para este recibo" con montos
+  // de OTRO estudio ya calculados adentro). Este chequeo (hasOwnProperty) nunca
+  // revisaba el CONTENIDO de la plantilla al leerla, solo si existia la llave -- asi
+  // que una plantilla contaminada de antes seguia ganando sobre el texto fresco
+  // recien calculado. Se aplica aqui el mismo filtro, tambien al leer.
+  const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id)
+    && !textoTieneCifraOConclusionSinToken(_plantillaTarifaActual[id]);
   const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : textoDefecto;
   const textoCrudo = tieneProyecto ? _overridesActuales[id] : base;
   // Mientras NO se esta editando, se muestra con los tokens {{...}} ya resueltos
@@ -433,7 +445,18 @@ function siguienteTarjetaId() {
 function textoChico(textoDefecto, idOverride) {
   const id = idOverride || siguienteTarjetaId();
   const tieneProyecto = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
-  const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id);
+  // Bug real reportado por el usuario, 2026-11-24 (seguimiento del fix de PDBT
+  // bimestral): guardarPlantillaTarifa() (textosGlobales.js) ya filtra desde el
+  // 2026-11-16 cualquier texto con una cifra/monto congelado sin token {{...}} ANTES
+  // de guardarlo en la plantilla -- pero esa limpieza solo corre al GUARDAR; una
+  // plantilla guardada ANTES de ese fix puede seguir cargando una cifra vieja
+  // congelada (ej. "...facturado cada mes, no cada mes, para este recibo" con montos
+  // de OTRO estudio ya calculados adentro). Este chequeo (hasOwnProperty) nunca
+  // revisaba el CONTENIDO de la plantilla al leerla, solo si existia la llave -- asi
+  // que una plantilla contaminada de antes seguia ganando sobre el texto fresco
+  // recien calculado. Se aplica aqui el mismo filtro, tambien al leer.
+  const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id)
+    && !textoTieneCifraOConclusionSinToken(_plantillaTarifaActual[id]);
   const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : textoDefecto;
   const wrap = el('span', 'texto-chico-editable');
   const span = document.createElement('span');
@@ -500,7 +523,18 @@ function tarjetas(items) {
 // silencio como si fuera texto libre; solo etiquetas/encabezados/descripciones.
 function celdaEditable(id, textoDefecto) {
   const tieneProyecto = Object.prototype.hasOwnProperty.call(_overridesActuales, id);
-  const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id);
+  // Bug real reportado por el usuario, 2026-11-24 (seguimiento del fix de PDBT
+  // bimestral): guardarPlantillaTarifa() (textosGlobales.js) ya filtra desde el
+  // 2026-11-16 cualquier texto con una cifra/monto congelado sin token {{...}} ANTES
+  // de guardarlo en la plantilla -- pero esa limpieza solo corre al GUARDAR; una
+  // plantilla guardada ANTES de ese fix puede seguir cargando una cifra vieja
+  // congelada (ej. "...facturado cada mes, no cada mes, para este recibo" con montos
+  // de OTRO estudio ya calculados adentro). Este chequeo (hasOwnProperty) nunca
+  // revisaba el CONTENIDO de la plantilla al leerla, solo si existia la llave -- asi
+  // que una plantilla contaminada de antes seguia ganando sobre el texto fresco
+  // recien calculado. Se aplica aqui el mismo filtro, tambien al leer.
+  const tienePlantillaTarifa = Object.prototype.hasOwnProperty.call(_plantillaTarifaActual, id)
+    && !textoTieneCifraOConclusionSinToken(_plantillaTarifaActual[id]);
   const base = tienePlantillaTarifa ? _plantillaTarifaActual[id] : textoDefecto;
   const span = document.createElement('span');
   span.className = 'celda-editable' + (tieneProyecto ? ' celda-editada' : tienePlantillaTarifa ? ' celda-con-global' : '');
@@ -1049,15 +1083,32 @@ function s01(r, _leido, onToggle) {
   const flujoTxt = r.recuperacionAcumulada
     ? ` (o ${r.recuperacionAcumulada.toFixed(1)} años si se cuenta el mantenimiento y el cambio de inversor)` : '';
   const cad = cadenciaPeriodo(r.periodoDias, r.esBimestral);
-  art.append(p(`El sistema completo cuesta ${M(r.investment)} (ya con IVA). Con el ahorro que generaría, ` +
+  // Bug real reportado por el usuario, 2026-11-24: en un lote con la misma tarifa (ej.
+  // PDBT), un servicio mostraba "bimestral" y otro, creado desde el mismo machote/
+  // plantilla ya aprobado, seguia mostrando "32 días" -- texto VIEJO congelado de
+  // cuando se guardo el machote/plantilla, de ANTES del fix de PDBT-siempre-bimestral.
+  // aplicarMachoteAProyecto() (clientes.js) deliberadamente SI conserva texto con
+  // cifras (solo lo marca para revision, nunca lo descarta) -- correcto para
+  // redaccion editorial, pero estos 2 parrafos no son redaccion: son un HECHO
+  // calculado (cadencia de facturacion + sus montos) que nunca debe quedar congelado
+  // de otro servicio. parrafoCalculado() (igual que la conclusion del comparativo
+  // calculado-vs-verificacion, 2026-11-20) ignora por completo cualquier override de
+  // proyecto o de plantilla -- siempre las cifras/cadencia de ESTE estudio.
+  art.append(parrafoCalculado('p', null, `El sistema completo cuesta ${M(r.investment)} (ya con IVA). Con el ahorro que generaría, ` +
     `esa inversión se recupera en aproximadamente ${r.payback ? r.payback.toFixed(1) + ' años' : 'un tiempo no calculable con el ahorro estimado actual'}${flujoTxt}. ` +
     `Después de ese tiempo, el ahorro de ${cad.frase} es ganancia, no recuperación de lo invertido.`));
-  art.append(p(`En el año de referencia se estima pasar de pagar ${M(r.annualbefore)} a ${M(r.annualafter)} al año. ` +
+  art.append(parrafoCalculado('p', null, `En el año de referencia se estima pasar de pagar ${M(r.annualbefore)} a ${M(r.annualafter)} al año. ` +
     `El promedio ${cad.adjetivo} sería ${M(r.annualafter / cad.periodosPorAnio)} en vez de ${M(r.annualbefore / cad.periodosPorAnio)} -- ` +
     `facturado ${cad.frase}, no cada mes, para este recibo. Son promedios de un modelo, no pagos fijos.`));
-  art.append(avisoCream('El recibo permite comprobar el gasto actual; el ahorro futuro es una estimación ' +
+  // Id FIJO (mismo motivo que s5-historial-intro/s2-aviso-nombre) -- los 2 parrafos de
+  // arriba dejaron de consumir siguienteTextoId() al pasar a parrafoCalculado() en
+  // esta misma sesion, asi que este aviso (antes el 3er/4to parrafo editable de la
+  // seccion segun el caso) se habria corrido de id sin esto -- cualquier edicion ya
+  // guardada bajo su id viejo se habria quedado huerfana, y un machote/plantilla con
+  // texto en el id que este aviso ocuparia ahora se habria colado aqui por error.
+  art.append(campoEditableConId('div', 'aviso-cream', 'El recibo permite comprobar el gasto actual; el ahorro futuro es una estimación ' +
     `condicionada. Se conserva el gasto observado de ${listaConceptos(r.meta.noReducibles)} sin anticipar ahorro ` +
-    'adicional. Los precios deberán actualizarse antes de contratar.'));
+    'adicional. Los precios deberán actualizarse antes de contratar.', 's1-aviso-precios'));
   return art;
 }
 

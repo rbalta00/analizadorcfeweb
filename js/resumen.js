@@ -42,7 +42,7 @@ export function generarResumenEjecutivo(r) {
     ]);
     y = spacer(y, 12);
 
-    const cad = cadenciaPeriodo(r.periodoDias);
+    const cad = cadenciaPeriodo(r.periodoDias, r.esBimestral);
     y = subX(doc, y, 'Antes vs. después');
     y = table(doc, y, ['Concepto', 'Hoy (sin paneles)', 'Con el sistema propuesto'], [
       ['Pago anual estimado', M(r.annualbefore), M(r.annualafter)],
