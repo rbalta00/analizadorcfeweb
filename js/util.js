@@ -63,8 +63,20 @@ export function fechaBaseVigenciaDeProyecto(proyecto) {
 // 01/DAC) puede ser bimestral. Compartida entre secciones.js (pantalla) y
 // propuesta.js (PDF viejo) para que nunca se desincronicen -- antes vivía
 // duplicada/sin arreglar en cada archivo por separado.
-export function cadenciaPeriodo(periodoDias) {
+//
+// Segundo parametro `esBimestral`, agregado 2026-11-24 -- bug real reportado por el
+// usuario: en PDBT con un recibo facturado mensual (ej. 32 dias), el PDF decia
+// "facturado cada mes, no cada mes, para este recibo" -- contradictorio, porque esta
+// funcion segui adivinando la cadencia SOLO de periodoDias (round(365/32)=11 ->
+// "mensual"), ignorando que r.esBimestral ya esta forzado a `true` para PDBT desde
+// el 2026-11-24 (ver resultado.js: "en tarifa PDBT el estudio se presenta siempre en
+// bimestres, sin importar los dias del periodo del recibo"). Con esBimestral=true
+// forzado, esta funcion ahora regresa bimestral de una vez, sin volver a adivinar --
+// el resto del documento (tablas, rowsPresentacion) ya se agrupa en 6 bimestres para
+// ese mismo caso, asi que el texto y las tablas por fin dicen lo mismo.
+export function cadenciaPeriodo(periodoDias, esBimestral) {
   const DIAS_MES_REF_LOCAL = 30.5;
+  if (esBimestral) return { adjetivo: 'bimestral', frase: 'cada período (bimestral, cada 2 meses)', periodosPorAnio: 6 };
   const periodosPorAnio = periodoDias > 0 ? Math.round(365 / periodoDias) : 12;
   if (periodosPorAnio >= 11) return { adjetivo: 'mensual', frase: 'cada mes', periodosPorAnio: 12 };
   if (periodosPorAnio >= 5 && periodosPorAnio <= 7) return { adjetivo: 'bimestral', frase: 'cada período (bimestral, cada 2 meses)', periodosPorAnio: 6 };

@@ -103,7 +103,7 @@ function pagina01(doc, r, numero) {
   const recupTxt = r.payback ? `${r.payback.toFixed(1)} años` : 'un tiempo no calculable con el ahorro estimado actual';
   const flujoTxt = r.recuperacionAcumulada
     ? ` (o ${r.recuperacionAcumulada.toFixed(1)} años si se cuenta el mantenimiento y el cambio de inversor)` : '';
-  const cad = cadenciaPeriodo(r.periodoDias);
+  const cad = cadenciaPeriodo(r.periodoDias, r.esBimestral);
   y = bodyX(doc, y, `El sistema completo cuesta ${M(r.investment)} (ya con IVA). Con el ahorro que generaría, ` +
     `esa inversión se recupera en aproximadamente ${recupTxt}${flujoTxt}. Después de ese tiempo, el ahorro de ` +
     `${cad.frase} es ganancia, no recuperación de lo invertido.`);

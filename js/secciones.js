@@ -1048,7 +1048,7 @@ function s01(r, _leido, onToggle) {
   art.append(subtitulo(1, 'cuanto-cuesta', 'Cuánto cuesta y en cuánto se paga solo'));
   const flujoTxt = r.recuperacionAcumulada
     ? ` (o ${r.recuperacionAcumulada.toFixed(1)} años si se cuenta el mantenimiento y el cambio de inversor)` : '';
-  const cad = cadenciaPeriodo(r.periodoDias);
+  const cad = cadenciaPeriodo(r.periodoDias, r.esBimestral);
   art.append(p(`El sistema completo cuesta ${M(r.investment)} (ya con IVA). Con el ahorro que generaría, ` +
     `esa inversión se recupera en aproximadamente ${r.payback ? r.payback.toFixed(1) + ' años' : 'un tiempo no calculable con el ahorro estimado actual'}${flujoTxt}. ` +
     `Después de ese tiempo, el ahorro de ${cad.frase} es ganancia, no recuperación de lo invertido.`));
@@ -2197,7 +2197,7 @@ function s10(r, _leido, onToggle) {
     p(`Análisis mes a mes del año de referencia: para cada mes se simula el pago real (sin paneles) y el pago con ` +
       `el sistema propuesto, usando la MISMA fórmula de facturación de la sección ${refSeccion(3, r)} -- no es un promedio repartido, ` +
       `es un cálculo independiente por mes con la generación solar y el consumo de ese mes.` +
-      (r.esBimestral ? ` La tabla de abajo agrupa esos 12 meses ya calculados en 6 bimestres (sumando cada par), para que coincida con la periodicidad de su recibo -- ningún mes se recalcula distinto.` : '')),
+      (r.esBimestral ? ` La tabla de abajo agrupa esos 12 meses ya calculados en 6 bimestres (sumando cada par)${r.tarifa === 'PDBT' ? ' -- en PDBT la presentación es siempre en bimestres, sin importar los días del período de este recibo en particular' : ', para que coincida con la periodicidad de su recibo'} -- ningún mes se recalcula distinto.` : '')),
     graficoToggle('g10-calc-mensual', r.esBimestral ? 'Tabla bimestral detallada' : 'Tabla mensual detallada',
       tabla([r.esBimestral ? 'Bimestre' : 'Mes', 'Consumo', 'Generación', 'Sin paneles', 'Con paneles', 'Ahorro', r.esBimestral ? '% del bimestre' : '% del mes'], r.rowsPresentacion.map(row => [
         row.mes, `${Math.round(row.consumoExtrapoladoKwh).toLocaleString('en-US')} kWh`, `${Math.round(row.generacionKwh).toLocaleString('en-US')} kWh`,
@@ -2401,7 +2401,7 @@ function s15(r, _leido, onToggle) {
     p(`Esta tabla usa exactamente el mismo cálculo mes a mes de la sección ${refSeccion(10, r)} (misma fórmula de facturación de la ` +
       `sección ${refSeccion(3, r)}, aplicada con el consumo y la generación real de cada mes) -- aquí solo se presentan los pesos en ` +
       `lugar del porcentaje de ahorro de cada ${unidadSingular15}. Ver sección ${refSeccion(10, r)} para el detalle fila por fila con el % de ahorro.` +
-      (r.esBimestral ? ' La tabla de arriba agrupa esos 12 meses en 6 bimestres (sumando cada par), para que coincida con su recibo.' : '')),
+      (r.esBimestral ? ` La tabla de arriba agrupa esos 12 meses en 6 bimestres (sumando cada par)${r.tarifa === 'PDBT' ? ' -- en PDBT la presentación es siempre en bimestres, sin importar los días del período de este recibo en particular' : ', para que coincida con su recibo'}.` : '')),
   ], r));
   return art;
 }
