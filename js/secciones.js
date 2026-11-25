@@ -1142,6 +1142,19 @@ function s02(r, leido, onToggle) {
     ['Pago recurrente del período', M(r.pagoRecurrentePeriodo)],
   ], { id: 'g02-datos-recibo-b' });
   art.append(graficoToggle('g02-datos-recibo', 'Tablas de datos verificados y total del recibo', [tablaDatoVerificado, tablaTotalRecibo]));
+  // Bug real reportado por el usuario, 2026-11-24: la fila "Período" de arriba es un
+  // dato de TRAZABILIDAD (lo que el recibo real dice, tal cual -- nunca se altera,
+  // para que esta tabla siga siendo honesta sobre lo que CFE facturo) -- pero cuando
+  // la tarifa es PDBT con un periodo real corto (ej. 32 dias, facturado mensual), esa
+  // misma cifra contradecia a simple vista el resto del documento, que presenta TODO
+  // en bimestres por la regla fija de esta tarifa (2026-11-24, "en PDBT el estudio se
+  // presenta siempre en bimestres"). parrafoCalculado() -- nunca editable/heredable
+  // de un machote, mismo motivo que el fix anterior de esta misma sesion.
+  if (r.esBimestral && r.periodoDias && r.periodoDias < 45) {
+    art.append(parrafoCalculado('p', 'nota aviso', `Este recibo en particular factura un período de ${r.periodoDias} días (poco menos de 1 mes), ` +
+      `pero la tarifa ${r.tarifa} se presenta SIEMPRE en bimestres en este estudio -- sin importar los días del período de este recibo en ` +
+      'particular. El dato de arriba es tal como lo factura CFE; el resto del documento (tablas, gráficas, pagos) agrupa el año en 6 bimestres, no en 12 meses.'));
+  }
   art.append(avisoCream('Los datos de este recibo se usan como base de cálculo del estudio completo; cualquier ' +
     'corrección debe confirmarse contra el documento original de CFE.'));
   const bloqueMapa = [
