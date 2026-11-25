@@ -1006,6 +1006,57 @@ function tarjetaProyecto(p) {
     if (proyectoActual && proyectoActual.id === p.id) sincronizarInputsNombreProyecto();
   });
   div.append(btnRenombrar);
+  // "Mover a otro cliente" desde la lista -- pedido explicito del usuario, 2026-11-24:
+  // "permite mover las cotizaciones a otras carpetas, por ejemplo a los 40" -- ya
+  // existia moverProyecto() (clientes.js) y se podia mover una cotizacion con el
+  // selector "Guardar como" del editor ABIERTO, pero no habia forma de hacerlo desde
+  // esta lista sin abrir la estudio completa primero. Mismo candado que ese flujo
+  // (ver onGuardarCotizacion mas abajo): mover SI se permite aunque este bloqueada --
+  // es puramente organizativo, no toca nombre ni contenido.
+  const btnMover = document.createElement('button');
+  btnMover.className = 'btn-link';
+  btnMover.textContent = '📁';
+  btnMover.title = 'Mover esta estudio a otro cliente (no toca su contenido)';
+  btnMover.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (div.querySelector('.selector-mover-cliente')) return; // ya esta abierto
+    const otros = listarClientes().filter((c) => c.id !== clienteActual.id);
+    if (!otros.length) {
+      alert('No hay otro cliente todavía -- crea uno primero desde "← Clientes".');
+      return;
+    }
+    const fila = document.createElement('div');
+    fila.className = 'selector-mover-cliente acciones-envio';
+    const sel = document.createElement('select');
+    sel.innerHTML = otros.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)} (${escapeHtml(etiquetaTipo(c.tipo))})</option>`).join('');
+    const btnConfirmar = document.createElement('button');
+    btnConfirmar.type = 'button';
+    btnConfirmar.className = 'btn-bloque-rapido';
+    btnConfirmar.textContent = '✓ Mover aquí';
+    const btnCancelar = document.createElement('button');
+    btnCancelar.type = 'button';
+    btnCancelar.className = 'btn-bloque-rapido';
+    btnCancelar.textContent = '✕ Cancelar';
+    btnConfirmar.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const destinoId = sel.value;
+      const destinoNombre = otros.find((c) => c.id === destinoId)?.nombre || '';
+      if (!confirm(`¿Mover "${p.nombre}" al cliente "${destinoNombre}"? No cambia nada de su contenido ni su nombre, solo con qué cliente queda guardada.`)) return;
+      const destino = moverProyecto(clienteActual.id, destinoId, p);
+      if (!destino) { alert('No se pudo mover la estudio -- revisa el espacio disponible.'); return; }
+      // moverProyecto() regresa el cliente DESTINO -- clienteActual (el origen, cuya
+      // lista seguimos viendo aqui) hay que releerlo de storage, si no se queda con el
+      // arreglo .proyectos viejo en memoria y la tarjeta recien movida sigue
+      // apareciendo en pantalla aunque ya no este ahi (bug real encontrado probando
+      // esto en vivo antes de pushearlo).
+      clienteActual = obtenerCliente(clienteActual.id);
+      renderListaProyectos();
+    });
+    btnCancelar.addEventListener('click', (ev) => { ev.stopPropagation(); fila.remove(); });
+    fila.append(sel, btnConfirmar, btnCancelar);
+    div.append(fila);
+  });
+  div.append(btnMover);
   const btnBorrar = document.createElement('button');
   btnBorrar.className = 'btn-link btn-borrar-cliente';
   btnBorrar.textContent = '🗑';
