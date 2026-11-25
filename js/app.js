@@ -3214,6 +3214,22 @@ function llenarFormularioDesdeRecibo(c) {
   llenarFormularioDesdeReciboCampos(c);
   if (proyectoActual && !proyectoActual.bloqueada) {
     proyectoActual.reciboSello = construirSelloDesdeCampos(c);
+    // Pedido explicito del usuario, 2026-11-24: "arregla la plantilla para que solo lea
+    // de nuevo el recibo y lo vuelva a guardar pero con la plantilla corregida" -- antes
+    // aplicarPlantillaTarifa() (textosGlobales.js) solo se podia disparar a mano desde el
+    // boton nuevo de renderPlantillasTarifa (ver commit de hoy mismo). Esta es la unica
+    // entrada real para aplicar un recibo (subir foto, "Volver a leer este recibo",
+    // proyecto recien creado) -- aplicar aqui la plantilla de la tarifa YA DETECTADA
+    // (si existe una guardada) cubre los 3 casos con un solo cambio: leer/releer el
+    // recibo y guardar ya deja el estudio con el formato revisado de esa tarifa, sin
+    // ningun clic aparte. Decision deliberada: esto SI puede pisar redaccion/apagados
+    // propios de este estudio en particular con los de la plantilla -- es exactamente lo
+    // que el usuario pidio (un estudio de un inmueble del lote debe verse igual que los
+    // demas de su misma tarifa). intentarAutoCalcular(), llamado por el propio caller
+    // justo despues de este return, reconstruye `r` desde proyectoActual ya actualizado,
+    // asi que no hace falta tocar ultimoResultado aqui.
+    const tarifaDeEsteRecibo = $('tarifa').value;
+    if (tarifaDeEsteRecibo) aplicarPlantillaTarifa(proyectoActual, tarifaDeEsteRecibo);
     guardarProyecto(clienteActual, proyectoActual);
   }
   return true;
