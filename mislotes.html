@@ -62,6 +62,20 @@
         <button type="button" id="btnAgregarInmueble" class="btn-secundario">+ Agregar inmueble</button>
       </div>
 
+      <p class="nota">O, si el estudio ya existe (lo hiciste antes, en cualquier cliente): elígelo aquí -- toma su
+        nombre y RPU reales, sin tener que volver a escribirlos a mano (y sin riesgo de que un RPU mal copiado no
+        cruce).</p>
+      <div class="fila">
+        <label>Elegir una cotización que ya tengas
+          <select id="selectCotizacionExistente">
+            <option value="">-- Elige una cotización --</option>
+          </select>
+        </label>
+      </div>
+      <div class="acciones">
+        <button type="button" id="btnAgregarDesdeExistente" class="btn-secundario">+ Agregar esta cotización al lote</button>
+      </div>
+
       <div id="totalesLote" class="tarjetas-metricas"></div>
       <p class="nota">Las tarjetas atenuadas son inmuebles sin ninguna cotización creada todavía. "+ Crear" abre
         una cotización en blanco bajo un cliente con el mismo nombre de este lote (se crea solo, si no existe

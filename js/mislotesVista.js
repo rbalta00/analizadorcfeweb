@@ -215,6 +215,29 @@ function renderListaLotes() {
   }
 }
 
+// Pedido explicito del usuario, 2026-11-24 (seguimiento directo de "y los que ya
+// tengo como los guardo en un lote nuevo"): agregar un estudio YA EXISTENTE a un
+// lote no requiere moverlo de cliente -- el cruce es por RPU, no por en que cliente
+// vive. Este selector solo evita que el usuario tenga que volver a TECLEAR el
+// nombre/RPU a mano (con el riesgo real de un RPU mal copiado, que nunca cruzaria).
+function poblarSelectCotizacionExistente() {
+  const sel = document.getElementById('selectCotizacionExistente');
+  sel.innerHTML = '<option value="">-- Elige una cotización --</option>';
+  for (const c of listarClientes()) {
+    if (!c.proyectos?.length) continue;
+    const og = document.createElement('optgroup');
+    og.label = c.nombre;
+    for (const p of c.proyectos) {
+      const opt = document.createElement('option');
+      opt.value = `${c.id}::${p.id}`;
+      const rpu = p.formulario?.noServicio;
+      opt.textContent = `${p.nombre}${rpu ? ' (RPU ' + rpu + ')' : ' (sin RPU capturado todavía)'}`;
+      og.append(opt);
+    }
+    sel.append(og);
+  }
+}
+
 function renderDetalleLote(loteId) {
   const lote = obtenerLotePropio(loteId);
   if (!lote) { renderListaLotes(); return; }
@@ -224,6 +247,7 @@ function renderDetalleLote(loteId) {
   document.getElementById('seccionDetalleLote').hidden = false;
   document.getElementById('tituloLoteActivo').textContent = lote.nombre;
   document.title = `${lote.nombre} · Mis lotes`;
+  poblarSelectCotizacionExistente();
   const filas = datosDelLote(lote);
   renderTotales(filas);
   const cont = document.getElementById('tablaLote');
@@ -282,6 +306,25 @@ document.getElementById('btnAgregarInmueble').addEventListener('click', () => {
   agregarInmuebleALote(loteActivoId, { nombre, rpu });
   inputNombre.value = '';
   inputRpu.value = '';
+  renderDetalleLote(loteActivoId);
+});
+
+document.getElementById('btnAgregarDesdeExistente').addEventListener('click', () => {
+  const sel = document.getElementById('selectCotizacionExistente');
+  if (!sel.value) { alert('Elige una cotización de la lista primero.'); return; }
+  const [clienteId, proyectoId] = sel.value.split('::');
+  const cliente = listarClientes().find((c) => c.id === clienteId);
+  const proyecto = cliente?.proyectos.find((p) => p.id === proyectoId);
+  if (!proyecto) { alert('Esa cotización ya no existe -- recarga la página.'); return; }
+  const rpu = proyecto.formulario?.noServicio || '';
+  const lote = obtenerLotePropio(loteActivoId);
+  if (rpu && lote.inmuebles.some((i) => normalizarRpu(i.rpu) === normalizarRpu(rpu))) {
+    alert(`Esta cotización (RPU ${rpu}) ya está en este lote.`);
+    return;
+  }
+  const nombre = proyecto.formulario?.titular || proyecto.nombre;
+  agregarInmuebleALote(loteActivoId, { nombre, rpu });
+  sel.value = '';
   renderDetalleLote(loteActivoId);
 });
 
