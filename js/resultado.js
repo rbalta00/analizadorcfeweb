@@ -163,8 +163,21 @@ export function construirResultado(input) {
   // Mismo reemplazo del ultimo periodo que arriba (historialUsado), para que la grafica y
   // la tabla de la seccion 5/7 muestren el MISMO numero que realmente se promedio -- nunca
   // el valor viejo que haya quedado en la casilla si se corrigio "kWh del período" aparte.
+  //
+  // Bug real encontrado 2026-11-24 (prompt consolidado PDBT v2, verificando la nueva fila
+  // "Consumo del último bimestre" de la sección 2): este reemplazo seguía siendo
+  // INCONDICIONAL, a diferencia de historialUsado (arriba), que desde el cambio 2 de ese
+  // mismo prompt solo reemplaza cuando el último renglón SÍ es el período actual. En un
+  // historial "por rango" (Paseo Bravo/COBAEP) el último renglón es el período COMPLETO
+  // ANTERIOR, no el actual -- se seguía pisando con periodoKwh aquí, aunque el cálculo
+  // real (historialUsado) ya no lo hiciera desde ese fix. Resultado: la tabla/gráfica de
+  // la sección 5/7 podía mostrar un período distinto al que de verdad se promedió,
+  // contradiciendo el propio propósito de esta variable (ver comentario arriba). Mismo
+  // criterio exacto que debeReemplazarUltimoDeHistorial, para que nunca se desincronicen.
   const historialParaMostrar = (historialParaMostrarCrudo && historialParaMostrarCrudo.length)
-    ? historialParaMostrarCrudo.map((h, i) => i === historialParaMostrarCrudo.length - 1 ? { ...h, kwh: periodoKwh } : h)
+    ? (debeReemplazarUltimoDeHistorial
+      ? historialParaMostrarCrudo.map((h, i) => i === historialParaMostrarCrudo.length - 1 ? { ...h, kwh: periodoKwh } : h)
+      : historialParaMostrarCrudo)
     : historialParaMostrarCrudo;
   // 2026-10-29): dimensionarHorasSol() SI calcula genMensual (produccion mensual real
   // del sistema), pero aqui nunca se usaba -- monthlyE se llenaba con genAnual/kwp

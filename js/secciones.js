@@ -1126,7 +1126,26 @@ function s02(r, leido, onToggle) {
     art.append(campoEditableConId('div', 'nota aviso', `El nombre impreso en el recibo de CFE es "${r.tituloRecibo}", distinto al nombre con el ` +
       `que se identifica este inmueble ("${r.titular}"). Verificar que ambos correspondan al mismo servicio antes de continuar.`, 's2-aviso-nombre'));
   }
-  const filasRecibo = [['Período', `${r.periodoDias || '?'} días`], ['Consumo del período', r.periodoKwh ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh` : 'por confirmar']];
+  // Prompt consolidado PDBT v2, 2026-11-24, cambio 3 (§2): "si el recibo es bimestral
+  // (≥45 días), como hoy. Si el recibo es mensual, los datos verificados del recibo
+  // se quedan... pero el renglón de periodo se rotula «Período del recibo: N días (un
+  // mes)» y se agregan dos renglones" -- el periodo del ESTUDIO en PDBT es siempre el
+  // bimestre (dos meses), nazca el recibo mensual o bimestral; esta tabla es de
+  // trazabilidad pura (nunca se inventa/altera el dato real del recibo, solo se le
+  // agrega contexto cuando contradice la presentacion del resto del documento).
+  const reciboEsMensualEnPdbtBimestral = r.esBimestral && r.periodoDias && r.periodoDias < 45;
+  const filasRecibo = [
+    [reciboEsMensualEnPdbtBimestral ? 'Período del recibo' : 'Período',
+      `${r.periodoDias || '?'} días${reciboEsMensualEnPdbtBimestral ? ' (un mes)' : ''}`],
+    ['Consumo del período', r.periodoKwh ? `${r.periodoKwh.toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh` : 'por confirmar'],
+  ];
+  if (reciboEsMensualEnPdbtBimestral) {
+    filasRecibo.push(['Período del estudio (tarifa PDBT)', 'bimestre (2 meses)']);
+    const ultimosDos = r.historial && r.historial.length >= 2 ? r.historial.slice(-2) : null;
+    filasRecibo.push(['Consumo del último bimestre (del historial del recibo)', ultimosDos
+      ? `${(ultimosDos[0].kwh + ultimosDos[1].kwh).toLocaleString('en-US', { maximumFractionDigits: 0 })} kWh`
+      : 'por confirmar -- falta historial de al menos 2 períodos']);
+  }
   if (r.demandaContratadaKw) filasRecibo.push(['Demanda contratada', `${r.demandaContratadaKw.toFixed(0)} kW`]);
   // textCols:[1] -- bug real reportado por el usuario, 2026-11-05 continuacion 11: "el
   // renglon 'periodo' si tiene palomita pero el dato '29 dias' no". Esta es una tabla de
@@ -1142,19 +1161,10 @@ function s02(r, leido, onToggle) {
     ['Pago recurrente del período', M(r.pagoRecurrentePeriodo)],
   ], { id: 'g02-datos-recibo-b' });
   art.append(graficoToggle('g02-datos-recibo', 'Tablas de datos verificados y total del recibo', [tablaDatoVerificado, tablaTotalRecibo]));
-  // Bug real reportado por el usuario, 2026-11-24: la fila "Período" de arriba es un
-  // dato de TRAZABILIDAD (lo que el recibo real dice, tal cual -- nunca se altera,
-  // para que esta tabla siga siendo honesta sobre lo que CFE facturo) -- pero cuando
-  // la tarifa es PDBT con un periodo real corto (ej. 32 dias, facturado mensual), esa
-  // misma cifra contradecia a simple vista el resto del documento, que presenta TODO
-  // en bimestres por la regla fija de esta tarifa (2026-11-24, "en PDBT el estudio se
-  // presenta siempre en bimestres"). parrafoCalculado() -- nunca editable/heredable
-  // de un machote, mismo motivo que el fix anterior de esta misma sesion.
-  if (r.esBimestral && r.periodoDias && r.periodoDias < 45) {
-    art.append(parrafoCalculado('p', 'nota aviso', `Este recibo en particular factura un período de ${r.periodoDias} días (poco menos de 1 mes), ` +
-      `pero la tarifa ${r.tarifa} se presenta SIEMPRE en bimestres en este estudio -- sin importar los días del período de este recibo en ` +
-      'particular. El dato de arriba es tal como lo factura CFE; el resto del documento (tablas, gráficas, pagos) agrupa el año en 6 bimestres, no en 12 meses.'));
-  }
+  // Nota: la aclaracion de "este recibo factura mensual pero PDBT se presenta en
+  // bimestres" ya quedo integrada DENTRO de la tabla de arriba (filas "Período del
+  // recibo"/"Período del estudio"/"Consumo del último bimestre", ver filasRecibo) --
+  // antes de esto habia un parrafo aparte repitiendo lo mismo en prosa, ya redundante.
   art.append(avisoCream('Los datos de este recibo se usan como base de cálculo del estudio completo; cualquier ' +
     'corrección debe confirmarse contra el documento original de CFE.'));
   const bloqueMapa = [
@@ -1682,12 +1692,35 @@ function s04(r, _leido, onToggle) {
     [textoChico('No baja con los paneles'), montoNoReduc, 'var(--cfe-navy,#163b4c)'],
   ])));
   art.append(p(`Lo que SÍ baja: ${listaConceptos(r.meta.reducibles)}. Lo que NO baja: ${listaConceptos(r.meta.noReducibles)}.`));
-  art.append(p(`Por eso, aunque se instalaran más paneles de los que se necesitan, el pago de un período no ` +
-    `bajaría de ${M(r.pisoPeriodo)} (ya con IVA y DAP) frente a los ${M(r.pagoRecurrentePeriodo)} actuales. El ` +
-    `ahorro máximo posible en este recibo, sin importar cuántos paneles se instalen, es de ${M(r.ahorroMaxPeriodo)} ` +
-    `por período — un ${PCT(r.pctMaxPeriodo)}.`));
-  art.append(avisoCream('No se prometen ahorros de demanda sin conocer la energía importada y la demanda después ' +
-    'de instalar. Conservar su importe en el presupuesto es un criterio prudente, no afirmar que esos cargos sean fijos.'));
+  // Prompt consolidado PDBT v2, 2026-11-24, cambio 3 (§4): "en PDBT el piso se expresa
+  // por bimestre... en un PDBT de recibo mensual el Suministro bimestral es el doble
+  // del mensual... y el DAP bimestral el doble del mensual" -- Tenencia (recibo
+  // mensual, periodoDias=32) mostraba el piso MENSUAL ($235.91) en vez del BIMESTRAL
+  // ($471.81), porque r.pisoPeriodo/pagoRecurrentePeriodo/ahorroMaxPeriodo siempre se
+  // calculan sobre el periodo REAL del recibo (motor.js: pisoDeAhorro(periodoDias,...)),
+  // nunca sobre el periodo DEL ESTUDIO (que en PDBT es siempre el bimestre, sin
+  // importar el recibo -- 2026-11-24, cambio 3 v1). "Ni una cifra de cálculo" puede
+  // cambiar (pedido explicito) -- r.pisoPeriodo etc. nunca se tocan; aqui solo se
+  // duplican para ESTA presentacion, porque Suministro y DAP son lineales en dias
+  // (duplicar dias duplica el importe exacto, confirmado contra el recibo real de
+  // Tenencia: 2×$33.54×1.16 + 2×$197.00 = $471.81, exacto). pctMaxPeriodo no cambia
+  // (es un cociente, el factor se cancela). parrafoCalculado() -- mismo motivo que el
+  // fix anterior de hoy: un hecho calculado nunca debe heredarse de un machote/plantilla.
+  const periodoDelReciboEsMensualForzadoABimestre = r.esBimestral && r.periodoDias && r.periodoDias < 45;
+  const factorBimestral4 = periodoDelReciboEsMensualForzadoABimestre ? 2 : 1;
+  const pisoMostrado4 = r.pisoPeriodo * factorBimestral4;
+  const pagoMostrado4 = r.pagoRecurrentePeriodo * factorBimestral4;
+  const ahorroMaxMostrado4 = r.ahorroMaxPeriodo * factorBimestral4;
+  const unidadPeriodo4 = r.esBimestral ? 'bimestre' : 'mes';
+  art.append(parrafoCalculado('p', null, `Por eso, aunque se instalaran más paneles de los que se necesitan, el pago de un ${unidadPeriodo4} no ` +
+    `bajaría de ${M(pisoMostrado4)} (ya con IVA y DAP) frente a los ${M(pagoMostrado4)} actuales. El ` +
+    `ahorro máximo posible en este recibo, sin importar cuántos paneles se instalen, es de ${M(ahorroMaxMostrado4)} ` +
+    `por ${unidadPeriodo4} — un ${PCT(r.pctMaxPeriodo)}.`));
+  // Id FIJO (mismo motivo que s1-aviso-precios, hoy mismo): el parrafo de piso de
+  // arriba dejo de consumir siguienteTextoId() al pasar a parrafoCalculado(), asi que
+  // este aviso se habria corrido de id sin esto.
+  art.append(campoEditableConId('div', 'aviso-cream', 'No se prometen ahorros de demanda sin conocer la energía importada y la demanda después ' +
+    'de instalar. Conservar su importe en el presupuesto es un criterio prudente, no afirmar que esos cargos sean fijos.', 's4-aviso-demanda'));
   // Tabla de franjas horarias, SOLO GDMTH -- bug real reportado por el usuario,
   // 2026-11-19 (prueba 1 del machote GDMTH, caso Antiguo Edificio de Finanzas): la
   // sección 4 explicaba la doctrina en texto pero le faltaba la tabla de franjas del
