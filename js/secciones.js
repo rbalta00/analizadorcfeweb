@@ -30,6 +30,9 @@ function razonNoReducible(concepto) {
   if (concepto === 'energia_punta') {
     return 'Sí depende del consumo (se factura por kWh, igual que Energía Base/Intermedia), pero el sol ya no genera en ese horario (tarde/noche) -- no hay energía propia con qué compensarlo.';
   }
+  if (concepto === 'cargoFijo') {
+    return 'Cargo fijo de CFE capturado para este recibo -- se prorratea por días, igual que el DAP, sin importar cuánta energía neta se consuma, así que no baja aunque los paneles cubran el 100% del consumo.';
+  }
   return 'No se identificó como un concepto que la energía solar pueda sustituir en este período.';
 }
 
@@ -1752,12 +1755,22 @@ function s04(r, _leido, onToggle) {
     // un monto -- bug real reportado por el usuario, 2026-11-05 continuacion 12, mismo
     // criterio que "29 días" (entrada anterior). col4 ("Ahorro máximo") solo se agrega
     // cuando coberturaCompleta -- ver nota igual en g03-calc-franjas arriba.
+    // Fila "Cargo fijo de CFE" condicional (revisión integral 2026-11-25): r.meta.noReducibles
+    // solo trae 'cargoFijo' cuando el recibo capturó un monto > 0 en ese campo (ver
+    // resultado.js) -- si no, esta tarifa de verdad es 100% reducible y la tabla se queda
+    // igual que siempre, con un solo renglón.
     graficoToggle('g04-calc-clasificacion', 'Tabla de clasificación de conceptos', tabla(['Concepto', 'Clasificación', 'Por qué', 'Ahorro con el sistema propuesto', 'Ahorro máximo (paneles ilimitados)'], [
       ['Energía (todos los tramos)', 'Sí baja', 'Se factura por kWh -- la energía solar sustituye kWh comprados a CFE.',
         ...filaAhorroConcepto(true, r.cargos.energia || 0, r)],
+      ...((r.meta.noReducibles || []).includes('cargoFijo') ? [
+        ['Cargo fijo de CFE', 'No baja', razonNoReducible('cargoFijo'), ...filaAhorroConcepto(false, r.cargos.cargoFijo || 0, r)],
+      ] : []),
     ], { small: true, textCols: coberturaRealizadaPct(r) >= 1 ? [1, 2, 4] : [1, 2], id: 'g04-calc-clasificacion' })),
-    avisoCream('El único piso que queda es el IVA y el DAP, que no dependen del consumo -- por eso el % máximo de ' +
-      'ahorro de una tarifa doméstica suele ser más alto que el de una tarifa con demanda contratada.'),
+    avisoCream((r.meta.noReducibles || []).includes('cargoFijo')
+      ? 'El piso que queda es el cargo fijo de CFE capturado para este recibo, más el IVA y el DAP -- ninguno de ' +
+        'los tres depende del consumo, por eso no bajan aunque los paneles cubran el 100%.'
+      : 'El único piso que queda es el IVA y el DAP, que no dependen del consumo -- por eso el % máximo de ' +
+        'ahorro de una tarifa doméstica suele ser más alto que el de una tarifa con demanda contratada.'),
   ] : [
     // Criterio de clasificación: separado en 2 ramas EXCLUYENTES (tieneDemandaContratada
     // true/false) -- antes era un solo párrafo que SIEMPRE mencionaba "demanda contratada

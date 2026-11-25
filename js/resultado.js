@@ -55,8 +55,23 @@ export function construirResultado(input) {
     piso = invoice(periodoDias, 0, true).total;
     ahorroMax = pagoRecurrentePeriodo - piso;
     pctMax = pagoRecurrentePeriodo ? ahorroMax / pagoRecurrentePeriodo : 0;
-    cargosFinal = { energia: facturaDetalle.base };
-    meta = { tieneDemandaContratada: false, reducibles: ['energia'], noReducibles: [] };
+    // Hallazgo real de la revisión integral 2026-11-25: facturaDetalle.cargoFijo (motor.js,
+    // construirInvoiceDomestica) ya se prorratea por días SIN depender de netEnergy -- es un
+    // piso real que NO baja con la energía solar, exactamente igual que Suministro en las
+    // tarifas con demanda -- y pisoDeAhorro() ya lo refleja correctamente en r.pisoPeriodo.
+    // Pero antes, cuando cargoFijoDomestica traía un monto > 0, `meta.reducibles`/
+    // `meta.noReducibles` (la fuente de la doctrina de "qué cargos pueden disminuir" en §4,
+    // tarifaDoctrina.js/secciones.js/propuesta.js) seguían diciendo "reducibles: ['energia'],
+    // noReducibles: []" -- es decir, el texto/tabla afirmaba que TODO baja con los paneles,
+    // contradiciendo el propio piso ya calculado. Separar el cargo fijo de 'energia' aquí
+    // (única fuente para pantalla/PDF/Excel, todos leen r.meta/r.cargos de forma genérica)
+    // cierra el hueco sin tocar ningún cálculo real -- facturaDetalle.total/piso/ahorroMax
+    // son exactamente los mismos números de siempre.
+    const tieneCargoFijoDom = Math.abs(facturaDetalle.cargoFijo || 0) > 1e-9;
+    cargosFinal = tieneCargoFijoDom
+      ? { energia: R(facturaDetalle.base - facturaDetalle.cargoFijo), cargoFijo: facturaDetalle.cargoFijo }
+      : { energia: facturaDetalle.base };
+    meta = { tieneDemandaContratada: false, reducibles: ['energia'], noReducibles: tieneCargoFijoDom ? ['cargoFijo'] : [] };
   }
 
   // Consumo base para dimensionar: se promedian TODOS los periodos de historial

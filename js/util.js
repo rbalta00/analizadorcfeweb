@@ -88,6 +88,7 @@ export const NOMBRES_CONCEPTO = {
   energia: 'Energía', energia_base: 'Energía base', energia_intermedia: 'Energía intermedia',
   energia_punta: 'Energía punta', transmision: 'Transmisión', cenace: 'CENACE', scnmem: 'SCnMEM',
   suministro: 'Suministro', distribucion: 'Distribución', capacidad: 'Capacidad',
+  cargoFijo: 'Cargo fijo de CFE',
 };
 
 export function listaConceptos(keys) {
